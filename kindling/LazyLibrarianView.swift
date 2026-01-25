@@ -1,9 +1,18 @@
 import Foundation
 import Kingfisher
+import SwiftData
 import SwiftUI
 
 struct LazyLibrarianView: View {
   @EnvironmentObject var userSettings: UserSettings
+  @Environment(\.modelContext) private var modelContext
+  @Query(
+    sort: [
+      SortDescriptor(\LibraryBook.addedAt, order: .reverse),
+      SortDescriptor(\LibraryBook.title, order: .forward),
+    ]
+  )
+  private var localBooks: [LibraryBook]
   @StateObject private var viewModel = LazyLibrarianViewModel()
   @State private var isShowingShareSheet = false
   @State private var shareURL: URL?
@@ -16,6 +25,14 @@ struct LazyLibrarianView: View {
   @State private var downloadKind: DownloadKind?
   @State private var pendingSearchItemIDs: Set<String> = []
   @State private var searchTask: Task<Void, Never>?
+  @State private var isSyncing = false
+  @State private var syncErrorMessage: String?
+  @State private var lastSync: Date?
+  @State private var lastSummary: LibrarySyncService.Summary?
+  @State private var localDownloadProgressByBookID: [String: Double] = [:]
+  @State private var localDownloadingBookIDs: Set<String> = []
+  @StateObject private var player = AudioPlayerController()
+  @State private var isShowingPlayer = false
 
   let clientOverride: LazyLibrarianServing?
 
@@ -46,23 +63,23 @@ struct LazyLibrarianView: View {
   }
 
   var body: some View {
-    if let client = configuredClient {
-      content(client: client)
-    } else {
-      ContentUnavailableView {
-        Label("LazyLibrarian", systemImage: "books.vertical")
-      } description: {
-        Text(
-          "Add your LazyLibrarian URL and API key in Settings to request books and see request status."
-        )
+    content(client: configuredClient)
+      .sheet(isPresented: $isShowingPlayer) {
+        LocalPlaybackView(player: player)
       }
-      .navigationTitle("Library")
-    }
   }
 
   @ViewBuilder
-  private func content(client: LazyLibrarianServing) -> some View {
+  private func content(client: LazyLibrarianServing?) -> some View {
     List {
+      if client == nil {
+        Text(
+          "LazyLibrarian not configured. Sync is disabled, but you can still play downloaded audiobooks."
+        )
+        .foregroundStyle(.secondary)
+        .font(.caption)
+      }
+
       if let error = viewModel.errorMessage {
         Text(error)
           .foregroundStyle(.red)
@@ -75,44 +92,30 @@ struct LazyLibrarianView: View {
           .font(.caption)
       }
 
-      if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        if viewModel.libraryItems.isEmpty {
-          Text("No books yet.")
-            .foregroundStyle(.secondary)
-        } else {
-          ForEach(viewModel.libraryItems) { item in
-            libraryRow(item, client: client)
-          }
-        }
-      } else {
-        let filteredLibrary = viewModel.filteredLibraryItems(query: viewModel.query)
-        let libraryByID = Dictionary(uniqueKeysWithValues: filteredLibrary.map { ($0.id, $0) })
-        let remoteResults = viewModel.searchResults
-        let matchedIDs = Set(remoteResults.map(\.id)).intersection(libraryByID.keys)
-        let remainingLibrary = filteredLibrary.filter { matchedIDs.contains($0.id) == false }
+      if let syncErrorMessage {
+        Text(syncErrorMessage)
+          .foregroundStyle(.red)
+          .font(.caption)
+      }
 
-        if remoteResults.isEmpty && remainingLibrary.isEmpty {
-          ContentUnavailableView(
-            "No Results",
-            systemImage: "magnifyingglass"
-          )
-        } else {
-          ForEach(remoteResults) { book in
-            if let item = libraryByID[book.id] {
-              libraryRow(item, client: client)
-            } else {
-              LazyLibrarianSearchResultRow(
-                viewModel: viewModel,
-                book: book,
-                client: client,
-                pendingItemIDs: $pendingSearchItemIDs
-              )
-            }
-          }
-          ForEach(remainingLibrary) { item in
-            libraryRow(item, client: client)
-          }
+      if let lastSync {
+        HStack(spacing: 8) {
+          Text("Last sync")
+          Text(lastSync, style: .time)
+            .foregroundStyle(.secondary)
         }
+        .font(.caption)
+      }
+
+      if let lastSummary {
+        summaryRow(lastSummary)
+      }
+
+      let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmedQuery.isEmpty {
+        libraryListing(client: client)
+      } else {
+        searchListing(query: trimmedQuery, client: client)
       }
     }
     #if os(iOS)
@@ -121,22 +124,33 @@ struct LazyLibrarianView: View {
     .navigationTitle("Library")
     .toolbar {
       ToolbarItem {
-        NavigationLink(destination: LocalLibraryView(client: client)) {
-          Image(systemName: "tray.full")
+        Button(action: { startSync(using: client) }) {
+          if isSyncing {
+            ProgressView()
+          } else {
+            Image(systemName: "arrow.triangle.2.circlepath")
+          }
         }
-        .help("Local Library")
+        .disabled(client == nil || isSyncing)
+        .help("Sync from LazyLibrarian")
       }
     }
     .onAppear {
+      guard let client else { return }
       Task {
+        if localBooks.isEmpty || lastSync == nil {
+          await syncFromRemote(using: client)
+        }
         await viewModel.loadLibraryItems(using: client)
       }
     }
     .refreshable {
-      await viewModel.loadLibraryItems(using: client)
+      guard let client else { return }
+      await refresh(using: client)
     }
     .searchable(text: $viewModel.query, prompt: "Search")
     .onSubmit(of: .search) {
+      guard let client else { return }
       Task {
         await viewModel.search(using: client)
       }
@@ -152,6 +166,7 @@ struct LazyLibrarianView: View {
       searchTask = Task {
         try? await Task.sleep(nanoseconds: 200_000_000)
         guard Task.isCancelled == false else { return }
+        guard let client else { return }
         await viewModel.search(using: client, query: trimmed)
       }
     }
@@ -175,6 +190,123 @@ struct LazyLibrarianView: View {
       isExportModalOpen: $isShowingKindleExporter,
       isExported: $isKindleExported
     )
+  }
+
+  private var localBooksById: [String: LibraryBook] {
+    Dictionary(uniqueKeysWithValues: localBooks.map { ($0.llId, $0) })
+  }
+
+  @ViewBuilder
+  private func summaryRow(_ summary: LibrarySyncService.Summary) -> some View {
+    let totalAdded = summary.insertedBooks + summary.insertedAuthors
+    let totalUpdated = summary.updatedBooks + summary.updatedAuthors
+    HStack(spacing: 8) {
+      Text("Last sync result")
+      Text("\(totalAdded) added, \(totalUpdated) updated")
+        .foregroundStyle(.secondary)
+    }
+    .font(.caption)
+  }
+
+  @ViewBuilder
+  private func libraryListing(client: LazyLibrarianServing?) -> some View {
+    let remoteItems = viewModel.libraryItems
+    let remoteIds = Set(remoteItems.map(\.id))
+    let localOnly = localBooks.filter { remoteIds.contains($0.llId) == false }
+
+    if remoteItems.isEmpty && localBooks.isEmpty {
+      ContentUnavailableView(
+        "No Books",
+        systemImage: "tray",
+        description: Text(
+          client == nil
+            ? "Add audiobooks to your local library to get started."
+            : "Tap Sync to pull your LazyLibrarian library."
+        )
+      )
+    } else if remoteItems.isEmpty {
+      ForEach(localBooks) { book in
+        localLibraryRow(book, client: client)
+      }
+    } else {
+      ForEach(remoteItems) { item in
+        libraryRow(item, localBook: localBooksById[item.id], client: client)
+      }
+      if localOnly.isEmpty == false {
+        Section("Local Only") {
+          ForEach(localOnly) { book in
+            localLibraryRow(book, client: client)
+          }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func searchListing(query: String, client: LazyLibrarianServing?) -> some View {
+    let localMatches = filteredLocalBooks(query: query)
+    let localIds = Set(localMatches.map(\.llId))
+    let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
+
+    if localMatches.isEmpty && remoteResults.isEmpty {
+      ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+    } else {
+      ForEach(localMatches) { book in
+        localLibraryRow(book, client: client)
+      }
+      if let client {
+        ForEach(remoteResults) { book in
+          LazyLibrarianSearchResultRow(
+            viewModel: viewModel,
+            book: book,
+            client: client,
+            pendingItemIDs: $pendingSearchItemIDs
+          )
+        }
+      }
+    }
+  }
+
+  private func filteredLocalBooks(query: String) -> [LibraryBook] {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.isEmpty == false else { return localBooks }
+    let needle = trimmed.lowercased()
+    return localBooks.filter { book in
+      book.title.lowercased().contains(needle)
+        || (book.author?.name.lowercased().contains(needle) ?? false)
+    }
+  }
+
+  private func startSync(using client: LazyLibrarianServing?) {
+    guard let client else { return }
+    guard isSyncing == false else { return }
+    Task {
+      await syncFromRemote(using: client)
+    }
+  }
+
+  @MainActor
+  private func syncFromRemote(using client: LazyLibrarianServing) async {
+    guard isSyncing == false else { return }
+    isSyncing = true
+    syncErrorMessage = nil
+    do {
+      let summary = try await LibrarySyncService().syncLibrary(
+        using: client,
+        modelContext: modelContext
+      )
+      lastSummary = summary
+      lastSync = Date()
+    } catch {
+      syncErrorMessage = error.localizedDescription
+    }
+    isSyncing = false
+  }
+
+  @MainActor
+  private func refresh(using client: LazyLibrarianServing) async {
+    await syncFromRemote(using: client)
+    await viewModel.loadLibraryItems(using: client)
   }
 
   private func startEbookDownload(
@@ -321,7 +453,8 @@ struct LazyLibrarianView: View {
 
   private func libraryRow(
     _ item: LazyLibrarianLibraryItem,
-    client: LazyLibrarianServing
+    localBook: LibraryBook?,
+    client: LazyLibrarianServing?
   ) -> some View {
     let progress = viewModel.progressForBookID(item.id)
     let isDownloadingThisBook = downloadingBookID == item.id
@@ -344,10 +477,17 @@ struct LazyLibrarianView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .lineLimit(1)
-          rowControls(
+          if let client {
+            rowControls(
+              item: item,
+              client: client,
+              isDownloadingThisBook: isDownloadingThisBook
+            )
+          }
+          localAudioControls(
             item: item,
-            client: client,
-            isDownloadingThisBook: isDownloadingThisBook
+            localBook: localBook,
+            client: client
           )
         }
         Spacer(minLength: 0)
@@ -513,6 +653,428 @@ struct LazyLibrarianView: View {
         .font(.system(size: 9, weight: .bold))
         .offset(x: 10, y: 10)
     }
+  }
+
+  private func localAudioControls(
+    item: LazyLibrarianLibraryItem,
+    localBook: LibraryBook?,
+    client: LazyLibrarianServing?
+  ) -> some View {
+    let audioStatus = audioStatus(for: localBook, fallback: item.audioStatus)
+    let status = localBook?.files.first?.downloadStatus ?? .notStarted
+    let progress = localDownloadProgressByBookID[item.id]
+    let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
+
+    let actionView: AnyView
+    if let localBook, let localPlaybackURL {
+      actionView = AnyView(playButton(for: localBook, url: localPlaybackURL))
+    } else {
+      actionView = AnyView(
+        localDownloadButton(
+          for: item,
+          status: status,
+          audioStatus: audioStatus,
+          client: client
+        )
+      )
+    }
+
+    let progressView = ProgressView(value: progress ?? 0)
+      .frame(maxWidth: 120)
+      .opacity(progress == nil ? 0 : 1)
+
+    return HStack(spacing: 8) {
+      actionView
+      progressView
+      Text(statusLabel(for: status))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  @ViewBuilder
+  private func localLibraryRow(_ book: LibraryBook, client: LazyLibrarianServing?) -> some View {
+    let file = book.files.first
+    let status = file?.downloadStatus ?? .notStarted
+    let progress = localDownloadProgressByBookID[book.llId]
+    let audioStatus = parseAudioStatus(from: book)
+    let playbackURL = playbackURL(for: book)
+    let coverURL = lazyLibrarianAssetURL(
+      baseURLString: userSettings.lazyLibrarianURL,
+      path: book.coverURLString
+    )
+
+    HStack(alignment: .top, spacing: 12) {
+      bookCoverView(
+        title: book.title,
+        author: book.author?.name ?? "Unknown Author",
+        url: coverURL
+      )
+      VStack(alignment: .leading, spacing: 6) {
+        Text(book.title)
+          .font(.headline)
+          .lineLimit(2)
+        Text(book.author?.name ?? "Unknown Author")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        statusLine(status: status, progress: progress, audioStatus: audioStatus)
+        if let playbackURL {
+          playButton(for: book, url: playbackURL)
+        } else {
+          localDownloadButton(
+            for: book,
+            status: status,
+            audioStatus: audioStatus,
+            client: client
+          )
+        }
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  @ViewBuilder
+  private func statusLine(
+    status: DownloadStatus,
+    progress: Double?,
+    audioStatus: LazyLibrarianLibraryItemStatus
+  ) -> some View {
+    HStack(spacing: 6) {
+      Text(statusLabel(for: status))
+      Text("Audio: \(audioStatus.rawValue)")
+      if let progress {
+        ProgressView(value: progress)
+          .frame(maxWidth: 120)
+      }
+    }
+    .foregroundStyle(.secondary)
+    .font(.caption)
+  }
+
+  private func statusLabel(for status: DownloadStatus) -> String {
+    switch status {
+    case .notStarted:
+      return "Not downloaded"
+    case .downloading:
+      return "Downloading"
+    case .paused:
+      return "Paused"
+    case .failed:
+      return "Failed"
+    case .completed:
+      return "Downloaded"
+    }
+  }
+
+  @ViewBuilder
+  private func localDownloadButton(
+    for book: LibraryBook,
+    status: DownloadStatus,
+    audioStatus: LazyLibrarianLibraryItemStatus,
+    client: LazyLibrarianServing?
+  ) -> some View {
+    let isDownloading = localDownloadingBookIDs.contains(book.llId)
+    let canDownload = audioStatus.isComplete && client != nil
+    Button(action: {
+      guard let client else { return }
+      startLocalDownload(for: book, client: client)
+    }) {
+      switch status {
+      case .completed:
+        Image(systemName: "checkmark.circle.fill")
+      case .failed:
+        Text("Retry")
+      case .downloading:
+        ProgressView()
+      default:
+        Text(canDownload ? "Download" : "Unavailable")
+      }
+    }
+    .disabled(
+      isDownloading || status == .completed || status == .downloading || canDownload == false
+    )
+  }
+
+  @ViewBuilder
+  private func localDownloadButton(
+    for item: LazyLibrarianLibraryItem,
+    status: DownloadStatus,
+    audioStatus: LazyLibrarianLibraryItemStatus,
+    client: LazyLibrarianServing?
+  ) -> some View {
+    let isDownloading = localDownloadingBookIDs.contains(item.id)
+    let canDownload = audioStatus.isComplete && client != nil
+    Button(action: {
+      guard let client else { return }
+      startLocalDownload(for: item, client: client)
+    }) {
+      switch status {
+      case .completed:
+        Image(systemName: "checkmark.circle.fill")
+      case .failed:
+        Text("Retry")
+      case .downloading:
+        ProgressView()
+      default:
+        Text(canDownload ? "Download" : "Unavailable")
+      }
+    }
+    .disabled(
+      isDownloading || status == .completed || status == .downloading || canDownload == false
+    )
+  }
+
+  @ViewBuilder
+  private func playButton(for book: LibraryBook, url: URL) -> some View {
+    Button(action: { startPlayback(for: book, url: url) }) {
+      Image(systemName: "play.circle.fill")
+        .font(.title2)
+    }
+    .help("Play")
+  }
+
+  @MainActor
+  private func startPlayback(for book: LibraryBook, url: URL) {
+    let localState = ensureLocalState(for: book)
+    localState.lastPlayedAt = Date()
+    try? modelContext.save()
+    player.load(url: url, title: book.title)
+    player.play()
+    isShowingPlayer = true
+  }
+
+  @MainActor
+  private func startLocalDownload(for book: LibraryBook, client: LazyLibrarianServing) {
+    guard localDownloadingBookIDs.contains(book.llId) == false else { return }
+    localDownloadingBookIDs.insert(book.llId)
+    localDownloadProgressByBookID[book.llId] = 0
+    downloadErrorMessage = nil
+
+    let audioStatus = parseAudioStatus(from: book)
+    guard audioStatus.isComplete else {
+      downloadErrorMessage = "Audiobook not ready (AudioStatus: \(audioStatus.rawValue))."
+      localDownloadingBookIDs.remove(book.llId)
+      localDownloadProgressByBookID[book.llId] = nil
+      return
+    }
+
+    Task { @MainActor in
+      let fileRecord = ensureFileRecord(for: book)
+      fileRecord.downloadStatus = .downloading
+      fileRecord.lastError = nil
+      fileRecord.bytesDownloaded = 0
+
+      do {
+        let tempURL = try await client.downloadAudiobook(bookID: book.llId) { value in
+          Task { @MainActor in
+            localDownloadProgressByBookID[book.llId] = value
+          }
+        }
+        let stored = try LibraryStorage().storeDownloadedFile(
+          tempURL,
+          for: book,
+          suggestedFilename: tempURL.lastPathComponent
+        )
+        let fileSize = stored.fileSizeBytes ?? 0
+        fileRecord.filename = stored.filename
+        fileRecord.localRelativePath = stored.relativePath
+        fileRecord.sizeBytes = fileSize
+        fileRecord.bytesDownloaded = fileSize
+        fileRecord.format = BookFileFormat.fromFilename(stored.filename)
+        fileRecord.downloadStatus = .completed
+
+        let localState = ensureLocalState(for: book)
+        localState.isDownloaded = true
+        localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
+
+        try modelContext.save()
+      } catch {
+        fileRecord.downloadStatus = .failed
+        fileRecord.lastError = error.localizedDescription
+        try? modelContext.save()
+        downloadErrorMessage =
+          "Download failed (AudioStatus: \(audioStatus.rawValue)): \(error.localizedDescription)"
+      }
+
+      localDownloadingBookIDs.remove(book.llId)
+      localDownloadProgressByBookID[book.llId] = nil
+    }
+  }
+
+  @MainActor
+  private func startLocalDownload(for item: LazyLibrarianLibraryItem, client: LazyLibrarianServing)
+  {
+    let book = ensureLocalBook(for: item)
+    startLocalDownload(for: book, client: client)
+  }
+
+  private func audioStatus(
+    for book: LibraryBook?,
+    fallback: LazyLibrarianLibraryItemStatus?
+  ) -> LazyLibrarianLibraryItemStatus {
+    if let book, let raw = book.audioStatusRaw,
+      let status = LazyLibrarianLibraryItemStatus(rawValue: raw)
+    {
+      return status
+    }
+    return fallback ?? .unknown
+  }
+
+  private func parseAudioStatus(from book: LibraryBook) -> LazyLibrarianLibraryItemStatus {
+    audioStatus(for: book, fallback: nil)
+  }
+
+  private func playbackURL(for book: LibraryBook) -> URL? {
+    guard
+      let file = book.files.first,
+      file.downloadStatus == .completed,
+      let relativePath = file.localRelativePath
+    else {
+      return nil
+    }
+
+    let url = try? LibraryStorage().url(forRelativePath: relativePath)
+    guard let url, FileManager.default.fileExists(atPath: url.path) else { return nil }
+
+    let format =
+      file.format == .unknown ? BookFileFormat.fromFilename(url.lastPathComponent) : file.format
+    switch format {
+    case .m4b, .mp3, .m4a:
+      return url
+    default:
+      return nil
+    }
+  }
+
+  private func ensureFileRecord(for book: LibraryBook) -> LibraryBookFile {
+    if let existing = book.files.first {
+      return existing
+    }
+    let record = LibraryBookFile(
+      llId: "\(book.llId):audio",
+      filename: book.title,
+      format: .unknown,
+      sizeBytes: 0,
+      checksum: nil,
+      trackCount: nil,
+      chapterInfoJSON: nil,
+      downloadStatus: .notStarted,
+      bytesDownloaded: 0,
+      lastError: nil,
+      localRelativePath: nil,
+      book: book
+    )
+    modelContext.insert(record)
+    book.files.append(record)
+    return record
+  }
+
+  private func ensureLocalState(for book: LibraryBook) -> LocalBookState {
+    if let existing = book.localState {
+      return existing
+    }
+    let state = LocalBookState(bookLlId: book.llId, book: book)
+    modelContext.insert(state)
+    book.localState = state
+    return state
+  }
+
+  @MainActor
+  private func ensureLocalBook(for item: LazyLibrarianLibraryItem) -> LibraryBook {
+    if let existing = localBooksById[item.id] {
+      let author = fetchOrCreateAuthor(name: item.author)
+      updateLocalBook(existing, with: item, author: author)
+      return existing
+    }
+
+    let author = fetchOrCreateAuthor(name: item.author)
+    let book = LibraryBook(
+      llId: item.id,
+      title: item.title,
+      summary: nil,
+      coverURLString: item.bookImagePath,
+      runtimeSeconds: nil,
+      addedAt: item.bookAdded,
+      updatedAt: latestLibraryDate(for: item),
+      seriesIndex: nil,
+      bookStatusRaw: item.status.rawValue,
+      audioStatusRaw: item.audioStatus?.rawValue,
+      author: author,
+      series: nil
+    )
+    modelContext.insert(book)
+    if modelContext.hasChanges {
+      try? modelContext.save()
+    }
+    return book
+  }
+
+  @MainActor
+  private func fetchOrCreateAuthor(name: String) -> Author {
+    let key = normalizeAuthorKey(name)
+    let descriptor = FetchDescriptor<Author>(
+      predicate: #Predicate { $0.llId == key }
+    )
+    if let existing = (try? modelContext.fetch(descriptor))?.first {
+      if existing.name != name {
+        existing.name = name
+      }
+      return existing
+    }
+    let author = Author(llId: key, name: name)
+    modelContext.insert(author)
+    return author
+  }
+
+  @MainActor
+  private func updateLocalBook(
+    _ book: LibraryBook,
+    with item: LazyLibrarianLibraryItem,
+    author: Author
+  ) {
+    var updated = false
+    if book.title != item.title {
+      book.title = item.title
+      updated = true
+    }
+    if book.coverURLString != item.bookImagePath {
+      book.coverURLString = item.bookImagePath
+      updated = true
+    }
+    let nextAddedAt = item.bookAdded
+    if book.addedAt != nextAddedAt {
+      book.addedAt = nextAddedAt
+      updated = true
+    }
+    let nextUpdatedAt = latestLibraryDate(for: item)
+    if book.updatedAt != nextUpdatedAt {
+      book.updatedAt = nextUpdatedAt
+      updated = true
+    }
+    if book.author !== author {
+      book.author = author
+      updated = true
+    }
+    if book.bookStatusRaw != item.status.rawValue {
+      book.bookStatusRaw = item.status.rawValue
+      updated = true
+    }
+    if book.audioStatusRaw != item.audioStatus?.rawValue {
+      book.audioStatusRaw = item.audioStatus?.rawValue
+      updated = true
+    }
+    if updated, modelContext.hasChanges {
+      try? modelContext.save()
+    }
+  }
+
+  private func normalizeAuthorKey(_ name: String) -> String {
+    name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func latestLibraryDate(for item: LazyLibrarianLibraryItem) -> Date? {
+    [item.bookLibrary, item.audioLibrary].compactMap { $0 }.max()
   }
 }
 
@@ -803,4 +1365,8 @@ struct ActivityShareSheet: View {
     LazyLibrarianView(client: LazyLibrarianMockClient())
       .environmentObject(UserSettings())
   }
+  .modelContainer(
+    for: [Author.self, Series.self, LibraryBook.self, LibraryBookFile.self, LocalBookState.self],
+    inMemory: true
+  )
 }
