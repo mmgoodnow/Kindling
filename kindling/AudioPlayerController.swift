@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 
-@MainActor
 final class AudioPlayerController: ObservableObject {
   @Published var isPlaying: Bool = false
   @Published var currentTime: Double = 0
@@ -95,8 +94,6 @@ final class AudioPlayerController: ObservableObject {
   }
 
   deinit {
-    Task { @MainActor in
-      resetObservers()
-    }
+    resetObservers()
   }
 }
