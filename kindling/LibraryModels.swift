@@ -18,6 +18,26 @@ enum BookFileFormat: String, Codable, CaseIterable {
   case unknown
 }
 
+extension BookFileFormat {
+  static func fromFilename(_ filename: String) -> BookFileFormat {
+    let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+    switch ext {
+    case "m4b":
+      return .m4b
+    case "mp3":
+      return .mp3
+    case "m4a":
+      return .m4a
+    case "flac":
+      return .flac
+    case "ogg", "oga":
+      return .ogg
+    default:
+      return .unknown
+    }
+  }
+}
+
 @Model
 final class Author {
   @Attribute(.unique) var llId: String

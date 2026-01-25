@@ -17,6 +17,8 @@ struct LocalLibraryView: View {
   @State private var errorMessage: String?
   @State private var lastSync: Date?
   @State private var lastSummary: LibrarySyncService.Summary?
+  @State private var downloadProgressByBookID: [String: Double] = [:]
+  @State private var downloadingBookIDs: Set<String> = []
 
   var body: some View {
     List {
@@ -47,12 +49,7 @@ struct LocalLibraryView: View {
         )
       } else {
         ForEach(books) { book in
-          VStack(alignment: .leading, spacing: 4) {
-            Text(book.title)
-            Text(book.author?.name ?? "Unknown Author")
-              .foregroundStyle(.secondary)
-              .font(.caption)
-          }
+          libraryRow(book)
         }
       }
     }
@@ -106,6 +103,151 @@ struct LocalLibraryView: View {
       }
       isSyncing = false
     }
+  }
+
+  @ViewBuilder
+  private func libraryRow(_ book: LibraryBook) -> some View {
+    let file = book.files.first
+    let status = file?.downloadStatus ?? .notStarted
+    let progress = downloadProgressByBookID[book.llId]
+    HStack(alignment: .firstTextBaseline) {
+      VStack(alignment: .leading, spacing: 4) {
+        Text(book.title)
+        Text(book.author?.name ?? "Unknown Author")
+          .foregroundStyle(.secondary)
+          .font(.caption)
+        statusLine(status: status, progress: progress)
+      }
+      Spacer()
+      downloadButton(for: book, status: status)
+    }
+  }
+
+  @ViewBuilder
+  private func statusLine(status: DownloadStatus, progress: Double?) -> some View {
+    HStack(spacing: 6) {
+      Text(statusLabel(for: status))
+      if let progress {
+        ProgressView(value: progress)
+          .frame(maxWidth: 120)
+      }
+    }
+    .foregroundStyle(.secondary)
+    .font(.caption)
+  }
+
+  private func statusLabel(for status: DownloadStatus) -> String {
+    switch status {
+    case .notStarted:
+      return "Not downloaded"
+    case .downloading:
+      return "Downloading"
+    case .paused:
+      return "Paused"
+    case .failed:
+      return "Failed"
+    case .completed:
+      return "Downloaded"
+    }
+  }
+
+  @ViewBuilder
+  private func downloadButton(for book: LibraryBook, status: DownloadStatus) -> some View {
+    let isDownloading = downloadingBookIDs.contains(book.llId)
+    Button(action: { startDownload(for: book) }) {
+      switch status {
+      case .completed:
+        Image(systemName: "checkmark.circle.fill")
+      case .failed:
+        Text("Retry")
+      case .downloading:
+        ProgressView()
+      default:
+        Text("Download")
+      }
+    }
+    .disabled(isDownloading || status == .completed || status == .downloading)
+  }
+
+  private func startDownload(for book: LibraryBook) {
+    guard downloadingBookIDs.contains(book.llId) == false else { return }
+    downloadingBookIDs.insert(book.llId)
+    downloadProgressByBookID[book.llId] = 0
+    errorMessage = nil
+
+    Task {
+      let fileRecord = ensureFileRecord(for: book)
+      fileRecord.downloadStatus = .downloading
+      fileRecord.lastError = nil
+      fileRecord.bytesDownloaded = 0
+
+      do {
+        let tempURL = try await client.downloadAudiobook(bookID: book.llId) { value in
+          Task { @MainActor in
+            downloadProgressByBookID[book.llId] = value
+          }
+        }
+        let stored = try LibraryStorage().storeDownloadedFile(
+          tempURL,
+          for: book,
+          suggestedFilename: tempURL.lastPathComponent
+        )
+        let fileSize = stored.fileSizeBytes ?? 0
+        fileRecord.filename = stored.filename
+        fileRecord.localRelativePath = stored.relativePath
+        fileRecord.sizeBytes = fileSize
+        fileRecord.bytesDownloaded = fileSize
+        fileRecord.format = BookFileFormat.fromFilename(stored.filename)
+        fileRecord.downloadStatus = .completed
+
+        let localState = ensureLocalState(for: book)
+        localState.isDownloaded = true
+        localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
+
+        try modelContext.save()
+      } catch {
+        fileRecord.downloadStatus = .failed
+        fileRecord.lastError = error.localizedDescription
+        try? modelContext.save()
+        errorMessage = "Download failed: \(error.localizedDescription)"
+      }
+
+      downloadingBookIDs.remove(book.llId)
+      downloadProgressByBookID[book.llId] = nil
+    }
+  }
+
+  private func ensureFileRecord(for book: LibraryBook) -> LibraryBookFile {
+    if let existing = book.files.first {
+      return existing
+    }
+    let record = LibraryBookFile(
+      llId: "\(book.llId):audio",
+      filename: book.title,
+      format: .unknown,
+      sizeBytes: 0,
+      checksum: nil,
+      trackCount: nil,
+      chapterInfoJSON: nil,
+      downloadStatus: .notStarted,
+      bytesDownloaded: 0,
+      lastError: nil,
+      localRelativePath: nil,
+      book: book
+    )
+    modelContext.insert(record)
+    book.files.append(record)
+    return record
+  }
+
+  private func ensureLocalState(for book: LibraryBook) -> LocalBookState {
+    if let existing = book.localState {
+      return existing
+    }
+    let state = LocalBookState(bookLlId: book.llId, book: book)
+    modelContext.insert(state)
+    book.localState = state
+    return state
   }
 }
 

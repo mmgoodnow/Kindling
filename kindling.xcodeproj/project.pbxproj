@@ -15,6 +15,7 @@
 		F179EC3C27C2960C9B95B01A /* LibraryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02C0597F979F491A121C9E4 /* LibraryModels.swift */; };
 		4A3CF8737D2AB537C847C3D3 /* LibrarySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0734DF343642F7C19150FF /* LibrarySyncService.swift */; };
 		254699AF0CEDAD06F5522971 /* LocalLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6A0492CAF755ED79438AF2 /* LocalLibraryView.swift */; };
+		7B99BF464A48C4046CFDD414 /* LibraryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF8EFA05C54AA50F9A65946 /* LibraryStorage.swift */; };
 		514A16C42CB19C2300B6F94E /* ExportViewModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */; };
 		51792F912C900EEA004B6E71 /* kindlingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51792F902C900EEA004B6E71 /* kindlingApp.swift */; };
 		51792F932C900EEA004B6E71 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51792F922C900EEA004B6E71 /* ContentView.swift */; };
@@ -93,6 +94,7 @@
 		B02C0597F979F491A121C9E4 /* LibraryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryModels.swift; sourceTree = "<group>"; };
 		9F0734DF343642F7C19150FF /* LibrarySyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncService.swift; sourceTree = "<group>"; };
 		9F6A0492CAF755ED79438AF2 /* LocalLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibraryView.swift; sourceTree = "<group>"; };
+		9AF8EFA05C54AA50F9A65946 /* LibraryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorage.swift; sourceTree = "<group>"; };
 		514A16C22CB124E500B6F94E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewModifier.swift; sourceTree = "<group>"; };
 		51792F8D2C900EEA004B6E71 /* kindling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kindling.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -192,6 +194,7 @@
 				B02C0597F979F491A121C9E4 /* LibraryModels.swift */,
 				9F0734DF343642F7C19150FF /* LibrarySyncService.swift */,
 				9F6A0492CAF755ED79438AF2 /* LocalLibraryView.swift */,
+				9AF8EFA05C54AA50F9A65946 /* LibraryStorage.swift */,
 				51792FC42C93CF90004B6E71 /* EBookDownloader.swift */,
 				51929E222C9A5F3A00D77429 /* SearchResult.swift */,
 				51792F962C900EEB004B6E71 /* Assets.xcassets */,
@@ -419,6 +422,7 @@
 				F179EC3C27C2960C9B95B01A /* LibraryModels.swift in Sources */,
 				4A3CF8737D2AB537C847C3D3 /* LibrarySyncService.swift in Sources */,
 				254699AF0CEDAD06F5522971 /* LocalLibraryView.swift in Sources */,
+				7B99BF464A48C4046CFDD414 /* LibraryStorage.swift in Sources */,
 				51792FC12C91250F004B6E71 /* IRCConnection.swift in Sources */,
 				51929E282C9FA70900D77429 /* SearchResultsView.swift in Sources */,
 				51929E232C9A5F3A00D77429 /* SearchResult.swift in Sources */,
