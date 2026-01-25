@@ -119,6 +119,14 @@ struct LazyLibrarianView: View {
       .listStyle(.grouped)
     #endif
     .navigationTitle("Library")
+    .toolbar {
+      ToolbarItem {
+        NavigationLink(destination: LocalLibraryView(client: client)) {
+          Image(systemName: "tray.full")
+        }
+        .help("Local Library")
+      }
+    }
     .onAppear {
       Task {
         await viewModel.loadLibraryItems(using: client)
