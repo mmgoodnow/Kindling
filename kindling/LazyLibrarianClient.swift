@@ -395,6 +395,11 @@ struct LazyLibrarianSearchResult: Identifiable, Hashable {
       && mode.isEmpty == false
   }
 
+  var snatchURL: String {
+    let plusFixed = url.replacingOccurrences(of: "+", with: " ")
+    return plusFixed.removingPercentEncoding ?? url
+  }
+
   var sizeParameter: String? {
     sizeRaw ?? sizeBytes.map(String.init)
   }
@@ -1174,7 +1179,7 @@ struct LazyLibrarianClient: LazyLibrarianServing {
       URLQueryItem(name: "library", value: library.rawValue),
       URLQueryItem(name: "mode", value: result.mode),
       URLQueryItem(name: "provider", value: result.provider),
-      URLQueryItem(name: "url", value: result.url),
+      URLQueryItem(name: "url", value: result.snatchURL),
       URLQueryItem(name: "title", value: result.title),
     ]
     if let size = result.sizeParameter {
