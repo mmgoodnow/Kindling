@@ -282,6 +282,7 @@ protocol LazyLibrarianServing {
     -> LazyLibrarianLibraryItem
   func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem]
   func fetchBookCovers(wait: Bool) async throws
+  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws
   func searchBook(id: String, library: LazyLibrarianLibrary) async throws
   func searchItem(
     query: String,
@@ -317,6 +318,11 @@ extension LazyLibrarianServing {
 
   func searchItem(query: String) async throws -> [LazyLibrarianSearchResult] {
     try await searchItem(query: query, cat: nil, bookID: nil)
+  }
+
+  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws {
+    throw LazyLibrarianError.unsupported(
+      "\(backendFlavor) does not support reporting wrong imported files.")
   }
 }
 
@@ -1745,6 +1751,18 @@ struct PodibleKindlingClient: LazyLibrarianServing {
       try await rpcCall(
         method: "library.acquire",
         params: ["bookId": bookID, "media": podibleMediaValue(for: library)]
+      ) as PodibleEmptyResult
+  }
+
+  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws {
+    let numericBookID = try parseBookID(bookID)
+    _ =
+      try await rpcCall(
+        method: "library.reportImportIssue",
+        params: [
+          "bookId": numericBookID,
+          "mediaType": podibleMediaValue(for: library),
+        ]
       ) as PodibleEmptyResult
   }
 
