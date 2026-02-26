@@ -286,6 +286,7 @@ protocol PodibleLibraryServing {
   func fetchLibraryItems() async throws -> [PodibleLibraryItem]
   func deleteLibraryBook(bookID: String) async throws
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
+  func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
@@ -321,6 +322,11 @@ extension PodibleLibraryServing {
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
     throw PodibleError.unsupported(
       "This backend does not support reporting wrong imported files.")
+  }
+
+  func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
+    _ = bookIDs
+    return []
   }
 }
 
@@ -661,6 +667,49 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return items
   }
 
+  func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
+    let filter = Set(bookIDs ?? [])
+    for (bookID, p) in progress {
+      let ebook = min(100, p.ebook + 7)
+      let audio = min(100, p.audio + 5)
+      progress[bookID] = (ebook: ebook, audio: audio)
+
+      guard let index = libraryItems.firstIndex(where: { $0.id == bookID }) else { continue }
+      let existing = libraryItems[index]
+      let combined = min(100, Int(((Double(ebook) + Double(audio)) / 2).rounded()))
+      let next = PodibleLibraryItem(
+        id: existing.id,
+        title: existing.title,
+        author: existing.author,
+        status: combined >= 100 ? .have : .requested,
+        ebookStatus: ebook >= 100 ? .have : .requested,
+        audioStatus: audio >= 100 ? .have : .requested,
+        bookAdded: existing.bookAdded,
+        updatedAt: .now,
+        fullPseudoProgress: combined,
+        bookImagePath: existing.bookImagePath
+      )
+      libraryItems[index] = next
+    }
+
+    let inProgress = libraryItems.filter { item in
+      let ebook = item.ebookStatus ?? item.status
+      let audio = item.audioStatus
+      func isActive(_ status: PodibleLibraryItemStatus?) -> Bool {
+        guard let status else { return false }
+        switch status {
+        case .requested, .wanted, .snatched, .seeding:
+          return true
+        default:
+          return false
+        }
+      }
+      return isActive(ebook) || isActive(audio)
+    }
+    if filter.isEmpty { return inProgress }
+    return inProgress.filter { filter.contains($0.id) }
+  }
+
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL {
     let fm = FileManager.default
     let folder = fm.temporaryDirectory.appendingPathComponent("lazy-librarian", isDirectory: true)
@@ -706,6 +755,10 @@ private struct PodibleLibraryListResult: Decodable {
 
 private struct PodibleLibraryCreateResult: Decodable {
   let book: PodibleLibraryBook?
+}
+
+private struct PodibleLibraryInProgressResult: Decodable {
+  let items: [PodibleLibraryBook]
 }
 
 private struct PodibleOpenLibrarySearchResult: Decodable {
@@ -916,6 +969,18 @@ struct PodibleClient: PodibleLibraryServing {
       return Array(mapped.prefix(limit))
     }
     return mapped
+  }
+
+  func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
+    var params: [String: Any] = [:]
+    if let bookIDs, bookIDs.isEmpty == false {
+      params["bookIds"] = try bookIDs.map(parseBookID(_:))
+    }
+    let response: PodibleLibraryInProgressResult = try await rpcCall(
+      method: "library.inProgress",
+      params: params
+    )
+    return response.items.map(toLibraryItem(_:))
   }
 
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL {

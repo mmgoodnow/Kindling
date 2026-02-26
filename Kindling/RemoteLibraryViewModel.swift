@@ -311,47 +311,67 @@ final class PodibleLibraryViewModel: ObservableObject {
     downloadPollingTasks[bookID] = Task { [weak self] in
       guard let self else { return }
       let deadline = Date.now.addingTimeInterval(15 * 60)
-      var lastStatusRefresh = Date.distantPast
-      let statusRefreshInterval: TimeInterval = 3.0
       while Task.isCancelled == false, Date.now < deadline {
         do {
-          let active = try await client.fetchDownloadProgress(limit: 50)
-          self.mergeProgress(active, forBookID: bookID)
-          // If both tracks are finished, do a final status refresh and continue polling statuses briefly until they settle.
-          if let current = self.downloadProgressByBookID[bookID], current.ebookFinished,
-            current.audiobookFinished
-          {
+          let activeItems = try await client.fetchInProgressLibraryItems(bookIDs: [bookID])
+          if let item = activeItems.first(where: { $0.id == bookID }) {
+            self.mergeInProgressItem(item, forBookID: bookID)
+          } else {
             await self.refreshLibrarySilently(using: client)
-            // Continue polling request statuses a bit longer until they settle to non-active, or timeout.
-            let settleDeadline = deadline
-            while Task.isCancelled == false, Date.now < settleDeadline {
-              if let item = self.libraryItems.first(where: { $0.id == bookID }) {
-                if self.shouldShowDownloadProgress(
-                  status: item.status, audioStatus: item.audioStatus) == false
-                {
-                  break
-                }
-              }
-              try? await Task.sleep(nanoseconds: self.downloadPollIntervalNanoseconds * 4)
-              await self.refreshLibrarySilently(using: client)
-            }
-            // Clear progress so UI hides bars once statuses settle.
             self.downloadProgressByBookID[bookID] = nil
             break
           }
-          // Periodically refresh request statuses to reflect transitions (e.g., Snatched -> Downloaded)
-          if Date.now.timeIntervalSince(lastStatusRefresh) >= statusRefreshInterval {
-            await self.refreshLibrarySilently(using: client)
-            lastStatusRefresh = .now
-          }
         } catch {
-          // Keep polling; transient failures are expected while downloads are being created.
+          // Keep polling; transient failures are expected.
         }
 
         try? await Task.sleep(nanoseconds: self.downloadPollIntervalNanoseconds)
       }
       self.downloadPollingTasks[bookID] = nil
     }
+  }
+
+  private func mergeInProgressItem(_ item: PodibleLibraryItem, forBookID bookID: String) {
+    guard item.id == bookID else { return }
+
+    if let index = libraryItems.firstIndex(where: { $0.id == bookID }) {
+      let existing = libraryItems[index]
+      let merged = PodibleLibraryItem(
+        id: item.id,
+        title: item.title,
+        author: item.author,
+        status: item.status,
+        ebookStatus: item.ebookStatus ?? existing.ebookStatus,
+        audioStatus: item.audioStatus ?? existing.audioStatus,
+        bookAdded: item.bookAdded ?? existing.bookAdded,
+        updatedAt: item.updatedAt ?? existing.updatedAt,
+        fullPseudoProgress: item.fullPseudoProgress ?? existing.fullPseudoProgress,
+        bookImagePath: item.bookImagePath ?? existing.bookImagePath
+      )
+      libraryItems[index] = merged
+      updatePolledProgressSnapshot(for: merged)
+      return
+    }
+
+    libraryItems.append(item)
+    libraryItems = filtered(libraryItems)
+    updatePolledProgressSnapshot(for: item)
+  }
+
+  private func updatePolledProgressSnapshot(for item: PodibleLibraryItem) {
+    let combined = max(0, min(100, item.fullPseudoProgress ?? 0))
+    let ebookStatus = item.ebookStatus ?? item.status
+    let audioStatus = item.audioStatus
+    let sawProgress = item.fullPseudoProgress != nil
+    downloadProgressByBookID[item.id] = DownloadProgress(
+      ebook: combined,
+      audiobook: combined,
+      ebookFinished: ebookStatus.isComplete,
+      audiobookFinished: audioStatus?.isComplete ?? false,
+      ebookSeen: sawProgress,
+      audiobookSeen: sawProgress,
+      updatedAt: .now
+    )
   }
 
   private func mergeProgress(_ items: [PodibleDownloadProgressItem], forBookID bookID: String) {
