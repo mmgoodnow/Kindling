@@ -58,8 +58,6 @@ enum PodibleLibraryItemStatus: String, Decodable {
   }
 }
 
-typealias LazyLibrarianLibraryItemStatus = PodibleLibraryItemStatus
-
 struct PodibleBook: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
@@ -136,8 +134,6 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
     link = try? container.decodeIfPresent(URL.self, forKey: .link)
   }
 }
-
-typealias LazyLibrarianBook = PodibleBook
 
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
@@ -234,8 +230,6 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   }
 }
 
-typealias LazyLibrarianLibraryItem = PodibleLibraryItem
-
 private enum PodibleDateParser {
   private static let utcCalendar: Calendar = {
     var calendar = Calendar(identifier: .gregorian)
@@ -310,8 +304,6 @@ protocol PodibleLibraryServing {
 }
 
 typealias RemoteLibraryServing = PodibleLibraryServing
-typealias LazyLibrarianServing = PodibleLibraryServing
-
 extension PodibleLibraryServing {
   var supportsManualResultSelection: Bool { true }
   var supportsImportIssueReporting: Bool { false }
@@ -413,8 +405,6 @@ struct PodibleDownloadProgressItem: Hashable, Decodable {
     finished = try? container.decodeIfPresent(Bool.self, forKey: .finished)
   }
 }
-
-typealias LazyLibrarianDownloadProgressItem = PodibleDownloadProgressItem
 
 struct PodibleSearchResult: Identifiable, Hashable {
   let id: String
@@ -591,8 +581,6 @@ struct PodibleSearchResult: Identifiable, Hashable {
     return Int64(value * multiplier)
   }
 }
-
-typealias LazyLibrarianSearchResult = PodibleSearchResult
 
 // Preview/testing helper that simulates the podible backend without network calls.
 final actor PodibleMockClient: PodibleLibraryServing {
@@ -773,8 +761,6 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return destination
   }
 }
-
-typealias LazyLibrarianMockClient = PodibleMockClient
 
 private struct PodibleRPCEnvelope<Result: Decodable>: Decodable {
   struct RPCError: Decodable {
