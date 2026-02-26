@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class LazyLibrarianViewModel: ObservableObject {
+final class PodibleLibraryViewModel: ObservableObject {
   struct DownloadProgress: Hashable {
     var ebook: Int
     var audiobook: Int
@@ -424,6 +424,6 @@ final class LazyLibrarianViewModel: ObservableObject {
   }
 }
 
-typealias RemoteLibraryViewModel = LazyLibrarianViewModel
-typealias PodibleLibraryViewModel = LazyLibrarianViewModel
-typealias PodibleLibraryDownloadProgress = LazyLibrarianViewModel.DownloadProgress
+typealias LazyLibrarianViewModel = PodibleLibraryViewModel
+typealias RemoteLibraryViewModel = PodibleLibraryViewModel
+typealias PodibleLibraryDownloadProgress = PodibleLibraryViewModel.DownloadProgress

@@ -3,7 +3,7 @@ import Kingfisher
 import SwiftData
 import SwiftUI
 
-struct LazyLibrarianView: View {
+struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @Environment(\.modelContext) private var modelContext
   @Query(
@@ -1207,10 +1207,10 @@ struct LazyLibrarianView: View {
   }
 }
 
-typealias RemoteLibraryView = LazyLibrarianView
-typealias PodibleLibraryView = LazyLibrarianView
+typealias LazyLibrarianView = PodibleLibraryView
+typealias RemoteLibraryView = PodibleLibraryView
 
-private struct LazyLibrarianSnatchResultPicker: View {
+private struct PodibleSnatchResultPicker: View {
   let book: PodibleLibraryItem
   let libraries: [PodibleLibraryMedia]
   let client: PodibleLibraryServing
@@ -1382,7 +1382,7 @@ private struct LazyLibrarianSnatchResultPicker: View {
   }
 }
 
-private typealias PodibleSnatchResultPicker = LazyLibrarianSnatchResultPicker
+private typealias LazyLibrarianSnatchResultPicker = PodibleSnatchResultPicker
 
 @ViewBuilder
 func lazyLibrarianEbookStatusRow(
