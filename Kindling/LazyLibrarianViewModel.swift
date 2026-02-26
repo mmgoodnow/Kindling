@@ -426,3 +426,4 @@ final class LazyLibrarianViewModel: ObservableObject {
 
 typealias RemoteLibraryViewModel = LazyLibrarianViewModel
 typealias PodibleLibraryViewModel = LazyLibrarianViewModel
+typealias PodibleLibraryDownloadProgress = LazyLibrarianViewModel.DownloadProgress

@@ -21,7 +21,7 @@ struct LazyLibrarianSearchResultsView: View {
         )
       } else {
         ForEach(viewModel.searchResults) { book in
-          LazyLibrarianSearchResultRow(
+          PodibleSearchResultRow(
             viewModel: viewModel,
             book: book,
             client: client,
@@ -33,6 +33,8 @@ struct LazyLibrarianSearchResultsView: View {
     .navigationTitle("Search")
   }
 }
+
+typealias PodibleSearchResultsView = LazyLibrarianSearchResultsView
 
 struct LazyLibrarianSearchResultRow: View {
   @ObservedObject var viewModel: LazyLibrarianViewModel
@@ -150,8 +152,10 @@ struct LazyLibrarianSearchResultRow: View {
   }
 }
 
+typealias PodibleSearchResultRow = LazyLibrarianSearchResultRow
+
 #Preview {
-  let viewModel = LazyLibrarianViewModel()
+  let viewModel = PodibleLibraryViewModel()
   viewModel.searchResults = [
     PodibleBook(
       id: "1",
@@ -172,7 +176,7 @@ struct LazyLibrarianSearchResultRow: View {
     ),
   ]
   viewModel.downloadProgressByBookID["1"] =
-    LazyLibrarianViewModel.DownloadProgress(
+    PodibleLibraryDownloadProgress(
       ebook: 42,
       audiobook: 18,
       ebookFinished: false,
@@ -183,9 +187,9 @@ struct LazyLibrarianSearchResultRow: View {
     )
 
   return NavigationStack {
-    LazyLibrarianSearchResultsView(
+    PodibleSearchResultsView(
       viewModel: viewModel,
-      client: LazyLibrarianMockClient()
+      client: PodibleMockClient()
     )
     .environmentObject(UserSettings())
   }

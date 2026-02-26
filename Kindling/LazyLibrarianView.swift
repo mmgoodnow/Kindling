@@ -15,7 +15,7 @@ struct LazyLibrarianView: View {
   private var localBooks: [LibraryBook]
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
-  @StateObject private var viewModel = LazyLibrarianViewModel()
+  @StateObject private var viewModel = PodibleLibraryViewModel()
   @State private var isShowingShareSheet = false
   @State private var shareURL: URL?
   @State private var isShowingKindleExporter = false
@@ -79,7 +79,7 @@ struct LazyLibrarianView: View {
       }
       .sheet(item: $snatchContext) { context in
         if let client = configuredClient {
-          LazyLibrarianSnatchResultPicker(
+          PodibleSnatchResultPicker(
             book: context.item,
             libraries: context.libraries,
             client: client
@@ -298,7 +298,7 @@ struct LazyLibrarianView: View {
       }
       if let client {
         ForEach(remoteResults) { book in
-          LazyLibrarianSearchResultRow(
+          PodibleSearchResultRow(
             viewModel: viewModel,
             book: book,
             client: client,
@@ -1382,6 +1382,8 @@ private struct LazyLibrarianSnatchResultPicker: View {
   }
 }
 
+private typealias PodibleSnatchResultPicker = LazyLibrarianSnatchResultPicker
+
 @ViewBuilder
 func lazyLibrarianEbookStatusRow(
   status: PodibleLibraryItemStatus?,
@@ -1450,7 +1452,7 @@ func lazyLibrarianAudioStatusRow(
 
 @ViewBuilder
 func lazyLibrarianProgressCircles(
-  progress: LazyLibrarianViewModel.DownloadProgress
+  progress: PodibleLibraryDownloadProgress
 ) -> some View {
   VStack(alignment: .trailing, spacing: 6) {
     HStack(spacing: 6) {
@@ -1475,7 +1477,7 @@ func lazyLibrarianProgressCircles(
 @ViewBuilder
 func lazyLibrarianStatusCluster(
   item: PodibleLibraryItem,
-  progress: LazyLibrarianViewModel.DownloadProgress?,
+  progress: PodibleLibraryDownloadProgress?,
   shouldOfferSearch: (PodibleLibraryItemStatus?) -> Bool
 ) -> some View {
   let showEbook = item.status.isComplete == false
@@ -1672,7 +1674,7 @@ struct ActivityShareSheet: View {
 
 #Preview {
   NavigationStack {
-    LazyLibrarianView(client: LazyLibrarianMockClient())
+    PodibleLibraryView(client: PodibleMockClient())
       .environmentObject(UserSettings())
   }
   .modelContainer(

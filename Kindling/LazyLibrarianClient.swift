@@ -779,6 +779,8 @@ final actor LazyLibrarianMockClient: RemoteLibraryServing {
   }
 }
 
+typealias PodibleMockClient = LazyLibrarianMockClient
+
 private struct PodibleRPCEnvelope<Result: Decodable>: Decodable {
   struct RPCError: Decodable {
     let code: Int
