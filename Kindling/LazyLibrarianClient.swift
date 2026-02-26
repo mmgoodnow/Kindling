@@ -64,8 +64,8 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
   let author: String
-  let status: LazyLibrarianLibraryItemStatus
-  let audioStatus: LazyLibrarianLibraryItemStatus?
+  let status: PodibleLibraryItemStatus
+  let audioStatus: PodibleLibraryItemStatus?
   let coverURL: URL?
   let coverImageURL: URL?
   let rating: Double?
@@ -74,8 +74,8 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
   let link: URL?
 
   init(
-    id: String, title: String, author: String, status: LazyLibrarianLibraryItemStatus,
-    audioStatus: LazyLibrarianLibraryItemStatus? = nil,
+    id: String, title: String, author: String, status: PodibleLibraryItemStatus,
+    audioStatus: PodibleLibraryItemStatus? = nil,
     coverURL: URL? = nil, coverImageURL: URL? = nil, rating: Double? = nil, ratingCount: Int? = nil,
     published: String? = nil, link: URL? = nil
   ) {
@@ -119,11 +119,11 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
     title = try container.decodeIfPresent(String.self, forKeys: [.titleLower, .titleUpper])
     author = try container.decodeIfPresent(String.self, forKeys: [.authorLower, .authorUpper])
     status =
-      (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .status))
-      ?? (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .statusAlt))
-      ?? (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .audioStatus))
+      (try? container.decode(PodibleLibraryItemStatus.self, forKey: .status))
+      ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .statusAlt))
+      ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .audioStatus))
       ?? .unknown
-    audioStatus = (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .audioStatus))
+    audioStatus = (try? container.decode(PodibleLibraryItemStatus.self, forKey: .audioStatus))
     coverURL = try? container.decodeIfPresent(URL.self, forKey: .coverURL)
     coverImageURL = try? container.decodeIfPresent(URL.self, forKey: .coverImageURL)
     rating = try? container.decodeIfPresent(Double.self, forKey: .rating)
@@ -143,8 +143,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
   let author: String
-  let status: LazyLibrarianLibraryItemStatus
-  let audioStatus: LazyLibrarianLibraryItemStatus?
+  let status: PodibleLibraryItemStatus
+  let audioStatus: PodibleLibraryItemStatus?
   let bookAdded: Date?
   let bookLibrary: Date?
   let audioLibrary: Date?
@@ -154,8 +154,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     id: String,
     title: String,
     author: String,
-    status: LazyLibrarianLibraryItemStatus,
-    audioStatus: LazyLibrarianLibraryItemStatus? = nil,
+    status: PodibleLibraryItemStatus,
+    audioStatus: PodibleLibraryItemStatus? = nil,
     bookAdded: Date? = nil,
     bookLibrary: Date? = nil,
     audioLibrary: Date? = nil,
@@ -196,11 +196,11 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     title = try container.decodeIfPresent(String.self, forKeys: [.titleLower, .titleUpper])
     author = try container.decodeIfPresent(String.self, forKeys: [.authorLower, .authorUpper])
     status =
-      (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .status))
-      ?? (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .statusAlt))
-      ?? (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .audioStatus))
+      (try? container.decode(PodibleLibraryItemStatus.self, forKey: .status))
+      ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .statusAlt))
+      ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .audioStatus))
       ?? .unknown
-    audioStatus = (try? container.decode(LazyLibrarianLibraryItemStatus.self, forKey: .audioStatus))
+    audioStatus = (try? container.decode(PodibleLibraryItemStatus.self, forKey: .audioStatus))
     bookImagePath = try? container.decodeIfPresent(
       String.self, forKeys: [.bookImageUpper, .bookImageLower])
     if let raw = try? container.decodeIfPresent(String.self, forKey: .bookLibrary) {
@@ -288,23 +288,23 @@ extension KeyedDecodingContainer {
 protocol PodibleLibraryServing {
   var supportsManualResultSelection: Bool { get }
   var supportsImportIssueReporting: Bool { get }
-  func searchBooks(query: String) async throws -> [LazyLibrarianBook]
+  func searchBooks(query: String) async throws -> [PodibleBook]
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
-    -> LazyLibrarianLibraryItem
-  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws
-  func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem]
-  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws
+    -> PodibleLibraryItem
+  func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws
+  func fetchLibraryItems() async throws -> [PodibleLibraryItem]
+  func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func searchItem(
     query: String,
-    cat: LazyLibrarianSearchCategory?,
+    cat: PodibleSearchCategory?,
     bookID: String?
-  ) async throws -> [LazyLibrarianSearchResult]
+  ) async throws -> [PodibleSearchResult]
   func snatchResult(
     bookID: String,
-    library: LazyLibrarianLibrary,
-    result: LazyLibrarianSearchResult
+    library: PodibleLibraryMedia,
+    result: PodibleSearchResult
   ) async throws
-  func fetchDownloadProgress(limit: Int?) async throws -> [LazyLibrarianDownloadProgressItem]
+  func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
 }
@@ -317,12 +317,12 @@ extension PodibleLibraryServing {
   var supportsImportIssueReporting: Bool { false }
 
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
-    -> LazyLibrarianLibraryItem
+    -> PodibleLibraryItem
   {
     throw LazyLibrarianError.unsupported("This backend does not support adding library books.")
   }
 
-  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
+  func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
     throw LazyLibrarianError.unsupported("This backend does not support media acquisition.")
   }
 
@@ -334,11 +334,11 @@ extension PodibleLibraryServing {
     try await downloadAudiobook(bookID: bookID, progress: { _ in })
   }
 
-  func searchItem(query: String) async throws -> [LazyLibrarianSearchResult] {
+  func searchItem(query: String) async throws -> [PodibleSearchResult] {
     try await searchItem(query: query, cat: nil, bookID: nil)
   }
 
-  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws {
+  func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
     throw LazyLibrarianError.unsupported(
       "This backend does not support reporting wrong imported files.")
   }
@@ -427,7 +427,7 @@ struct PodibleSearchResult: Identifiable, Hashable {
   let leechers: Int?
   let age: String?
   let mode: String
-  let library: LazyLibrarianLibrary?
+  let library: PodibleLibraryMedia?
 
   var canSnatch: Bool {
     title.isEmpty == false && provider.isEmpty == false && url.isEmpty == false
@@ -445,7 +445,7 @@ struct PodibleSearchResult: Identifiable, Hashable {
 
   var displaySize: String? {
     if let sizeRaw,
-      let parsed = LazyLibrarianSearchResult.parseSizeBytes(from: sizeRaw)
+      let parsed = PodibleSearchResult.parseSizeBytes(from: sizeRaw)
     {
       return ByteCountFormatter.string(fromByteCount: parsed, countStyle: .file)
     }
@@ -456,54 +456,54 @@ struct PodibleSearchResult: Identifiable, Hashable {
     dictionary: [String: Any]
   ) {
     let title =
-      LazyLibrarianSearchResult.stringValue(
+      PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "title", "Title", "name", "Name", "bookname", "BookName", "filename", "Filename",
           "release", "Release",
         ]) ?? ""
     let provider =
-      LazyLibrarianSearchResult.stringValue(
+      PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "provider", "Provider", "source", "Source", "indexer", "Indexer",
         ]) ?? ""
     let url =
-      LazyLibrarianSearchResult.stringValue(
+      PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "url", "URL", "link", "Link", "download", "Download", "torrent", "Torrent", "magnet",
           "Magnet",
         ]) ?? ""
     let mode =
-      LazyLibrarianSearchResult.stringValue(
+      PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "mode", "Mode", "downloadType", "DownloadType", "type", "Type",
         ]) ?? ""
     let sizeRaw =
-      LazyLibrarianSearchResult.stringValue(
+      PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "size", "Size", "filesize", "FileSize",
         ])
-    let seeders = LazyLibrarianSearchResult.intValue(
+    let seeders = PodibleSearchResult.intValue(
       dictionary,
       keys: [
         "seeders", "Seeders", "seeds", "Seeds",
       ])
-    let leechers = LazyLibrarianSearchResult.intValue(
+    let leechers = PodibleSearchResult.intValue(
       dictionary,
       keys: [
         "leechers", "Leechers", "leeches", "Leeches",
       ])
-    let age = LazyLibrarianSearchResult.stringValue(
+    let age = PodibleSearchResult.stringValue(
       dictionary,
       keys: [
         "age", "Age", "published", "Published", "date", "Date",
       ])
-    let library = LazyLibrarianSearchResult.parseLibrary(
-      from: LazyLibrarianSearchResult.stringValue(
+    let library = PodibleSearchResult.parseLibrary(
+      from: PodibleSearchResult.stringValue(
         dictionary,
         keys: [
           "library", "Library", "kind", "Kind", "booktype", "BookType", "media", "Media", "type",
@@ -524,7 +524,7 @@ struct PodibleSearchResult: Identifiable, Hashable {
     self.provider = provider
     self.url = url
     self.sizeRaw = sizeRaw
-    self.sizeBytes = LazyLibrarianSearchResult.parseSizeBytes(from: sizeRaw)
+    self.sizeBytes = PodibleSearchResult.parseSizeBytes(from: sizeRaw)
     self.seeders = seeders
     self.leechers = leechers
     self.age = age
@@ -557,7 +557,7 @@ struct PodibleSearchResult: Identifiable, Hashable {
     return nil
   }
 
-  private static func parseLibrary(from raw: String?) -> LazyLibrarianLibrary? {
+  private static func parseLibrary(from raw: String?) -> PodibleLibraryMedia? {
     guard let raw else { return nil }
     let lowered = raw.lowercased()
     if lowered.contains("audio") {
@@ -596,23 +596,23 @@ typealias LazyLibrarianSearchResult = PodibleSearchResult
 
 // Preview/testing helper that simulates the podible backend without network calls.
 final actor PodibleMockClient: PodibleLibraryServing {
-  private var libraryItems: [LazyLibrarianLibraryItem] = [
-    LazyLibrarianLibraryItem(
+  private var libraryItems: [PodibleLibraryItem] = [
+    PodibleLibraryItem(
       id: "1", title: "Project Hail Mary", author: "Andy Weir", status: .downloaded,
       bookAdded: Date().addingTimeInterval(-86_400 * 3)),
-    LazyLibrarianLibraryItem(
+    PodibleLibraryItem(
       id: "2", title: "The City We Became", author: "N. K. Jemisin", status: .requested,
       bookAdded: Date().addingTimeInterval(-86_400 * 12)),
   ]
   private var progress: [String: (ebook: Int, audio: Int)] = [:]
 
-  func searchBooks(query: String) async throws -> [LazyLibrarianBook] {
+  func searchBooks(query: String) async throws -> [PodibleBook] {
     let canned = [
-      LazyLibrarianBook(
+      PodibleBook(
         id: "1", title: "Project Hail Mary", author: "Andy Weir", status: .downloaded),
-      LazyLibrarianBook(
+      PodibleBook(
         id: "2", title: "The City We Became", author: "N. K. Jemisin", status: .requested),
-      LazyLibrarianBook(
+      PodibleBook(
         id: "3", title: "The House in the Cerulean Sea", author: "T. J. Klune", status: .wanted),
     ]
     if query.isEmpty { return canned }
@@ -627,12 +627,12 @@ final actor PodibleMockClient: PodibleLibraryServing {
     titleHint: String? = nil,
     authorHint: String? = nil
   ) async throws
-    -> LazyLibrarianLibraryItem
+    -> PodibleLibraryItem
   {
     if let existing = libraryItems.first(where: { $0.id == openLibraryKey }) {
       return existing
     }
-    let new = LazyLibrarianLibraryItem(
+    let new = PodibleLibraryItem(
       id: openLibraryKey,
       title: titleHint ?? "Requested \(openLibraryKey)",
       author: authorHint ?? "Unknown",
@@ -643,21 +643,21 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return new
   }
 
-  func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem] {
+  func fetchLibraryItems() async throws -> [PodibleLibraryItem] {
     return libraryItems
   }
 
-  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
+  func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
     // no-op for mock
   }
 
   func searchItem(
     query: String,
-    cat: LazyLibrarianSearchCategory?,
+    cat: PodibleSearchCategory?,
     bookID: String?
-  ) async throws -> [LazyLibrarianSearchResult] {
+  ) async throws -> [PodibleSearchResult] {
     let results = [
-      LazyLibrarianSearchResult(
+      PodibleSearchResult(
         dictionary: [
           "title": "\(query) (Mock eBook)",
           "provider": "MockProvider",
@@ -670,7 +670,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
           "library": "eBook",
         ]
       )!,
-      LazyLibrarianSearchResult(
+      PodibleSearchResult(
         dictionary: [
           "title": "\(query) (Mock Audio)",
           "provider": "MockProvider",
@@ -697,12 +697,12 @@ final actor PodibleMockClient: PodibleLibraryServing {
 
   func snatchResult(
     bookID: String,
-    library: LazyLibrarianLibrary,
-    result: LazyLibrarianSearchResult
+    library: PodibleLibraryMedia,
+    result: PodibleSearchResult
   ) async throws {
     if let index = libraryItems.firstIndex(where: { $0.id == bookID }) {
       let existing = libraryItems[index]
-      let updated = LazyLibrarianLibraryItem(
+      let updated = PodibleLibraryItem(
         id: existing.id,
         title: existing.title,
         author: existing.author,
@@ -717,16 +717,15 @@ final actor PodibleMockClient: PodibleLibraryServing {
     }
   }
 
-  func fetchDownloadProgress(limit: Int? = nil) async throws -> [LazyLibrarianDownloadProgressItem]
-  {
-    var items: [LazyLibrarianDownloadProgressItem] = []
+  func fetchDownloadProgress(limit: Int? = nil) async throws -> [PodibleDownloadProgressItem] {
+    var items: [PodibleDownloadProgressItem] = []
     for (bookID, p) in progress {
       let ebook = min(100, p.ebook + 7)
       let audio = min(100, p.audio + 5)
       progress[bookID] = (ebook: ebook, audio: audio)
 
       items.append(
-        LazyLibrarianDownloadProgressItem(
+        PodibleDownloadProgressItem(
           bookID: bookID,
           auxInfo: "eBook",
           source: "SABNZBD",
@@ -736,7 +735,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
         )
       )
       items.append(
-        LazyLibrarianDownloadProgressItem(
+        PodibleDownloadProgressItem(
           bookID: bookID,
           auxInfo: "AudioBook",
           source: "SABNZBD",
@@ -880,13 +879,13 @@ struct PodibleClient: PodibleLibraryServing {
 
   var supportsImportIssueReporting: Bool { true }
 
-  func searchBooks(query: String) async throws -> [LazyLibrarianBook] {
+  func searchBooks(query: String) async throws -> [PodibleBook] {
     let response: PodibleOpenLibrarySearchResult = try await rpcCall(
       method: "openlibrary.search",
       params: ["q": query, "limit": 50]
     )
     return response.results.map { candidate in
-      LazyLibrarianBook(
+      PodibleBook(
         id: candidate.openLibraryKey,
         title: candidate.title,
         author: candidate.author,
@@ -902,7 +901,7 @@ struct PodibleClient: PodibleLibraryServing {
     titleHint: String? = nil,
     authorHint: String? = nil
   ) async throws
-    -> LazyLibrarianLibraryItem
+    -> PodibleLibraryItem
   {
     _ = titleHint
     _ = authorHint
@@ -916,7 +915,7 @@ struct PodibleClient: PodibleLibraryServing {
     return toLibraryItem(book)
   }
 
-  func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem] {
+  func fetchLibraryItems() async throws -> [PodibleLibraryItem] {
     var cursor: Int?
     var collected: [PodibleLibraryBook] = []
 
@@ -934,7 +933,7 @@ struct PodibleClient: PodibleLibraryServing {
     return collected.map(toLibraryItem(_:))
   }
 
-  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
+  func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
     let numericBookID = try parseBookID(bookID)
     _ =
       try await rpcCall(
@@ -943,7 +942,7 @@ struct PodibleClient: PodibleLibraryServing {
       ) as PodibleEmptyResult
   }
 
-  func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws {
+  func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
     let numericBookID = try parseBookID(bookID)
     _ =
       try await rpcCall(
@@ -957,11 +956,11 @@ struct PodibleClient: PodibleLibraryServing {
 
   func searchItem(
     query: String,
-    cat: LazyLibrarianSearchCategory?,
+    cat: PodibleSearchCategory?,
     bookID: String?
-  ) async throws -> [LazyLibrarianSearchResult] {
+  ) async throws -> [PodibleSearchResult] {
     _ = bookID
-    let libraries: [LazyLibrarianLibrary]
+    let libraries: [PodibleLibraryMedia]
     switch cat {
     case .book:
       libraries = [.ebook]
@@ -971,7 +970,7 @@ struct PodibleClient: PodibleLibraryServing {
       libraries = [.audio, .ebook]
     }
 
-    var results: [LazyLibrarianSearchResult] = []
+    var results: [PodibleSearchResult] = []
     for library in libraries {
       let response: PodibleSearchRunResult = try await rpcCall(
         method: "search.run",
@@ -988,8 +987,8 @@ struct PodibleClient: PodibleLibraryServing {
 
   func snatchResult(
     bookID: String,
-    library: LazyLibrarianLibrary,
-    result: LazyLibrarianSearchResult
+    library: PodibleLibraryMedia,
+    result: PodibleSearchResult
   ) async throws {
     let numericBookID = try parseBookID(bookID)
     var params: [String: Any] = [
@@ -1005,22 +1004,21 @@ struct PodibleClient: PodibleLibraryServing {
     _ = try await rpcCall(method: "snatch.create", params: params) as PodibleEmptyResult
   }
 
-  func fetchDownloadProgress(limit: Int? = nil) async throws -> [LazyLibrarianDownloadProgressItem]
-  {
+  func fetchDownloadProgress(limit: Int? = nil) async throws -> [PodibleDownloadProgressItem] {
     let response: PodibleDownloadsListResult = try await rpcCall(
       method: "downloads.list",
       params: [:]
     )
-    var mapped: [LazyLibrarianDownloadProgressItem] = []
+    var mapped: [PodibleDownloadProgressItem] = []
     for download in response.downloads {
       guard let bookID = download.bookId else { continue }
       guard let mediaType = download.mediaType else { continue }
       let auxInfo: String
       switch mediaType {
       case "audio":
-        auxInfo = LazyLibrarianLibrary.audio.rawValue
+        auxInfo = PodibleLibraryMedia.audio.rawValue
       case "ebook":
-        auxInfo = LazyLibrarianLibrary.ebook.rawValue
+        auxInfo = PodibleLibraryMedia.ebook.rawValue
       default:
         continue
       }
@@ -1033,7 +1031,7 @@ struct PodibleClient: PodibleLibraryServing {
         || download.releaseStatus == "imported"
         || percent >= 100
       mapped.append(
-        LazyLibrarianDownloadProgressItem(
+        PodibleDownloadProgressItem(
           bookID: String(bookID),
           auxInfo: auxInfo,
           source: "podible",
@@ -1084,8 +1082,8 @@ struct PodibleClient: PodibleLibraryServing {
 
   private func toSearchResult(
     _ result: PodibleTorznabResult,
-    library: LazyLibrarianLibrary
-  ) -> LazyLibrarianSearchResult? {
+    library: PodibleLibraryMedia
+  ) -> PodibleSearchResult? {
     var dict: [String: Any] = [
       "title": result.title,
       "provider": result.provider,
@@ -1102,7 +1100,7 @@ struct PodibleClient: PodibleLibraryServing {
     if let leechers = result.leechers {
       dict["leechers"] = leechers
     }
-    return LazyLibrarianSearchResult(dictionary: dict)
+    return PodibleSearchResult(dictionary: dict)
   }
 
   private func preferredAudioAsset(from assets: [PodibleAsset]) -> PodibleAsset? {
@@ -1134,12 +1132,12 @@ struct PodibleClient: PodibleLibraryServing {
     return value
   }
 
-  private func toLibraryItem(_ book: PodibleLibraryBook) -> LazyLibrarianLibraryItem {
+  private func toLibraryItem(_ book: PodibleLibraryBook) -> PodibleLibraryItem {
     let ebookStatus = mapPodibleStatus(book.ebookStatus)
     let audioStatus = mapPodibleStatus(book.audioStatus)
     let addedAt = LazyLibrarianDateParser.parse(book.addedAt)
     let updatedAt = LazyLibrarianDateParser.parse(book.updatedAt)
-    return LazyLibrarianLibraryItem(
+    return PodibleLibraryItem(
       id: String(book.id),
       title: book.title,
       author: book.author,
@@ -1152,7 +1150,7 @@ struct PodibleClient: PodibleLibraryServing {
     )
   }
 
-  private func mapPodibleStatus(_ raw: String) -> LazyLibrarianLibraryItemStatus {
+  private func mapPodibleStatus(_ raw: String) -> PodibleLibraryItemStatus {
     switch raw.lowercased() {
     case "wanted":
       return .wanted
@@ -1173,7 +1171,7 @@ struct PodibleClient: PodibleLibraryServing {
     }
   }
 
-  private func podibleMediaValue(for library: LazyLibrarianLibrary) -> String {
+  private func podibleMediaValue(for library: PodibleLibraryMedia) -> String {
     library == .audio ? "audio" : "ebook"
   }
 
