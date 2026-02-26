@@ -277,6 +277,8 @@ extension KeyedDecodingContainer {
 
 protocol LazyLibrarianServing {
   var backendFlavor: LibraryBackendFlavor { get }
+  var supportsManualResultSelection: Bool { get }
+  var supportsImportIssueReporting: Bool { get }
   func searchBooks(query: String) async throws -> [LazyLibrarianBook]
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
     -> LazyLibrarianLibraryItem
@@ -309,6 +311,8 @@ enum LibraryBackendFlavor {
 
 extension LazyLibrarianServing {
   var backendFlavor: LibraryBackendFlavor { .lazyLibrarian }
+  var supportsManualResultSelection: Bool { true }
+  var supportsImportIssueReporting: Bool { false }
 
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
     -> LazyLibrarianLibraryItem
@@ -861,6 +865,7 @@ struct PodibleKindlingClient: LazyLibrarianServing {
   var session: URLSession = .shared
 
   var backendFlavor: LibraryBackendFlavor { .podible }
+  var supportsImportIssueReporting: Bool { true }
 
   func searchBooks(query: String) async throws -> [LazyLibrarianBook] {
     let response: PodibleOpenLibrarySearchResult = try await rpcCall(

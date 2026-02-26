@@ -617,7 +617,7 @@ struct LazyLibrarianView: View {
     let canKindleExport =
       canExport && userSettings.kindleEmailAddress.isEmpty == false
     let wrongFileLibrary: LazyLibrarianLibrary? = {
-      guard client.backendFlavor == .podible else { return nil }
+      guard client.supportsImportIssueReporting else { return nil }
       if item.audioStatus?.isComplete == true { return .audio }
       if item.status.isComplete { return .ebook }
       return nil
@@ -629,7 +629,7 @@ struct LazyLibrarianView: View {
       canTriggerEbookSearch: canTriggerEbookSearch,
       canTriggerAudioSearch: canTriggerAudioSearch
     )
-    let canChooseResult = client.backendFlavor == .podible && snatchLibraries.isEmpty == false
+    let canChooseResult = client.supportsManualResultSelection && snatchLibraries.isEmpty == false
     let controls = HStack(spacing: 8) {
       trailingControlButton(
         label: "Download & Export",
