@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct LazyLibrarianSearchResultsView: View {
+struct PodibleSearchResultsView: View {
   @ObservedObject var viewModel: LazyLibrarianViewModel
   @EnvironmentObject var userSettings: UserSettings
   let client: PodibleLibraryServing
@@ -34,9 +34,9 @@ struct LazyLibrarianSearchResultsView: View {
   }
 }
 
-typealias PodibleSearchResultsView = LazyLibrarianSearchResultsView
+typealias LazyLibrarianSearchResultsView = PodibleSearchResultsView
 
-struct LazyLibrarianSearchResultRow: View {
+struct PodibleSearchResultRow: View {
   @ObservedObject var viewModel: LazyLibrarianViewModel
   @EnvironmentObject var userSettings: UserSettings
   let book: PodibleBook
@@ -152,7 +152,7 @@ struct LazyLibrarianSearchResultRow: View {
   }
 }
 
-typealias PodibleSearchResultRow = LazyLibrarianSearchResultRow
+typealias LazyLibrarianSearchResultRow = PodibleSearchResultRow
 
 #Preview {
   let viewModel = PodibleLibraryViewModel()
