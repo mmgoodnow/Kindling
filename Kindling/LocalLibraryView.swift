@@ -402,8 +402,7 @@ struct LocalLibraryView: View {
           status: .downloaded,
           audioStatus: .downloaded,
           bookAdded: Date().addingTimeInterval(-86400),
-          bookLibrary: Date().addingTimeInterval(-86400),
-          audioLibrary: Date().addingTimeInterval(-86400),
+          updatedAt: Date().addingTimeInterval(-86400),
           bookImagePath: nil
         ),
         PodibleLibraryItem(
@@ -413,8 +412,7 @@ struct LocalLibraryView: View {
           status: .downloaded,
           audioStatus: .downloaded,
           bookAdded: Date().addingTimeInterval(-172800),
-          bookLibrary: Date().addingTimeInterval(-172800),
-          audioLibrary: Date().addingTimeInterval(-172800),
+          updatedAt: Date().addingTimeInterval(-172800),
           bookImagePath: nil
         ),
       ]

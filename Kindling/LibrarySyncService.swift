@@ -87,7 +87,7 @@ struct LibrarySyncService {
   }
 
   private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
-    [item.bookLibrary, item.audioLibrary].compactMap { $0 }.max()
+    item.updatedAt
   }
 
   private func updateBook(_ book: LibraryBook, with item: PodibleLibraryItem, author: Author)

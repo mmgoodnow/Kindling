@@ -688,8 +688,7 @@ struct PodibleLibraryView: View {
     let ebookStatus = item.ebookStatus ?? item.status
     let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
     let hasEbookAvailable =
-      item.bookLibrary != nil
-      || ebookStatus.isComplete
+      ebookStatus.isComplete
       || localEbookStatus?.isComplete == true
     let canKindleExport =
       hasEbookAvailable && userSettings.kindleEmailAddress.isEmpty == false
@@ -1216,7 +1215,7 @@ struct PodibleLibraryView: View {
   }
 
   private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
-    [item.bookLibrary, item.audioLibrary].compactMap { $0 }.max()
+    item.updatedAt
   }
 }
 

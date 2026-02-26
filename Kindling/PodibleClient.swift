@@ -141,8 +141,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let ebookStatus: PodibleLibraryItemStatus?
   let audioStatus: PodibleLibraryItemStatus?
   let bookAdded: Date?
-  let bookLibrary: Date?
-  let audioLibrary: Date?
+  let updatedAt: Date?
   let bookImagePath: String?
 
   init(
@@ -153,8 +152,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     ebookStatus: PodibleLibraryItemStatus? = nil,
     audioStatus: PodibleLibraryItemStatus? = nil,
     bookAdded: Date? = nil,
-    bookLibrary: Date? = nil,
-    audioLibrary: Date? = nil,
+    updatedAt: Date? = nil,
     bookImagePath: String? = nil
   ) {
     self.id = id
@@ -164,8 +162,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.ebookStatus = ebookStatus
     self.audioStatus = audioStatus
     self.bookAdded = bookAdded
-    self.bookLibrary = bookLibrary
-    self.audioLibrary = audioLibrary
+    self.updatedAt = updatedAt
     self.bookImagePath = bookImagePath
   }
 
@@ -183,8 +180,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case ebookStatusAlt = "EbookStatus"
     case audioStatus = "AudioStatus"
     case bookAdded = "BookAdded"
-    case bookLibrary = "BookLibrary"
-    case audioLibrary = "AudioLibrary"
+    case updatedAt = "updatedAt"
     case bookImageUpper = "BookImg"
     case bookImageLower = "bookimg"
   }
@@ -205,33 +201,19 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     audioStatus = (try? container.decode(PodibleLibraryItemStatus.self, forKey: .audioStatus))
     bookImagePath = try? container.decodeIfPresent(
       String.self, forKeys: [.bookImageUpper, .bookImageLower])
-    if let raw = try? container.decodeIfPresent(String.self, forKey: .bookLibrary) {
-      bookLibrary = PodibleDateParser.parse(raw)
+    if let raw = try? container.decodeIfPresent(String.self, forKey: .updatedAt) {
+      updatedAt = PodibleDateParser.parse(raw)
     } else {
-      bookLibrary = nil
+      updatedAt = nil
     }
-    if let raw = try? container.decodeIfPresent(String.self, forKey: .audioLibrary) {
-      audioLibrary = PodibleDateParser.parse(raw)
-    } else {
-      audioLibrary = nil
-    }
-    switch (bookLibrary, audioLibrary) {
-    case let (b?, a?):
-      bookAdded = min(b, a)
-    case let (b?, nil):
-      bookAdded = b
-    case let (nil, a?):
-      bookAdded = a
-    case (nil, nil):
-      if let raw = try? container.decodeIfPresent(String.self, forKey: .bookAdded) {
-        if let parsed = PodibleDateParser.parse(raw) {
-          bookAdded = PodibleDateParser.endOfDay(parsed)
-        } else {
-          bookAdded = nil
-        }
+    if let raw = try? container.decodeIfPresent(String.self, forKey: .bookAdded) {
+      if let parsed = PodibleDateParser.parse(raw) {
+        bookAdded = PodibleDateParser.endOfDay(parsed)
       } else {
         bookAdded = nil
       }
+    } else {
+      bookAdded = nil
     }
   }
 }
@@ -999,8 +981,7 @@ struct PodibleClient: PodibleLibraryServing {
       ebookStatus: ebookStatus,
       audioStatus: audioStatus,
       bookAdded: addedAt,
-      bookLibrary: ebookStatus.isComplete ? updatedAt : nil,
-      audioLibrary: audioStatus.isComplete ? updatedAt : nil,
+      updatedAt: updatedAt,
       bookImagePath: absoluteAssetURLString(from: book.coverUrl)
     )
   }
