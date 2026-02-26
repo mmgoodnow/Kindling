@@ -326,16 +326,6 @@ extension PodibleLibraryServing {
     throw LazyLibrarianError.unsupported("This backend does not support media acquisition.")
   }
 
-  func requestBook(id: String, titleHint: String?, authorHint: String?) async throws
-    -> LazyLibrarianLibraryItem
-  {
-    try await addLibraryBook(openLibraryKey: id, titleHint: titleHint, authorHint: authorHint)
-  }
-
-  func searchBook(id: String, library: LazyLibrarianLibrary) async throws {
-    try await acquireLibraryMedia(bookID: id, library: library)
-  }
-
   func downloadEpub(bookID: String) async throws -> URL {
     try await downloadEpub(bookID: bookID, progress: { _ in })
   }

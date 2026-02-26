@@ -385,9 +385,11 @@ struct LocalLibraryView: View {
       []
     }
 
-    func requestBook(id: String, titleHint: String?, authorHint: String?) async throws
-      -> PodibleLibraryItem
-    {
+    func addLibraryBook(
+      openLibraryKey: String,
+      titleHint: String?,
+      authorHint: String?
+    ) async throws -> PodibleLibraryItem {
       throw LazyLibrarianError.notConfigured
     }
 
@@ -418,9 +420,7 @@ struct LocalLibraryView: View {
       ]
     }
 
-    func fetchBookCovers(wait: Bool) async throws {}
-
-    func searchBook(id: String, library: PodibleLibraryMedia) async throws {}
+    func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {}
 
     func searchItem(
       query: String,
