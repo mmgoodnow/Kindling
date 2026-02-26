@@ -616,9 +616,12 @@ struct LazyLibrarianView: View {
     let canAudioExport = item.audioStatus == .open && canDownload
     let canKindleExport =
       canExport && userSettings.kindleEmailAddress.isEmpty == false
-    let canReportWrongAudio =
-      client.backendFlavor == .podible
-      && (item.audioStatus?.isComplete ?? false)
+    let wrongFileLibrary: LazyLibrarianLibrary? = {
+      guard client.backendFlavor == .podible else { return nil }
+      if item.audioStatus?.isComplete == true { return .audio }
+      if item.status.isComplete { return .ebook }
+      return nil
+    }()
 
     let canRefresh = canEbookSearch || canAudioSearch
     let canTriggerRefresh = canTriggerEbookSearch || canTriggerAudioSearch
@@ -671,15 +674,15 @@ struct LazyLibrarianView: View {
           }
         }
       )
-      if canReportWrongAudio {
+      if let wrongFileLibrary {
         trailingControlButton(
-          label: "Wrong Audio File",
+          label: "Wrong File",
           systemName: "exclamationmark.triangle",
           action: {
             Task {
               await reportWrongImportedFile(
                 bookID: item.id,
-                library: .audio,
+                library: wrongFileLibrary,
                 client: client
               )
             }
