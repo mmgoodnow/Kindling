@@ -676,13 +676,11 @@ struct PodibleLibraryView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .lineLimit(1)
-          if let client {
-            rowControls(
-              item: item,
-              localBook: localBook,
-              client: client
-            )
-          }
+          rowControls(
+            item: item,
+            localBook: localBook,
+            client: client
+          )
           localAudioControls(
             item: item,
             localBook: localBook,
@@ -725,15 +723,17 @@ struct PodibleLibraryView: View {
   private func rowControls(
     item: PodibleLibraryItem,
     localBook: LibraryBook?,
-    client: RemoteLibraryServing
+    client: RemoteLibraryServing?
   ) -> some View {
+    let hasRemoteClient = client != nil
     let ebookStatus = item.ebookStatus ?? item.status
     let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
     let hasEbookAvailable =
       ebookStatus.isComplete
       || localEbookStatus?.isComplete == true
+    let canShareEbook = hasRemoteClient && hasEbookAvailable
     let canKindleExport =
-      hasEbookAvailable && userSettings.kindleEmailAddress.isEmpty == false
+      canShareEbook && userSettings.kindleEmailAddress.isEmpty == false
     let localAudioStatus = audioStatus(for: localBook, fallback: item.audioStatus)
     let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
     let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
@@ -743,9 +743,10 @@ struct PodibleLibraryView: View {
       && localAudioStatus.isComplete
       && localFileStatus != .completed
       && localFileStatus != .downloading
+      && hasRemoteClient
       && isLocalDownloading == false
     let reportIssueLibrary: PodibleLibraryMedia? = {
-      guard client.supportsImportIssueReporting else { return nil }
+      guard let client, client.supportsImportIssueReporting else { return nil }
       // Prefer audio because that's the most common recovery path in Kindling, but still
       // fall back to ebook when a row doesn't expose audio state.
       if localFileStatus == .completed { return .audio }
@@ -756,8 +757,9 @@ struct PodibleLibraryView: View {
       trailingControlButton(
         label: "Share eBook",
         systemName: "book",
-        isEnabled: hasEbookAvailable,
+        isEnabled: canShareEbook,
         action: {
+          guard let client else { return }
           Task {
             await startEbookDownload(
               bookID: item.id,
@@ -776,6 +778,7 @@ struct PodibleLibraryView: View {
             startPlayback(for: localBook, url: localPlaybackURL)
             return
           }
+          guard let client else { return }
           startLocalDownload(for: item, client: client)
         }
       )
@@ -784,6 +787,7 @@ struct PodibleLibraryView: View {
         systemName: "paperplane",
         isEnabled: canKindleExport,
         action: {
+          guard let client else { return }
           Task {
             await startKindleExport(
               bookID: item.id,
@@ -799,6 +803,7 @@ struct PodibleLibraryView: View {
         isEnabled: reportIssueLibrary != nil,
         action: {
           guard let reportIssueLibrary else { return }
+          guard let client else { return }
           Task {
             await reportWrongImportedFile(
               bookID: item.id,
@@ -880,44 +885,24 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func localLibraryRow(_ book: LibraryBook, client: RemoteLibraryServing?) -> some View {
-    let file = book.files.first
-    let status = file?.downloadStatus ?? .notStarted
-    let progress = localDownloadProgressByBookID[book.llId]
-    let audioStatus = parseAudioStatus(from: book)
-    let playbackURL = playbackURL(for: book)
-    let coverURL = remoteLibraryAssetURL(
-      baseURLString: remoteAssetBaseURLString,
-      path: book.coverURLString
-    )
+    libraryRow(localProxyItem(for: book), localBook: book, client: nil)
+  }
 
-    HStack(alignment: .top, spacing: 12) {
-      bookCoverView(
-        title: book.title,
-        author: book.author?.name ?? "Unknown Author",
-        url: coverURL
-      )
-      VStack(alignment: .leading, spacing: 6) {
-        Text(book.title)
-          .font(.headline)
-          .lineLimit(2)
-        Text(book.author?.name ?? "Unknown Author")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-        statusLine(status: status, progress: progress, audioStatus: audioStatus)
-        if let playbackURL {
-          playButton(for: book, url: playbackURL)
-        } else {
-          localDownloadButton(
-            for: book,
-            status: status,
-            audioStatus: audioStatus,
-            client: client
-          )
-        }
-      }
-      Spacer(minLength: 0)
-    }
+  private func localProxyItem(for book: LibraryBook) -> PodibleLibraryItem {
+    let ebookStatus = localEbookStatus(for: book, fallback: nil)
+    let audioStatus = parseAudioStatus(from: book)
+    let overallStatus = ebookStatus ?? audioStatus
+    return PodibleLibraryItem(
+      id: book.llId,
+      title: book.title,
+      author: book.author?.name ?? "Unknown Author",
+      status: overallStatus,
+      ebookStatus: ebookStatus,
+      audioStatus: audioStatus,
+      bookAdded: book.addedAt,
+      updatedAt: book.updatedAt,
+      bookImagePath: book.coverURLString
+    )
   }
 
   @ViewBuilder
