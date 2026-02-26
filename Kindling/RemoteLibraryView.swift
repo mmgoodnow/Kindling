@@ -295,15 +295,17 @@ struct PodibleLibraryView: View {
     let localOnly = localBooks.filter { remoteIds.contains($0.llId) == false }
 
     if remoteItems.isEmpty && localBooks.isEmpty {
-      ContentUnavailableView(
-        "No Books",
-        systemImage: "tray",
-        description: Text(
-          client == nil
-            ? "Add audiobooks to your local library to get started."
-            : "Tap Sync to pull your remote library."
+      centeredListEmptyState {
+        ContentUnavailableView(
+          "No Books",
+          systemImage: "tray",
+          description: Text(
+            client == nil
+              ? "Add audiobooks to your local library to get started."
+              : "Tap Sync to pull your remote library."
+          )
         )
-      )
+      }
     } else if remoteItems.isEmpty {
       ForEach(localBooks) { book in
         localLibraryRow(book, client: client)
@@ -329,7 +331,9 @@ struct PodibleLibraryView: View {
     let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
 
     if localMatches.isEmpty && remoteResults.isEmpty {
-      ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+      centeredListEmptyState {
+        ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+      }
     } else {
       ForEach(localMatches) { book in
         localLibraryRow(book, client: client)
@@ -355,6 +359,24 @@ struct PodibleLibraryView: View {
       book.title.lowercased().contains(needle)
         || (book.author?.name.lowercased().contains(needle) ?? false)
     }
+  }
+
+  @ViewBuilder
+  private func centeredListEmptyState<Content: View>(
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    VStack {
+      Spacer(minLength: 0)
+      HStack {
+        Spacer(minLength: 0)
+        content()
+        Spacer(minLength: 0)
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, minHeight: 260)
+    .listRowSeparator(.hidden)
+    .listRowBackground(Color.clear)
   }
 
   private func startSync(using client: RemoteLibraryServing?) {
