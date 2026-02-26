@@ -35,6 +35,8 @@ struct PodibleLibraryView: View {
   @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
+  @State private var isShowingDeleteRemoteBookConfirmation = false
+  @State private var pendingRemoteDeleteItem: PodibleLibraryItem?
 
   let clientOverride: RemoteLibraryServing?
 
@@ -174,6 +176,27 @@ struct PodibleLibraryView: View {
       Text(
         "Removes local SwiftData library records, sync state, and downloaded local files. The remote podible library is not changed."
       )
+    }
+    .confirmationDialog(
+      "Delete Remote Book?",
+      isPresented: $isShowingDeleteRemoteBookConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Delete Book", role: .destructive) {
+        guard let client, let item = pendingRemoteDeleteItem else { return }
+        Task {
+          await deleteRemoteBook(item, using: client)
+        }
+      }
+      Button("Cancel", role: .cancel) {
+        pendingRemoteDeleteItem = nil
+      }
+    } message: {
+      if let item = pendingRemoteDeleteItem {
+        Text(
+          "Removes \"\(item.title)\" from the remote podible library via library.delete. Local downloaded files are not deleted."
+        )
+      }
     }
     .onAppear {
       guard let client, isWipingLocalLibrary == false else { return }
@@ -412,6 +435,20 @@ struct PodibleLibraryView: View {
     do {
       try await client.reportImportIssue(bookID: bookID, library: library)
       await viewModel.loadLibraryItems(using: client)
+    } catch {
+      downloadErrorMessage = error.localizedDescription
+    }
+  }
+
+  @MainActor
+  private func deleteRemoteBook(_ item: PodibleLibraryItem, using client: RemoteLibraryServing)
+    async
+  {
+    downloadErrorMessage = nil
+    do {
+      try await client.deleteLibraryBook(bookID: item.id)
+      pendingRemoteDeleteItem = nil
+      await refresh(using: client)
     } catch {
       downloadErrorMessage = error.localizedDescription
     }
@@ -728,6 +765,7 @@ struct PodibleLibraryView: View {
       if item.audioStatus != nil { return .audio }
       return .ebook
     }()
+    let canDeleteRemoteBook = client.supportsLibraryDelete
 
     let controls = HStack(spacing: 8) {
       trailingControlButton(
@@ -783,6 +821,15 @@ struct PodibleLibraryView: View {
               client: client
             )
           }
+        }
+      )
+      trailingControlButton(
+        label: "Delete Remote Book",
+        systemName: "trash",
+        isEnabled: canDeleteRemoteBook,
+        action: {
+          pendingRemoteDeleteItem = item
+          isShowingDeleteRemoteBookConfirmation = true
         }
       )
     }

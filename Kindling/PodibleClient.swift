@@ -266,12 +266,14 @@ extension KeyedDecodingContainer {
 }
 
 protocol PodibleLibraryServing {
+  var supportsLibraryDelete: Bool { get }
   var supportsImportIssueReporting: Bool { get }
   func searchBooks(query: String) async throws -> [PodibleBook]
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
     -> PodibleLibraryItem
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchLibraryItems() async throws -> [PodibleLibraryItem]
+  func deleteLibraryBook(bookID: String) async throws
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
@@ -280,6 +282,7 @@ protocol PodibleLibraryServing {
 
 typealias RemoteLibraryServing = PodibleLibraryServing
 extension PodibleLibraryServing {
+  var supportsLibraryDelete: Bool { false }
   var supportsImportIssueReporting: Bool { false }
 
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
@@ -290,6 +293,10 @@ extension PodibleLibraryServing {
 
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
     throw PodibleError.unsupported("This backend does not support media acquisition.")
+  }
+
+  func deleteLibraryBook(bookID: String) async throws {
+    throw PodibleError.unsupported("This backend does not support deleting library books.")
   }
 
   func downloadEpub(bookID: String) async throws -> URL {
@@ -560,6 +567,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
   ]
   private var progress: [String: (ebook: Int, audio: Int)] = [:]
 
+  nonisolated var supportsLibraryDelete: Bool { true }
+
   func searchBooks(query: String) async throws -> [PodibleBook] {
     let canned = [
       PodibleBook(
@@ -603,6 +612,11 @@ final actor PodibleMockClient: PodibleLibraryServing {
 
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
     // no-op for mock
+  }
+
+  func deleteLibraryBook(bookID: String) async throws {
+    libraryItems.removeAll { $0.id == bookID }
+    progress.removeValue(forKey: bookID)
   }
 
   func fetchDownloadProgress(limit: Int? = nil) async throws -> [PodibleDownloadProgressItem] {
@@ -763,6 +777,7 @@ struct PodibleClient: PodibleLibraryServing {
   let apiKey: String
   var session: URLSession = .shared
 
+  var supportsLibraryDelete: Bool { true }
   var supportsImportIssueReporting: Bool { true }
 
   func searchBooks(query: String) async throws -> [PodibleBook] {
@@ -825,6 +840,15 @@ struct PodibleClient: PodibleLibraryServing {
       try await rpcCall(
         method: "library.acquire",
         params: ["bookId": numericBookID, "media": podibleMediaValue(for: library)]
+      ) as PodibleEmptyResult
+  }
+
+  func deleteLibraryBook(bookID: String) async throws {
+    let numericBookID = try parseBookID(bookID)
+    _ =
+      try await rpcCall(
+        method: "library.delete",
+        params: ["bookId": numericBookID]
       ) as PodibleEmptyResult
   }
 
