@@ -155,7 +155,7 @@ struct PodibleSearchResultRow: View {
 typealias LazyLibrarianSearchResultRow = PodibleSearchResultRow
 
 #Preview {
-  let viewModel = PodibleLibraryViewModel()
+  let viewModel = RemoteLibraryViewModel()
   viewModel.searchResults = [
     PodibleBook(
       id: "1",

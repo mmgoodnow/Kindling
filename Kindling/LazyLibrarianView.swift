@@ -15,7 +15,7 @@ struct PodibleLibraryView: View {
   private var localBooks: [LibraryBook]
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
-  @StateObject private var viewModel = PodibleLibraryViewModel()
+  @StateObject private var viewModel = RemoteLibraryViewModel()
   @State private var isShowingShareSheet = false
   @State private var shareURL: URL?
   @State private var isShowingKindleExporter = false
@@ -1674,7 +1674,7 @@ struct ActivityShareSheet: View {
 
 #Preview {
   NavigationStack {
-    PodibleLibraryView(client: PodibleMockClient())
+    RemoteLibraryView(client: PodibleMockClient())
       .environmentObject(UserSettings())
   }
   .modelContainer(
