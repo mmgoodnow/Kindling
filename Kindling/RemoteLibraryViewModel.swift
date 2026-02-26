@@ -159,28 +159,6 @@ final class PodibleLibraryViewModel: ObservableObject {
     isLoading = false
   }
 
-  func forceSearch(_ book: PodibleBook, using client: RemoteLibraryServing) async {
-    isLoading = true
-    errorMessage = nil
-    do {
-      try await client.acquireLibraryMedia(bookID: book.id, library: .ebook)
-      try await client.acquireLibraryMedia(bookID: book.id, library: .audio)
-      markSearchTriggered(bookID: book.id, library: .ebook)
-      markSearchTriggered(bookID: book.id, library: .audio)
-    } catch {
-      if shouldIgnoreError(error) == false {
-        self.errorMessage = error.localizedDescription
-      }
-    }
-    isLoading = false
-  }
-
-  func triggerSearch(
-    bookID: String, library: PodibleLibraryMedia, using client: RemoteLibraryServing
-  ) async {
-    await triggerAcquire(bookID: bookID, library: library, using: client)
-  }
-
   func triggerAcquire(
     bookID: String, library: PodibleLibraryMedia, using client: RemoteLibraryServing
   ) async {

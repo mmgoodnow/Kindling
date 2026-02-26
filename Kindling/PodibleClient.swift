@@ -276,7 +276,6 @@ extension KeyedDecodingContainer {
 }
 
 protocol PodibleLibraryServing {
-  var supportsManualResultSelection: Bool { get }
   var supportsImportIssueReporting: Bool { get }
   func searchBooks(query: String) async throws -> [PodibleBook]
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
@@ -301,7 +300,6 @@ protocol PodibleLibraryServing {
 
 typealias RemoteLibraryServing = PodibleLibraryServing
 extension PodibleLibraryServing {
-  var supportsManualResultSelection: Bool { true }
   var supportsImportIssueReporting: Bool { false }
 
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
