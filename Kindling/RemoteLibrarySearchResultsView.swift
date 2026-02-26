@@ -86,7 +86,6 @@ struct PodibleSearchResultRow: View {
           if let item = effectiveItem {
             remoteLibraryStatusCluster(
               item: item,
-              progress: progress,
               shouldOfferSearch: { status in
                 viewModel.shouldOfferSearch(status: status)
               }

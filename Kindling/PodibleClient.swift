@@ -142,6 +142,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let audioStatus: PodibleLibraryItemStatus?
   let bookAdded: Date?
   let updatedAt: Date?
+  let fullPseudoProgress: Int?
   let bookImagePath: String?
 
   init(
@@ -153,6 +154,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     audioStatus: PodibleLibraryItemStatus? = nil,
     bookAdded: Date? = nil,
     updatedAt: Date? = nil,
+    fullPseudoProgress: Int? = nil,
     bookImagePath: String? = nil
   ) {
     self.id = id
@@ -163,6 +165,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.audioStatus = audioStatus
     self.bookAdded = bookAdded
     self.updatedAt = updatedAt
+    self.fullPseudoProgress = fullPseudoProgress
     self.bookImagePath = bookImagePath
   }
 
@@ -181,6 +184,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case audioStatus = "AudioStatus"
     case bookAdded = "BookAdded"
     case updatedAt = "updatedAt"
+    case fullPseudoProgress = "fullPseudoProgress"
     case bookImageUpper = "BookImg"
     case bookImageLower = "bookimg"
   }
@@ -205,6 +209,13 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
       updatedAt = PodibleDateParser.parse(raw)
     } else {
       updatedAt = nil
+    }
+    if let value = try? container.decodeIfPresent(Int.self, forKey: .fullPseudoProgress) {
+      fullPseudoProgress = value
+    } else if let value = try? container.decodeIfPresent(Double.self, forKey: .fullPseudoProgress) {
+      fullPseudoProgress = Int(value.rounded())
+    } else {
+      fullPseudoProgress = nil
     }
     if let raw = try? container.decodeIfPresent(String.self, forKey: .bookAdded) {
       if let parsed = PodibleDateParser.parse(raw) {
@@ -720,6 +731,7 @@ private struct PodibleLibraryBook: Decodable {
   let audioStatus: String
   let ebookStatus: String
   let status: String
+  let fullPseudoProgress: Double?
 }
 
 private struct PodibleSearchRunResult: Decodable {
@@ -883,8 +895,7 @@ struct PodibleClient: PodibleLibraryServing {
         continue
       }
       let percent =
-        download.downloadProgress?.percent
-        ?? download.fullPseudoProgress.map { Int($0.rounded()) }
+        download.fullPseudoProgress.map { Int($0.rounded()) }
         ?? 0
       let finished =
         download.releaseStatus == "downloaded"
@@ -1006,6 +1017,7 @@ struct PodibleClient: PodibleLibraryServing {
       audioStatus: audioStatus,
       bookAdded: addedAt,
       updatedAt: updatedAt,
+      fullPseudoProgress: book.fullPseudoProgress.map { Int($0.rounded()) },
       bookImagePath: absoluteAssetURLString(from: book.coverUrl)
     )
   }

@@ -128,6 +128,7 @@ final class PodibleLibraryViewModel: ObservableObject {
           audioStatus: requested.audioStatus,
           bookAdded: requested.bookAdded ?? existing.bookAdded,
           updatedAt: requested.updatedAt ?? existing.updatedAt,
+          fullPseudoProgress: requested.fullPseudoProgress ?? existing.fullPseudoProgress,
           bookImagePath: requested.bookImagePath ?? existing.bookImagePath
         )
         libraryItems[existingIndex] = updated

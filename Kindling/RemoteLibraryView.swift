@@ -652,9 +652,8 @@ struct PodibleLibraryView: View {
     localBook: LibraryBook?,
     client: RemoteLibraryServing?
   ) -> some View {
-    let progress = viewModel.progressForBookID(item.id)
     let ebookStatus = item.ebookStatus ?? item.status
-    let rowProgressPercent = progress?.combinedProgressPercent
+    let rowProgressPercent = item.fullPseudoProgress
     let rowIsAcquiring = viewModel.shouldShowDownloadProgress(
       status: ebookStatus, audioStatus: item.audioStatus)
 
@@ -690,7 +689,6 @@ struct PodibleLibraryView: View {
         Spacer(minLength: 0)
         remoteLibraryStatusCluster(
           item: item,
-          progress: progress,
           shouldOfferSearch: { status in
             viewModel.shouldOfferSearch(status: status)
           }
@@ -901,6 +899,7 @@ struct PodibleLibraryView: View {
       audioStatus: audioStatus,
       bookAdded: book.addedAt,
       updatedAt: book.updatedAt,
+      fullPseudoProgress: nil,
       bookImagePath: book.coverURLString
     )
   }
@@ -1359,14 +1358,13 @@ func remoteLibraryProgressCircles(
 @ViewBuilder
 func remoteLibraryStatusCluster(
   item: PodibleLibraryItem,
-  progress: PodibleLibraryDownloadProgress?,
   shouldOfferSearch: (PodibleLibraryItemStatus?) -> Bool
 ) -> some View {
   let ebookStatus = item.ebookStatus ?? item.status
   let ebookIncomplete = ebookStatus.isComplete == false
   let audioIncomplete = item.audioStatus?.isComplete == false
   let hasPendingAcquisition = ebookIncomplete || audioIncomplete
-  let showCombinedProgress = progress?.hasCombinedProgress ?? false
+  let showCombinedProgress = (item.fullPseudoProgress ?? 0) > 0
   let shouldOfferAnySearch = shouldOfferSearch(ebookStatus) || shouldOfferSearch(item.audioStatus)
 
   Group {
