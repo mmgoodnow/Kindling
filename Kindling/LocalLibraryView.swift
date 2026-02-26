@@ -422,20 +422,6 @@ struct LocalLibraryView: View {
 
     func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {}
 
-    func searchItem(
-      query: String,
-      cat: PodibleSearchCategory?,
-      bookID: String?
-    ) async throws -> [PodibleSearchResult] {
-      []
-    }
-
-    func snatchResult(
-      bookID: String,
-      library: PodibleLibraryMedia,
-      result: PodibleSearchResult
-    ) async throws {}
-
     func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem] {
       []
     }

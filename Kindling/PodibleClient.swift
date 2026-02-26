@@ -283,16 +283,6 @@ protocol PodibleLibraryServing {
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchLibraryItems() async throws -> [PodibleLibraryItem]
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
-  func searchItem(
-    query: String,
-    cat: PodibleSearchCategory?,
-    bookID: String?
-  ) async throws -> [PodibleSearchResult]
-  func snatchResult(
-    bookID: String,
-    library: PodibleLibraryMedia,
-    result: PodibleSearchResult
-  ) async throws
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
@@ -318,10 +308,6 @@ extension PodibleLibraryServing {
 
   func downloadAudiobook(bookID: String) async throws -> URL {
     try await downloadAudiobook(bookID: bookID, progress: { _ in })
-  }
-
-  func searchItem(query: String) async throws -> [PodibleSearchResult] {
-    try await searchItem(query: query, cat: nil, bookID: nil)
   }
 
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
