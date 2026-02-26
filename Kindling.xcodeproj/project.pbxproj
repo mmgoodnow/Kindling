@@ -41,7 +41,7 @@
 		51929E282C9FA70900D77429 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E272C9FA70900D77429 /* SearchResultsView.swift */; };
 		51929E2A2CA0072600D77429 /* MailComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E292CA0072600D77429 /* MailComposerView.swift */; };
 		51929E2C2CA007BC00D77429 /* MailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E2B2CA007BC00D77429 /* MailView.swift */; };
-		51A0C0012DCB12F800123456 /* LazyLibrarianClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0112DCB12F800123456 /* LazyLibrarianClient.swift */; };
+		51A0C0012DCB12F800123456 /* PodibleClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0112DCB12F800123456 /* PodibleClient.swift */; };
 		51A0C0022DCB12F800123456 /* LazyLibrarianViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0122DCB12F800123456 /* LazyLibrarianViewModel.swift */; };
 		51A0C0032DCB12F800123456 /* LazyLibrarianView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0132DCB12F800123456 /* LazyLibrarianView.swift */; };
 		51A0C0102DCB12F800123456 /* LazyLibrarianSearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0202DCB12F800123456 /* LazyLibrarianSearchResultsView.swift */; };
@@ -122,7 +122,7 @@
 		51929E272C9FA70900D77429 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		51929E292CA0072600D77429 /* MailComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailComposerView.swift; sourceTree = "<group>"; };
 		51929E2B2CA007BC00D77429 /* MailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailView.swift; sourceTree = "<group>"; };
-		51A0C0112DCB12F800123456 /* LazyLibrarianClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLibrarianClient.swift; sourceTree = "<group>"; };
+		51A0C0112DCB12F800123456 /* PodibleClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodibleClient.swift; sourceTree = "<group>"; };
 		51A0C0122DCB12F800123456 /* LazyLibrarianViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLibrarianViewModel.swift; sourceTree = "<group>"; };
 		51A0C0132DCB12F800123456 /* LazyLibrarianView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLibrarianView.swift; sourceTree = "<group>"; };
 		51A0C0202DCB12F800123456 /* LazyLibrarianSearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLibrarianSearchResultsView.swift; sourceTree = "<group>"; };
@@ -216,7 +216,7 @@
 				51929E2B2CA007BC00D77429 /* MailView.swift */,
 				514A16BA2CAB6D9B00B6F94E /* Reporters.swift */,
 				514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */,
-				51A0C0112DCB12F800123456 /* LazyLibrarianClient.swift */,
+				51A0C0112DCB12F800123456 /* PodibleClient.swift */,
 				51A0C0122DCB12F800123456 /* LazyLibrarianViewModel.swift */,
 			);
 			path = Kindling;
@@ -442,7 +442,7 @@
 				514A16B72CA78AD800B6F94E /* SettingsView.swift in Sources */,
 				51A0C0032DCB12F800123456 /* LazyLibrarianView.swift in Sources */,
 				51A0C0102DCB12F800123456 /* LazyLibrarianSearchResultsView.swift in Sources */,
-				51A0C0012DCB12F800123456 /* LazyLibrarianClient.swift in Sources */,
+				51A0C0012DCB12F800123456 /* PodibleClient.swift in Sources */,
 				51A0C0022DCB12F800123456 /* LazyLibrarianViewModel.swift in Sources */,
 				514A16C42CB19C2300B6F94E /* ExportViewModifier.swift in Sources */,
 			);
