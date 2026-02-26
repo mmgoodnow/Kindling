@@ -706,7 +706,27 @@ struct LazyLibrarianView: View {
           systemName: "arrow.clockwise",
           isEnabled: canTriggerRefresh,
           action: {
-            presentSnatchPicker(for: item, libraries: snatchLibraries)
+            if client.backendFlavor == .podible {
+              Task {
+                if canTriggerEbookSearch {
+                  await viewModel.triggerSearch(
+                    bookID: item.id,
+                    library: .ebook,
+                    using: client
+                  )
+                }
+                if canTriggerAudioSearch {
+                  await viewModel.triggerSearch(
+                    bookID: item.id,
+                    library: .audio,
+                    using: client
+                  )
+                }
+                await viewModel.loadLibraryItems(using: client)
+              }
+            } else {
+              presentSnatchPicker(for: item, libraries: snatchLibraries)
+            }
           }
         )
       }
