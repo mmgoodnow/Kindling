@@ -613,20 +613,24 @@ final actor LazyLibrarianMockClient: RemoteLibraryServing {
     }
   }
 
-  func requestBook(id: String, titleHint: String? = nil, authorHint: String? = nil) async throws
+  func addLibraryBook(
+    openLibraryKey: String,
+    titleHint: String? = nil,
+    authorHint: String? = nil
+  ) async throws
     -> LazyLibrarianLibraryItem
   {
-    if let existing = libraryItems.first(where: { $0.id == id }) {
+    if let existing = libraryItems.first(where: { $0.id == openLibraryKey }) {
       return existing
     }
     let new = LazyLibrarianLibraryItem(
-      id: id,
-      title: titleHint ?? "Requested \(id)",
+      id: openLibraryKey,
+      title: titleHint ?? "Requested \(openLibraryKey)",
       author: authorHint ?? "Unknown",
       status: .requested
     )
     libraryItems.append(new)
-    progress[id] = (ebook: 0, audio: 0)
+    progress[openLibraryKey] = (ebook: 0, audio: 0)
     return new
   }
 
@@ -634,7 +638,7 @@ final actor LazyLibrarianMockClient: RemoteLibraryServing {
     return libraryItems
   }
 
-  func searchBook(id: String, library: LazyLibrarianLibrary) async throws {
+  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
     // no-op for mock
   }
 
@@ -882,14 +886,18 @@ struct PodibleKindlingClient: RemoteLibraryServing {
     }
   }
 
-  func requestBook(id: String, titleHint: String? = nil, authorHint: String? = nil) async throws
+  func addLibraryBook(
+    openLibraryKey: String,
+    titleHint: String? = nil,
+    authorHint: String? = nil
+  ) async throws
     -> LazyLibrarianLibraryItem
   {
     _ = titleHint
     _ = authorHint
     let response: PodibleLibraryCreateResult = try await rpcCall(
       method: "library.create",
-      params: ["openLibraryKey": id]
+      params: ["openLibraryKey": openLibraryKey]
     )
     guard let book = response.book else {
       throw LazyLibrarianError.badResponse
@@ -915,12 +923,12 @@ struct PodibleKindlingClient: RemoteLibraryServing {
     return collected.map(toLibraryItem(_:))
   }
 
-  func searchBook(id: String, library: LazyLibrarianLibrary) async throws {
-    let bookID = try parseBookID(id)
+  func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
+    let numericBookID = try parseBookID(bookID)
     _ =
       try await rpcCall(
         method: "library.acquire",
-        params: ["bookId": bookID, "media": podibleMediaValue(for: library)]
+        params: ["bookId": numericBookID, "media": podibleMediaValue(for: library)]
       ) as PodibleEmptyResult
   }
 
