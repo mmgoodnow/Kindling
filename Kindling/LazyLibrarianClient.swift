@@ -276,7 +276,6 @@ extension KeyedDecodingContainer {
 }
 
 protocol LazyLibrarianServing {
-  var backendFlavor: LibraryBackendFlavor { get }
   var supportsManualResultSelection: Bool { get }
   var supportsImportIssueReporting: Bool { get }
   func searchBooks(query: String) async throws -> [LazyLibrarianBook]
@@ -303,14 +302,7 @@ protocol LazyLibrarianServing {
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
 }
 
-enum LibraryBackendFlavor {
-  case lazyLibrarian
-  case podible
-  case mock
-}
-
 extension LazyLibrarianServing {
-  var backendFlavor: LibraryBackendFlavor { .lazyLibrarian }
   var supportsManualResultSelection: Bool { true }
   var supportsImportIssueReporting: Bool { false }
 
@@ -338,7 +330,7 @@ extension LazyLibrarianServing {
 
   func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws {
     throw LazyLibrarianError.unsupported(
-      "\(backendFlavor) does not support reporting wrong imported files.")
+      "This backend does not support reporting wrong imported files.")
   }
 }
 
@@ -595,8 +587,6 @@ final actor LazyLibrarianMockClient: LazyLibrarianServing {
       bookAdded: Date().addingTimeInterval(-86_400 * 12)),
   ]
   private var progress: [String: (ebook: Int, audio: Int)] = [:]
-
-  nonisolated var backendFlavor: LibraryBackendFlavor { .mock }
 
   func searchBooks(query: String) async throws -> [LazyLibrarianBook] {
     let canned = [
@@ -864,7 +854,6 @@ struct PodibleKindlingClient: LazyLibrarianServing {
   let apiKey: String
   var session: URLSession = .shared
 
-  var backendFlavor: LibraryBackendFlavor { .podible }
   var supportsImportIssueReporting: Bool { true }
 
   func searchBooks(query: String) async throws -> [LazyLibrarianBook] {
