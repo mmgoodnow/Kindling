@@ -33,7 +33,6 @@ struct PodibleLibraryView: View {
   @State private var localDownloadingBookIDs: Set<String> = []
   @StateObject private var player = AudioPlayerController()
   @State private var isShowingPlayer = false
-  @State private var snatchContext: SnatchContext?
 
   let clientOverride: RemoteLibraryServing?
 
@@ -44,12 +43,6 @@ struct PodibleLibraryView: View {
   private enum DownloadKind {
     case ebook
     case audiobook
-  }
-
-  private struct SnatchContext: Identifiable {
-    let id = UUID()
-    let item: PodibleLibraryItem
-    let libraries: [PodibleLibraryMedia]
   }
 
   private var configuredClient: RemoteLibraryServing? {
@@ -76,20 +69,6 @@ struct PodibleLibraryView: View {
     content(client: configuredClient)
       .sheet(isPresented: $isShowingPlayer) {
         LocalPlaybackView(player: player)
-      }
-      .sheet(item: $snatchContext) { context in
-        if let client = configuredClient {
-          PodibleSnatchResultPicker(
-            book: context.item,
-            libraries: context.libraries,
-            client: client
-          ) { library in
-            viewModel.noteSearchTriggered(bookID: context.item.id, library: library)
-            await viewModel.loadLibraryItems(using: client)
-          }
-        } else {
-          Text("Remote library backend is not configured.")
-        }
       }
   }
 
@@ -366,14 +345,6 @@ struct PodibleLibraryView: View {
     await viewModel.loadLibraryItems(using: client)
   }
 
-  private func presentSnatchPicker(
-    for item: PodibleLibraryItem,
-    libraries: [PodibleLibraryMedia]
-  ) {
-    guard libraries.isEmpty == false else { return }
-    snatchContext = SnatchContext(item: item, libraries: libraries)
-  }
-
   @MainActor
   private func reportWrongImportedFile(
     bookID: String,
@@ -387,20 +358,6 @@ struct PodibleLibraryView: View {
     } catch {
       downloadErrorMessage = error.localizedDescription
     }
-  }
-
-  private func snatchLibraries(
-    canTriggerEbookSearch: Bool,
-    canTriggerAudioSearch: Bool
-  ) -> [PodibleLibraryMedia] {
-    var libraries: [PodibleLibraryMedia] = []
-    if canTriggerEbookSearch {
-      libraries.append(.ebook)
-    }
-    if canTriggerAudioSearch {
-      libraries.append(.audio)
-    }
-    return libraries
   }
 
   private func startEbookDownload(
@@ -625,11 +582,6 @@ struct PodibleLibraryView: View {
 
     let canRefresh = canEbookSearch || canAudioSearch
     let canTriggerRefresh = canTriggerEbookSearch || canTriggerAudioSearch
-    let snatchLibraries = snatchLibraries(
-      canTriggerEbookSearch: canTriggerEbookSearch,
-      canTriggerAudioSearch: canTriggerAudioSearch
-    )
-    let canChooseResult = client.supportsManualResultSelection && snatchLibraries.isEmpty == false
     let controls = HStack(spacing: 8) {
       trailingControlButton(
         label: "Download & Export",
@@ -687,15 +639,6 @@ struct PodibleLibraryView: View {
                 client: client
               )
             }
-          }
-        )
-      }
-      if canChooseResult {
-        trailingControlButton(
-          label: "Choose Result",
-          systemName: "list.bullet.rectangle",
-          action: {
-            presentSnatchPicker(for: item, libraries: snatchLibraries)
           }
         )
       }
@@ -1208,178 +1151,6 @@ struct PodibleLibraryView: View {
 }
 
 typealias RemoteLibraryView = PodibleLibraryView
-
-private struct PodibleSnatchResultPicker: View {
-  let book: PodibleLibraryItem
-  let libraries: [PodibleLibraryMedia]
-  let client: RemoteLibraryServing
-  let onSnatchComplete: (PodibleLibraryMedia) async -> Void
-
-  @Environment(\.dismiss) private var dismiss
-  @State private var selectedLibrary: PodibleLibraryMedia
-  @State private var results: [PodibleSearchResult] = []
-  @State private var isLoading = false
-  @State private var errorMessage: String?
-  @State private var snatchError: String?
-  @State private var activeSnatchID: String?
-
-  init(
-    book: PodibleLibraryItem,
-    libraries: [PodibleLibraryMedia],
-    client: RemoteLibraryServing,
-    onSnatchComplete: @escaping (PodibleLibraryMedia) async -> Void
-  ) {
-    self.book = book
-    self.libraries = libraries
-    self.client = client
-    self.onSnatchComplete = onSnatchComplete
-    _selectedLibrary = State(initialValue: libraries.first ?? .ebook)
-  }
-
-  var body: some View {
-    NavigationStack {
-      List {
-        if let errorMessage {
-          Text(errorMessage)
-            .foregroundStyle(.red)
-            .font(.caption)
-        }
-
-        if let snatchError {
-          Text(snatchError)
-            .foregroundStyle(.red)
-            .font(.caption)
-        }
-
-        if libraries.count > 1 {
-          Picker("Library", selection: $selectedLibrary) {
-            ForEach(libraries, id: \.self) { library in
-              Text(library.rawValue)
-                .tag(library)
-            }
-          }
-          .pickerStyle(.segmented)
-        }
-
-        if isLoading {
-          HStack {
-            Spacer()
-            ProgressView()
-            Spacer()
-          }
-        } else if filteredResults.isEmpty {
-          ContentUnavailableView(
-            "No Results",
-            systemImage: "magnifyingglass",
-            description: Text("Try refreshing or adjusting your query.")
-          )
-        } else {
-          ForEach(filteredResults) { result in
-            snatchRow(result)
-          }
-        }
-      }
-      .navigationTitle("Choose Result")
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Done") { dismiss() }
-        }
-      }
-      .task {
-        await loadResults()
-      }
-    }
-  }
-
-  private var filteredResults: [PodibleSearchResult] {
-    results.filter { result in
-      guard let library = result.library else { return true }
-      return library == selectedLibrary
-    }
-  }
-
-  @ViewBuilder
-  private func snatchRow(_ result: PodibleSearchResult) -> some View {
-    let title = result.title.isEmpty ? result.url : result.title
-    HStack(alignment: .top, spacing: 12) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text(title)
-          .font(.headline)
-          .lineLimit(2)
-        Text(result.provider.isEmpty ? "Unknown Provider" : result.provider)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        HStack(spacing: 8) {
-          if let size = result.displaySize {
-            Text(size)
-          }
-          if let seeders = result.seeders {
-            Text("S \(seeders)")
-          }
-          if let leechers = result.leechers {
-            Text("L \(leechers)")
-          }
-          if let age = result.age {
-            Text(age)
-          }
-          if result.mode.isEmpty == false {
-            Text(result.mode)
-          }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-      }
-      Spacer()
-      if activeSnatchID == result.id {
-        ProgressView()
-          .controlSize(.small)
-      } else {
-        Button("Snatch") {
-          snatch(result)
-        }
-        .disabled(result.canSnatch == false || activeSnatchID != nil)
-      }
-    }
-    .padding(.vertical, 4)
-  }
-
-  @MainActor
-  private func loadResults() async {
-    guard isLoading == false else { return }
-    isLoading = true
-    errorMessage = nil
-    let query = [book.title, book.author]
-      .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
-      .joined(separator: " ")
-    do {
-      let category = selectedLibrary.searchCategory
-      let bookID = book.id.isEmpty ? nil : book.id
-      results = try await client.searchItem(query: query, cat: category, bookID: bookID)
-    } catch {
-      errorMessage = error.localizedDescription
-    }
-    isLoading = false
-  }
-
-  private func snatch(_ result: PodibleSearchResult) {
-    snatchError = nil
-    activeSnatchID = result.id
-    Task { @MainActor in
-      do {
-        try await client.snatchResult(
-          bookID: book.id,
-          library: selectedLibrary,
-          result: result
-        )
-        await onSnatchComplete(selectedLibrary)
-        dismiss()
-      } catch {
-        snatchError = error.localizedDescription
-      }
-      activeSnatchID = nil
-    }
-  }
-}
 
 @ViewBuilder
 func remoteLibraryEbookStatusRow(
