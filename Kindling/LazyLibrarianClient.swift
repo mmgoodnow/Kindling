@@ -284,7 +284,6 @@ protocol LazyLibrarianServing {
   func requestBook(id: String, titleHint: String?, authorHint: String?) async throws
     -> LazyLibrarianLibraryItem
   func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem]
-  func fetchBookCovers(wait: Bool) async throws
   func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws
   func searchBook(id: String, library: LazyLibrarianLibrary) async throws
   func searchItem(
@@ -632,10 +631,6 @@ final actor LazyLibrarianMockClient: LazyLibrarianServing {
     return libraryItems
   }
 
-  func fetchBookCovers(wait: Bool = false) async throws {
-    // no-op for mock
-  }
-
   func searchBook(id: String, library: LazyLibrarianLibrary) async throws {
     // no-op for mock
   }
@@ -915,10 +910,6 @@ struct PodibleKindlingClient: LazyLibrarianServing {
     }
 
     return collected.map(toLibraryItem(_:))
-  }
-
-  func fetchBookCovers(wait: Bool = false) async throws {
-    _ = wait
   }
 
   func searchBook(id: String, library: LazyLibrarianLibrary) async throws {

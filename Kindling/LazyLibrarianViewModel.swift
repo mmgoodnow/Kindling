@@ -41,15 +41,9 @@ final class LazyLibrarianViewModel: ObservableObject {
     isLoading = true
     errorMessage = nil
     do {
-      var all = try await client.fetchLibraryItems()
-      var filteredAll = filtered(all)
+      let all = try await client.fetchLibraryItems()
+      let filteredAll = filtered(all)
       prunePendingItems(matching: filteredAll)
-      if client.backendFlavor == .lazyLibrarian && needsCoverRefresh(all) {
-        try? await client.fetchBookCovers(wait: true)
-        all = try await client.fetchLibraryItems()
-        filteredAll = filtered(all)
-        prunePendingItems(matching: filteredAll)
-      }
       let filteredItems = mergePending(into: filteredAll)
       libraryItems = filteredItems
       startPollingIfNeeded(for: filteredItems, client: client)
@@ -121,10 +115,6 @@ final class LazyLibrarianViewModel: ObservableObject {
         } else {
           pendingItemsByID[requested.id] = pending
         }
-      }
-      if client.backendFlavor == .lazyLibrarian {
-        markSearchTriggered(bookID: requested.id, library: .ebook)
-        markSearchTriggered(bookID: requested.id, library: .audio)
       }
       // Update the library list and the search results with the new status.
       if let existingIndex = libraryItems.firstIndex(where: { $0.id == requested.id }) {
@@ -226,20 +216,6 @@ final class LazyLibrarianViewModel: ObservableObject {
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
       }
     }
-  }
-
-  private func needsCoverRefresh(_ items: [LazyLibrarianLibraryItem]) -> Bool {
-    for item in items {
-      let rawPath = item.bookImagePath?.trimmingCharacters(in: .whitespacesAndNewlines)
-      if rawPath == nil || rawPath?.isEmpty == true {
-        return true
-      }
-      let normalized = rawPath?.lowercased() ?? ""
-      if normalized == "images/nocover.png" || normalized == "/images/nocover.png" {
-        return true
-      }
-    }
-    return false
   }
 
   func beginOptimisticRequest(for book: LazyLibrarianBook) {
