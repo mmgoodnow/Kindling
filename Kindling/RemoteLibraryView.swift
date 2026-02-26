@@ -686,7 +686,11 @@ struct PodibleLibraryView: View {
     client: RemoteLibraryServing
   ) -> some View {
     let ebookStatus = item.ebookStatus ?? item.status
-    let hasEbookAvailable = item.bookLibrary != nil || ebookStatus.isComplete
+    let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
+    let hasEbookAvailable =
+      item.bookLibrary != nil
+      || ebookStatus.isComplete
+      || localEbookStatus?.isComplete == true
     let canKindleExport =
       hasEbookAvailable && userSettings.kindleEmailAddress.isEmpty == false
     let localAudioStatus = audioStatus(for: localBook, fallback: item.audioStatus)
@@ -824,7 +828,6 @@ struct PodibleLibraryView: View {
     client: RemoteLibraryServing?
   ) -> some View {
     _ = client
-    let status = localBook?.files.first?.downloadStatus ?? .notStarted
     let progress = localDownloadProgressByBookID[item.id]
 
     return Group {
@@ -1045,6 +1048,18 @@ struct PodibleLibraryView: View {
       return status
     }
     return fallback ?? .unknown
+  }
+
+  private func localEbookStatus(
+    for book: LibraryBook?,
+    fallback: PodibleLibraryItemStatus?
+  ) -> PodibleLibraryItemStatus? {
+    if let book, let raw = book.bookStatusRaw,
+      let status = PodibleLibraryItemStatus(rawValue: raw)
+    {
+      return status
+    }
+    return fallback
   }
 
   private func parseAudioStatus(from book: LibraryBook) -> PodibleLibraryItemStatus {
@@ -1372,7 +1387,7 @@ func remoteLibraryRowProgressBackground(
         RoundedRectangle(cornerRadius: 10, style: .continuous)
           .fill(.accent.opacity(0.07))
           .frame(width: fillWidth, alignment: .leading)
-          .animation(.easeInOut(duration: 0.25), value: clamped)
+          .animation(.easeInOut(duration: 0.5), value: clamped)
       }
     }
   }
