@@ -424,6 +424,5 @@ final class PodibleLibraryViewModel: ObservableObject {
   }
 }
 
-typealias LazyLibrarianViewModel = PodibleLibraryViewModel
 typealias RemoteLibraryViewModel = PodibleLibraryViewModel
 typealias PodibleLibraryDownloadProgress = PodibleLibraryViewModel.DownloadProgress

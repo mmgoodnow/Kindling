@@ -34,8 +34,6 @@ struct PodibleSearchResultsView: View {
   }
 }
 
-typealias LazyLibrarianSearchResultsView = PodibleSearchResultsView
-
 struct PodibleSearchResultRow: View {
   @ObservedObject var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
@@ -151,8 +149,6 @@ struct PodibleSearchResultRow: View {
     }
   }
 }
-
-typealias LazyLibrarianSearchResultRow = PodibleSearchResultRow
 
 #Preview {
   let viewModel = RemoteLibraryViewModel()

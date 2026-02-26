@@ -1207,7 +1207,6 @@ struct PodibleLibraryView: View {
   }
 }
 
-typealias LazyLibrarianView = PodibleLibraryView
 typealias RemoteLibraryView = PodibleLibraryView
 
 private struct PodibleSnatchResultPicker: View {
