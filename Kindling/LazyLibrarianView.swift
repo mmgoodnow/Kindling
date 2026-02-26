@@ -65,17 +65,11 @@ struct LazyLibrarianView: View {
         apiKey: userSettings.podibleAPIKey
       )
     }
-    guard
-      let url = URL(string: userSettings.lazyLibrarianURL),
-      userSettings.lazyLibrarianURL.isEmpty == false,
-      userSettings.lazyLibrarianAPIKey.isEmpty == false
-    else {
-      return nil
-    }
-    return LazyLibrarianClient(
-      baseURL: url,
-      apiKey: userSettings.lazyLibrarianAPIKey
-    )
+    return nil
+  }
+
+  private var remoteAssetBaseURLString: String {
+    userSettings.podibleRPCURL
   }
 
   var body: some View {
@@ -565,7 +559,7 @@ struct LazyLibrarianView: View {
           title: item.title,
           author: item.author,
           url: lazyLibrarianAssetURL(
-            baseURLString: userSettings.lazyLibrarianURL,
+            baseURLString: remoteAssetBaseURLString,
             path: item.bookImagePath
           )
         )
@@ -827,7 +821,7 @@ struct LazyLibrarianView: View {
     let audioStatus = parseAudioStatus(from: book)
     let playbackURL = playbackURL(for: book)
     let coverURL = lazyLibrarianAssetURL(
-      baseURLString: userSettings.lazyLibrarianURL,
+      baseURLString: remoteAssetBaseURLString,
       path: book.coverURLString
     )
 

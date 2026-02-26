@@ -9,6 +9,4 @@ class UserSettings: ObservableObject {
   @AppStorage("kindleEmailAddress") var kindleEmailAddress: String = "example@kindle.com"
   @AppStorage("podibleRPCURL") var podibleRPCURL: String = ""
   @AppStorage("podibleAPIKey") var podibleAPIKey: String = ""
-  @AppStorage("lazyLibrarianURL") var lazyLibrarianURL: String = ""
-  @AppStorage("lazyLibrarianAPIKey") var lazyLibrarianAPIKey: String = ""
 }

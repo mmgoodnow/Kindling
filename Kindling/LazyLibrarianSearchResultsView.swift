@@ -66,7 +66,7 @@ struct LazyLibrarianSearchResultRow: View {
         let coverURL = book.coverImageURL.flatMap { url -> URL? in
           if url.scheme != nil { return url }
           return lazyLibrarianAssetURL(
-            baseURLString: userSettings.lazyLibrarianURL,
+            baseURLString: userSettings.podibleRPCURL,
             path: url.absoluteString
           )
         }
