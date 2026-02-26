@@ -449,9 +449,56 @@ struct PodibleLibraryView: View {
     downloadErrorMessage = nil
     do {
       try await client.deleteLibraryBook(bookID: item.id)
+      try deleteLocalMirror(forBookID: item.id)
       await refresh(using: client)
     } catch {
       downloadErrorMessage = error.localizedDescription
+    }
+  }
+
+  @MainActor
+  private func deleteLocalMirror(forBookID bookID: String) throws {
+    localDownloadingBookIDs.remove(bookID)
+    localDownloadProgressByBookID[bookID] = nil
+
+    guard let book = localBooksById[bookID] else { return }
+
+    let fileRows = book.files
+    let localFileURLs: [URL] = fileRows.compactMap { file in
+      guard let relativePath = file.localRelativePath else { return nil }
+      return try? LibraryStorage().url(forRelativePath: relativePath)
+    }
+
+    // Best-effort local file cleanup; the database is the source of truth for what is shown.
+    for url in localFileURLs where FileManager.default.fileExists(atPath: url.path) {
+      try? FileManager.default.removeItem(at: url)
+    }
+
+    // Remove now-empty parent folders (usually KindlingLibrary/<bookId>/).
+    let parentFolders = Set(localFileURLs.map { $0.deletingLastPathComponent() })
+    for folder in parentFolders {
+      guard FileManager.default.fileExists(atPath: folder.path) else { continue }
+      let contents =
+        (try? FileManager.default.contentsOfDirectory(
+          at: folder,
+          includingPropertiesForKeys: nil,
+          options: [.skipsHiddenFiles]
+        )) ?? []
+      if contents.isEmpty {
+        try? FileManager.default.removeItem(at: folder)
+      }
+    }
+
+    if let localState = book.localState {
+      modelContext.delete(localState)
+    }
+    for file in fileRows {
+      modelContext.delete(file)
+    }
+    modelContext.delete(book)
+
+    if modelContext.hasChanges {
+      try modelContext.save()
     }
   }
 
