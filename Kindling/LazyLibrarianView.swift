@@ -1208,6 +1208,8 @@ struct LazyLibrarianView: View {
   }
 }
 
+typealias RemoteLibraryView = LazyLibrarianView
+
 private struct LazyLibrarianSnatchResultPicker: View {
   let book: LazyLibrarianLibraryItem
   let libraries: [LazyLibrarianLibrary]

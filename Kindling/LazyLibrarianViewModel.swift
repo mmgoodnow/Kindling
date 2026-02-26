@@ -424,3 +424,5 @@ final class LazyLibrarianViewModel: ObservableObject {
     return false
   }
 }
+
+typealias RemoteLibraryViewModel = LazyLibrarianViewModel
