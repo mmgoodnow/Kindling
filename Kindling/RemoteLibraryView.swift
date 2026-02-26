@@ -35,8 +35,6 @@ struct PodibleLibraryView: View {
   @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
-  @State private var isShowingDeleteRemoteBookConfirmation = false
-  @State private var pendingRemoteDeleteItem: PodibleLibraryItem?
 
   let clientOverride: RemoteLibraryServing?
 
@@ -176,27 +174,6 @@ struct PodibleLibraryView: View {
       Text(
         "Removes local SwiftData library records, sync state, and downloaded local files. The remote podible library is not changed."
       )
-    }
-    .confirmationDialog(
-      "Delete Remote Book?",
-      isPresented: $isShowingDeleteRemoteBookConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Delete Book", role: .destructive) {
-        guard let client, let item = pendingRemoteDeleteItem else { return }
-        Task {
-          await deleteRemoteBook(item, using: client)
-        }
-      }
-      Button("Cancel", role: .cancel) {
-        pendingRemoteDeleteItem = nil
-      }
-    } message: {
-      if let item = pendingRemoteDeleteItem {
-        Text(
-          "Removes \"\(item.title)\" from the remote podible library via library.delete. Local downloaded files are not deleted."
-        )
-      }
     }
     .onAppear {
       guard let client, isWipingLocalLibrary == false else { return }
@@ -447,7 +424,6 @@ struct PodibleLibraryView: View {
     downloadErrorMessage = nil
     do {
       try await client.deleteLibraryBook(bookID: item.id)
-      pendingRemoteDeleteItem = nil
       await refresh(using: client)
     } catch {
       downloadErrorMessage = error.localizedDescription
@@ -735,8 +711,9 @@ struct PodibleLibraryView: View {
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       if let client, client.supportsLibraryDelete {
         Button(role: .destructive) {
-          pendingRemoteDeleteItem = item
-          isShowingDeleteRemoteBookConfirmation = true
+          Task {
+            await deleteRemoteBook(item, using: client)
+          }
         } label: {
           Label("Delete", systemImage: "trash")
         }
