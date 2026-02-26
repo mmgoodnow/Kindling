@@ -338,8 +338,8 @@ final class PodibleLibraryViewModel: ObservableObject {
       let existing = libraryItems[index]
       let merged = PodibleLibraryItem(
         id: item.id,
-        title: item.title.isEmpty ? existing.title : item.title,
-        author: item.author.isEmpty ? existing.author : item.author,
+        title: item.title,
+        author: item.author,
         status: item.status,
         ebookStatus: item.ebookStatus ?? existing.ebookStatus,
         audioStatus: item.audioStatus ?? existing.audioStatus,
@@ -352,6 +352,10 @@ final class PodibleLibraryViewModel: ObservableObject {
       updatePolledProgressSnapshot(for: merged)
       return
     }
+
+    libraryItems.append(item)
+    libraryItems = filtered(libraryItems)
+    updatePolledProgressSnapshot(for: item)
   }
 
   private func updatePolledProgressSnapshot(for item: PodibleLibraryItem) {
