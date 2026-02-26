@@ -1,6 +1,6 @@
 import Foundation
 
-enum LazyLibrarianError: LocalizedError {
+enum PodibleError: LocalizedError {
   case notConfigured
   case badURL
   case badResponse
@@ -26,7 +26,9 @@ enum LazyLibrarianError: LocalizedError {
   }
 }
 
-enum LazyLibrarianLibraryItemStatus: String, Decodable {
+typealias LazyLibrarianError = PodibleError
+
+enum PodibleLibraryItemStatus: String, Decodable {
   case requested = "Requested"
   case wanted = "Wanted"
   case snatched = "Snatched"
@@ -43,7 +45,7 @@ enum LazyLibrarianLibraryItemStatus: String, Decodable {
 
   init(from decoder: Decoder) throws {
     let raw = try decoder.singleValueContainer().decode(String.self)
-    self = LazyLibrarianLibraryItemStatus(rawValue: raw) ?? .unknown
+    self = PodibleLibraryItemStatus(rawValue: raw) ?? .unknown
   }
 
   var isComplete: Bool {
@@ -56,9 +58,9 @@ enum LazyLibrarianLibraryItemStatus: String, Decodable {
   }
 }
 
-typealias PodibleLibraryItemStatus = LazyLibrarianLibraryItemStatus
+typealias LazyLibrarianLibraryItemStatus = PodibleLibraryItemStatus
 
-struct LazyLibrarianBook: Identifiable, Hashable, Decodable {
+struct PodibleBook: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
   let author: String
@@ -135,9 +137,9 @@ struct LazyLibrarianBook: Identifiable, Hashable, Decodable {
   }
 }
 
-typealias PodibleBook = LazyLibrarianBook
+typealias LazyLibrarianBook = PodibleBook
 
-struct LazyLibrarianLibraryItem: Identifiable, Hashable, Decodable {
+struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
   let author: String
@@ -232,9 +234,9 @@ struct LazyLibrarianLibraryItem: Identifiable, Hashable, Decodable {
   }
 }
 
-typealias PodibleLibraryItem = LazyLibrarianLibraryItem
+typealias LazyLibrarianLibraryItem = PodibleLibraryItem
 
-private enum LazyLibrarianDateParser {
+private enum PodibleDateParser {
   private static let utcCalendar: Calendar = {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
@@ -269,6 +271,8 @@ private enum LazyLibrarianDateParser {
     return end
   }
 }
+
+private typealias LazyLibrarianDateParser = PodibleDateParser
 
 extension KeyedDecodingContainer {
   fileprivate func decodeIfPresent(_ type: String.Type, forKeys keys: [Key]) throws -> String {
@@ -350,26 +354,28 @@ extension PodibleLibraryServing {
   }
 }
 
-enum LazyLibrarianLibrary: String {
+enum PodibleLibraryMedia: String {
   case ebook = "eBook"
   case audio = "AudioBook"
 }
 
-typealias PodibleLibraryMedia = LazyLibrarianLibrary
+typealias LazyLibrarianLibrary = PodibleLibraryMedia
 
-enum LazyLibrarianSearchCategory: String {
+enum PodibleSearchCategory: String {
   case general
   case book
   case audio
 }
 
-extension LazyLibrarianLibrary {
-  var searchCategory: LazyLibrarianSearchCategory {
+typealias LazyLibrarianSearchCategory = PodibleSearchCategory
+
+extension PodibleLibraryMedia {
+  var searchCategory: PodibleSearchCategory {
     self == .ebook ? .book : .audio
   }
 }
 
-struct LazyLibrarianDownloadProgressItem: Hashable, Decodable {
+struct PodibleDownloadProgressItem: Hashable, Decodable {
   let bookID: String?
   let auxInfo: String?
   let source: String?
@@ -418,9 +424,9 @@ struct LazyLibrarianDownloadProgressItem: Hashable, Decodable {
   }
 }
 
-typealias PodibleDownloadProgressItem = LazyLibrarianDownloadProgressItem
+typealias LazyLibrarianDownloadProgressItem = PodibleDownloadProgressItem
 
-struct LazyLibrarianSearchResult: Identifiable, Hashable {
+struct PodibleSearchResult: Identifiable, Hashable {
   let id: String
   let title: String
   let provider: String
@@ -596,7 +602,7 @@ struct LazyLibrarianSearchResult: Identifiable, Hashable {
   }
 }
 
-typealias PodibleSearchResult = LazyLibrarianSearchResult
+typealias LazyLibrarianSearchResult = PodibleSearchResult
 
 // Preview/testing helper that simulates LazyLibrarian without network calls.
 final actor LazyLibrarianMockClient: PodibleLibraryServing {
