@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PodibleSearchResultsView: View {
-  @ObservedObject var viewModel: LazyLibrarianViewModel
+  @ObservedObject var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
   let client: RemoteLibraryServing
   @State private var pendingItemIDs: Set<String> = []
@@ -37,7 +37,7 @@ struct PodibleSearchResultsView: View {
 typealias LazyLibrarianSearchResultsView = PodibleSearchResultsView
 
 struct PodibleSearchResultRow: View {
-  @ObservedObject var viewModel: LazyLibrarianViewModel
+  @ObservedObject var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
   let book: PodibleBook
   let client: RemoteLibraryServing

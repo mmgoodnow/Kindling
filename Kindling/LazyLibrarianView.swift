@@ -1382,8 +1382,6 @@ private struct PodibleSnatchResultPicker: View {
   }
 }
 
-private typealias LazyLibrarianSnatchResultPicker = PodibleSnatchResultPicker
-
 @ViewBuilder
 func remoteLibraryEbookStatusRow(
   status: PodibleLibraryItemStatus?,
