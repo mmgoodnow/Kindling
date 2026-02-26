@@ -604,8 +604,8 @@ struct PodibleSearchResult: Identifiable, Hashable {
 
 typealias LazyLibrarianSearchResult = PodibleSearchResult
 
-// Preview/testing helper that simulates LazyLibrarian without network calls.
-final actor LazyLibrarianMockClient: PodibleLibraryServing {
+// Preview/testing helper that simulates the podible backend without network calls.
+final actor PodibleMockClient: PodibleLibraryServing {
   private var libraryItems: [LazyLibrarianLibraryItem] = [
     LazyLibrarianLibraryItem(
       id: "1", title: "Project Hail Mary", author: "Andy Weir", status: .downloaded,
@@ -785,7 +785,7 @@ final actor LazyLibrarianMockClient: PodibleLibraryServing {
   }
 }
 
-typealias PodibleMockClient = LazyLibrarianMockClient
+typealias LazyLibrarianMockClient = PodibleMockClient
 
 private struct PodibleRPCEnvelope<Result: Decodable>: Decodable {
   struct RPCError: Decodable {
@@ -1419,6 +1419,3 @@ struct PodibleClient: PodibleLibraryServing {
     }
   }
 }
-
-typealias PodibleKindlingClient = PodibleClient
-typealias KindlingBackendClient = PodibleClient
