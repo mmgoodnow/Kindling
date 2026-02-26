@@ -615,72 +615,6 @@ final actor PodibleMockClient: PodibleLibraryServing {
     // no-op for mock
   }
 
-  func searchItem(
-    query: String,
-    cat: PodibleSearchCategory?,
-    bookID: String?
-  ) async throws -> [PodibleSearchResult] {
-    let results = [
-      PodibleSearchResult(
-        dictionary: [
-          "title": "\(query) (Mock eBook)",
-          "provider": "MockProvider",
-          "url": "https://example.com/mock-ebook",
-          "size": "12.4 MB",
-          "mode": "torznab",
-          "seeders": 42,
-          "leechers": 3,
-          "age": "1d",
-          "library": "eBook",
-        ]
-      )!,
-      PodibleSearchResult(
-        dictionary: [
-          "title": "\(query) (Mock Audio)",
-          "provider": "MockProvider",
-          "url": "https://example.com/mock-audio",
-          "size": "420 MB",
-          "mode": "torznab",
-          "seeders": 12,
-          "leechers": 1,
-          "age": "2d",
-          "library": "AudioBook",
-        ]
-      )!,
-    ]
-    guard let cat else { return results }
-    switch cat {
-    case .book:
-      return results.filter { $0.library == .ebook }
-    case .audio:
-      return results.filter { $0.library == .audio }
-    case .general:
-      return results
-    }
-  }
-
-  func snatchResult(
-    bookID: String,
-    library: PodibleLibraryMedia,
-    result: PodibleSearchResult
-  ) async throws {
-    if let index = libraryItems.firstIndex(where: { $0.id == bookID }) {
-      let existing = libraryItems[index]
-      let updated = PodibleLibraryItem(
-        id: existing.id,
-        title: existing.title,
-        author: existing.author,
-        status: library == .ebook ? .snatched : existing.status,
-        audioStatus: library == .audio ? .snatched : existing.audioStatus,
-        bookAdded: existing.bookAdded,
-        bookLibrary: existing.bookLibrary,
-        audioLibrary: existing.audioLibrary,
-        bookImagePath: existing.bookImagePath
-      )
-      libraryItems[index] = updated
-    }
-  }
-
   func fetchDownloadProgress(limit: Int? = nil) async throws -> [PodibleDownloadProgressItem] {
     var items: [PodibleDownloadProgressItem] = []
     for (bookID, p) in progress {
@@ -914,56 +848,6 @@ struct PodibleClient: PodibleLibraryServing {
           "mediaType": podibleMediaValue(for: library),
         ]
       ) as PodibleEmptyResult
-  }
-
-  func searchItem(
-    query: String,
-    cat: PodibleSearchCategory?,
-    bookID: String?
-  ) async throws -> [PodibleSearchResult] {
-    _ = bookID
-    let libraries: [PodibleLibraryMedia]
-    switch cat {
-    case .book:
-      libraries = [.ebook]
-    case .audio:
-      libraries = [.audio]
-    case .general, .none:
-      libraries = [.audio, .ebook]
-    }
-
-    var results: [PodibleSearchResult] = []
-    for library in libraries {
-      let response: PodibleSearchRunResult = try await rpcCall(
-        method: "search.run",
-        params: [
-          "query": query,
-          "media": podibleMediaValue(for: library),
-        ]
-      )
-      results.append(
-        contentsOf: response.results.compactMap { toSearchResult($0, library: library) })
-    }
-    return results
-  }
-
-  func snatchResult(
-    bookID: String,
-    library: PodibleLibraryMedia,
-    result: PodibleSearchResult
-  ) async throws {
-    let numericBookID = try parseBookID(bookID)
-    var params: [String: Any] = [
-      "bookId": numericBookID,
-      "provider": result.provider,
-      "title": result.title,
-      "mediaType": podibleMediaValue(for: library),
-      "url": result.snatchURL,
-    ]
-    if let sizeBytes = result.sizeBytes {
-      params["sizeBytes"] = sizeBytes
-    }
-    _ = try await rpcCall(method: "snatch.create", params: params) as PodibleEmptyResult
   }
 
   func fetchDownloadProgress(limit: Int? = nil) async throws -> [PodibleDownloadProgressItem] {
