@@ -282,11 +282,8 @@ protocol LazyLibrarianServing {
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
     -> LazyLibrarianLibraryItem
   func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws
-  func requestBook(id: String, titleHint: String?, authorHint: String?) async throws
-    -> LazyLibrarianLibraryItem
   func fetchLibraryItems() async throws -> [LazyLibrarianLibraryItem]
   func reportImportIssue(bookID: String, library: LazyLibrarianLibrary) async throws
-  func searchBook(id: String, library: LazyLibrarianLibrary) async throws
   func searchItem(
     query: String,
     cat: LazyLibrarianSearchCategory?,
@@ -311,11 +308,21 @@ extension LazyLibrarianServing {
   func addLibraryBook(openLibraryKey: String, titleHint: String?, authorHint: String?) async throws
     -> LazyLibrarianLibraryItem
   {
-    try await requestBook(id: openLibraryKey, titleHint: titleHint, authorHint: authorHint)
+    throw LazyLibrarianError.unsupported("This backend does not support adding library books.")
   }
 
   func acquireLibraryMedia(bookID: String, library: LazyLibrarianLibrary) async throws {
-    try await searchBook(id: bookID, library: library)
+    throw LazyLibrarianError.unsupported("This backend does not support media acquisition.")
+  }
+
+  func requestBook(id: String, titleHint: String?, authorHint: String?) async throws
+    -> LazyLibrarianLibraryItem
+  {
+    try await addLibraryBook(openLibraryKey: id, titleHint: titleHint, authorHint: authorHint)
+  }
+
+  func searchBook(id: String, library: LazyLibrarianLibrary) async throws {
+    try await acquireLibraryMedia(bookID: id, library: library)
   }
 
   func downloadEpub(bookID: String) async throws -> URL {
