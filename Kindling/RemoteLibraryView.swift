@@ -358,7 +358,7 @@ struct PodibleLibraryView: View {
 
         Button(action: toggleBottomControlsMode) {
           Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
-            .font(.headline.weight(.bold))
+            .font(.title3.weight(.bold))
             .foregroundStyle(.primary)
             .frame(width: 44, height: 44)
         }

@@ -161,7 +161,7 @@ struct LocalPlaybackView: View {
           player.unload()
         } label: {
           Image(systemName: "xmark")
-            .font(.headline.weight(.bold))
+            .font(.title3.weight(.bold))
             .foregroundStyle(.secondary)
             .frame(width: 36, height: 36)
         }
