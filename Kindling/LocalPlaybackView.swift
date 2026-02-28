@@ -20,25 +20,34 @@ struct LocalPlaybackView: View {
 
   private func expandedPlayerView() -> some View {
     VStack(spacing: 0) {
-      sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
-        .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
+      ScrollView(showsIndicators: false) {
+        VStack(spacing: 0) {
+          sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
+            .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
-      VStack(spacing: 8) {
-        Text(player.title)
-          .font(.title2.weight(.bold))
-          .multilineTextAlignment(.center)
-          .lineLimit(3)
-        if player.author.isEmpty == false {
-          Text(player.author)
-            .font(.headline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .lineLimit(2)
+          VStack(spacing: 8) {
+            Text(player.title)
+              .font(.title2.weight(.bold))
+              .multilineTextAlignment(.center)
+              .lineLimit(3)
+            if player.author.isEmpty == false {
+              Text(player.author)
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            }
+          }
+          .padding(.top, 28)
+
+          if player.chapters.isEmpty == false {
+            chapterListSection
+              .padding(.top, 28)
+          }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 28)
       }
-      .padding(.top, 28)
-
-      Spacer(minLength: 0)
 
       VStack(spacing: 24) {
         VStack(spacing: 10) {
@@ -75,9 +84,9 @@ struct LocalPlaybackView: View {
           }
         }
       }
+      .padding(.top, 28)
     }
     .padding(.horizontal, 24)
-    .padding(.top, 28)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
   }
@@ -109,6 +118,80 @@ struct LocalPlaybackView: View {
         .frame(width: size, height: size)
     }
     .buttonStyle(.plain)
+  }
+
+  private var chapterListSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("Chapters")
+        .font(.headline.weight(.semibold))
+        .foregroundStyle(.secondary)
+
+      LazyVStack(spacing: 6) {
+        ForEach(player.chapters) { chapter in
+          Button {
+            player.seek(to: chapter.startTime)
+          } label: {
+            HStack(spacing: 12) {
+              VStack(alignment: .leading, spacing: 3) {
+                Text(chapter.title)
+                  .font(.body.weight(currentChapterID == chapter.id ? .semibold : .regular))
+                  .foregroundStyle(.primary)
+                  .multilineTextAlignment(.leading)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(formatTime(chapter.startTime))
+                  .font(.caption.monospacedDigit())
+                  .foregroundStyle(.secondary)
+              }
+
+              if currentChapterID == chapter.id {
+                Image(systemName: "speaker.wave.2.fill")
+                  .font(.footnote.weight(.semibold))
+                  .foregroundStyle(.secondary)
+              }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(chapterRowBackground(isCurrent: currentChapterID == chapter.id))
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    }
+  }
+
+  private var currentChapterID: Int? {
+    guard player.chapters.isEmpty == false else { return nil }
+
+    let currentTime = max(player.currentTime, 0)
+    for (index, chapter) in player.chapters.enumerated() {
+      let nextStart =
+        player.chapters.indices.contains(index + 1)
+        ? player.chapters[index + 1].startTime
+        : player.duration
+      if currentTime >= chapter.startTime, currentTime < max(nextStart, chapter.startTime + 0.01) {
+        return chapter.id
+      }
+    }
+
+    return player.chapters.last?.id
+  }
+
+  @ViewBuilder
+  private func chapterRowBackground(isCurrent: Bool) -> some View {
+    #if os(iOS)
+      if isCurrent {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(Color.primary.opacity(0.08))
+      } else {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(Color.primary.opacity(0.04))
+      }
+    #else
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(isCurrent ? Color.primary.opacity(0.10) : Color.primary.opacity(0.05))
+    #endif
   }
 }
 
