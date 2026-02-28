@@ -115,27 +115,13 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerBackground: some View {
-    ZStack {
-      LinearGradient(
-        colors: [
-          Color(red: 0.13, green: 0.15, blue: 0.20),
-          Color(red: 0.08, green: 0.09, blue: 0.12),
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-
-      RadialGradient(
-        colors: [
-          Color.white.opacity(0.08),
-          Color.clear,
-        ],
-        center: .top,
-        startRadius: 24,
-        endRadius: 380
-      )
-    }
-    .ignoresSafeArea()
+    #if os(iOS)
+      Color(uiColor: .systemBackground)
+        .opacity(0.92)
+        .ignoresSafeArea()
+    #else
+      Color.clear
+    #endif
   }
 
   private var macPlayerBackground: some View {
@@ -208,9 +194,9 @@ struct LocalPlaybackView: View {
   }
 #endif
 
-#if os(iOS)
-  private struct MiniPlaybackGlassBarStyle: ViewModifier {
-    func body(content: Content) -> some View {
+private struct MiniPlaybackGlassBarStyle: ViewModifier {
+  func body(content: Content) -> some View {
+    #if os(iOS)
       if #available(iOS 26.0, *) {
         GlassEffectContainer {
           content
@@ -220,11 +206,16 @@ struct LocalPlaybackView: View {
         content
           .background(.ultraThinMaterial)
       }
-    }
+    #else
+      content
+        .background(.ultraThinMaterial)
+    #endif
   }
+}
 
-  private struct PlayerGlassCircleButtonStyle: ViewModifier {
-    func body(content: Content) -> some View {
+private struct PlayerGlassCircleButtonStyle: ViewModifier {
+  func body(content: Content) -> some View {
+    #if os(iOS)
       if #available(iOS 26.0, *) {
         content
           .buttonStyle(.glass)
@@ -233,9 +224,13 @@ struct LocalPlaybackView: View {
           .buttonStyle(.plain)
           .background(.thinMaterial, in: Circle())
       }
-    }
+    #else
+      content
+        .buttonStyle(.plain)
+        .background(.thinMaterial, in: Circle())
+    #endif
   }
-#endif
+}
 
 @MainActor
 @ViewBuilder

@@ -358,9 +358,9 @@ struct PodibleLibraryView: View {
 
         Button(action: toggleBottomControlsMode) {
           Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
-            .font(.title3.weight(.medium))
+            .font(.callout.weight(.semibold))
             .foregroundStyle(.primary)
-            .frame(width: 52, height: 52)
+            .frame(width: 40, height: 40)
         }
         .modifier(BottomControlsActionButtonStyle())
         .accessibilityLabel(shouldShowBottomMiniPlayer ? "Show Search" : "Hide Search")
