@@ -38,9 +38,6 @@ struct PodibleLibraryView: View {
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
   @State private var pendingReportIssueBook: PendingReportIssueBook?
-  #if os(iOS)
-    @FocusState private var isBottomSearchFocused: Bool
-  #endif
 
   let clientOverride: RemoteLibraryServing?
 
@@ -82,7 +79,14 @@ struct PodibleLibraryView: View {
     content(client: configuredClient)
       #if os(iOS)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-          remoteLibraryBottomControlsBar
+          if player.hasLoadedItem {
+            MiniPlaybackBar(player: player) {
+              isShowingPlayer = true
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+          }
         }
       #endif
       .sheet(isPresented: $isShowingPlayer) {
@@ -230,8 +234,15 @@ struct PodibleLibraryView: View {
       guard let client, isWipingLocalLibrary == false else { return }
       await refresh(using: client)
     }
+    .searchable(text: $viewModel.query, prompt: "Search")
     #if os(macOS)
-      .searchable(text: $viewModel.query, prompt: "Search")
+      .onSubmit(of: .search) {
+        guard let client, isWipingLocalLibrary == false else { return }
+        Task {
+          await viewModel.search(using: client)
+        }
+      }
+    #else
       .onSubmit(of: .search) {
         guard let client, isWipingLocalLibrary == false else { return }
         Task {
@@ -317,168 +328,6 @@ struct PodibleLibraryView: View {
     }
     return parts.isEmpty ? nil : parts.joined(separator: "  •  ")
   }
-
-  #if os(iOS)
-    private var isBottomSearchActive: Bool {
-      if isBottomSearchFocused {
-        return true
-      }
-      return viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
-    @ViewBuilder
-    private var remoteLibraryBottomControlsBar: some View {
-      Group {
-        if #available(iOS 26.0, *) {
-          GlassEffectContainer(spacing: 12) {
-            bottomControlsContent
-          }
-        } else {
-          bottomControlsContent
-            .background(.bar)
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.top, 10)
-      .padding(.bottom, 8)
-    }
-
-    private var bottomControlsContent: some View {
-      VStack(spacing: 10) {
-        if player.hasLoadedItem {
-          bottomMiniPlayerPill
-        }
-
-        HStack(spacing: 12) {
-          bottomSearchField
-
-          Button(action: toggleBottomControlsMode) {
-            Image(systemName: isBottomSearchActive ? "xmark" : "magnifyingglass")
-              .font(.title3.weight(.bold))
-              .foregroundStyle(.primary)
-              .frame(width: 44, height: 44)
-          }
-          .modifier(BottomControlsActionButtonStyle())
-          .accessibilityLabel(isBottomSearchActive ? "Clear Search" : "Focus Search")
-        }
-      }
-    }
-
-    private var bottomSearchField: some View {
-      HStack(spacing: 10) {
-        Image(systemName: "magnifyingglass")
-          .foregroundStyle(.secondary)
-        TextField("Search", text: $viewModel.query)
-          .textFieldStyle(.plain)
-          .submitLabel(.search)
-          .focused($isBottomSearchFocused)
-      }
-      .padding(.horizontal, 16)
-      .frame(height: 48)
-      .modifier(BottomControlsPillStyle())
-      .onSubmit {
-        guard let client = configuredClient, isWipingLocalLibrary == false else { return }
-        Task {
-          await viewModel.search(using: client)
-        }
-      }
-    }
-
-    private var bottomMiniPlayerPill: some View {
-      HStack(spacing: 12) {
-        bottomMiniPlayerArtwork
-
-        VStack(alignment: .leading, spacing: 2) {
-          Text(player.title)
-            .font(.subheadline.weight(.semibold))
-            .lineLimit(1)
-          if player.author.isEmpty == false {
-            Text(player.author)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
-          }
-        }
-
-        Spacer(minLength: 0)
-
-        Button(action: player.togglePlayback) {
-          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-            .font(.headline.weight(.semibold))
-            .frame(width: 36, height: 36)
-        }
-        .buttonStyle(.plain)
-      }
-      .padding(.horizontal, 12)
-      .frame(height: 48)
-      .modifier(BottomControlsPillStyle())
-      .contentShape(Rectangle())
-      .onTapGesture {
-        isShowingPlayer = true
-      }
-    }
-
-    @ViewBuilder
-    private var bottomMiniPlayerArtwork: some View {
-      if let artworkURL = player.artworkURL {
-        KFImage(artworkURL)
-          .placeholder {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-              .fill(.tertiary)
-          }
-          .resizable()
-          .scaledToFill()
-          .frame(width: 36, height: 36)
-          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-      } else {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-          .fill(.tertiary)
-          .frame(width: 36, height: 36)
-          .overlay {
-            Image(systemName: "headphones")
-              .font(.caption.weight(.semibold))
-              .foregroundStyle(.secondary)
-          }
-      }
-    }
-
-    private func toggleBottomControlsMode() {
-      if isBottomSearchActive {
-        isBottomSearchFocused = false
-        viewModel.query = ""
-        pendingSearchItemIDs.removeAll()
-      } else {
-        isBottomSearchFocused = true
-      }
-    }
-
-    private struct BottomControlsPillStyle: ViewModifier {
-      func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-          content
-            .glassEffect(in: Capsule())
-        } else {
-          content
-            .background(.thinMaterial, in: Capsule())
-        }
-      }
-    }
-
-    private struct BottomControlsActionButtonStyle: ViewModifier {
-      func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-          content
-            .buttonStyle(.plain)
-            .glassEffect(in: Circle())
-        } else {
-          content
-            .buttonStyle(.plain)
-            .background(.thinMaterial, in: Circle())
-        }
-      }
-    }
-  #endif
-
   @ViewBuilder
   private func summaryRow(_ summary: LibrarySyncService.Summary) -> some View {
     let totalAdded = summary.insertedBooks + summary.insertedAuthors
