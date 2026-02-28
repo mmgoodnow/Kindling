@@ -159,7 +159,8 @@ struct LocalPlaybackView: View {
             .foregroundStyle(.secondary)
             .frame(width: 28, height: 28)
         }
-        .modifier(PlayerGlassCircleButtonStyle())
+        .buttonStyle(.plain)
+        .modifier(MiniPlaybackCloseButtonStyle())
       }
       .padding(.top, 10)
       .padding(.horizontal, 16)
@@ -192,6 +193,23 @@ private struct MiniPlaybackGlassBarStyle: ViewModifier {
     #else
       content
         .background(.ultraThinMaterial)
+    #endif
+  }
+}
+
+private struct MiniPlaybackCloseButtonStyle: ViewModifier {
+  func body(content: Content) -> some View {
+    #if os(iOS)
+      if #available(iOS 26.0, *) {
+        content
+          .glassEffect(in: Circle())
+      } else {
+        content
+          .background(.thinMaterial, in: Circle())
+      }
+    #else
+      content
+        .background(.thinMaterial, in: Circle())
     #endif
   }
 }
