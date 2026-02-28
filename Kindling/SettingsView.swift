@@ -14,8 +14,7 @@ struct SettingsView: View {
           .textInputAutocapitalization(.never)
           .keyboardType(.URL)
         #endif
-        SecureField("API Key", text: userSettings.$podibleAPIKey)
-          .textContentType(.password)
+        TextField("API Key", text: userSettings.$podibleAPIKey)
           #if os(iOS)
             .textInputAutocapitalization(.never)
           #endif

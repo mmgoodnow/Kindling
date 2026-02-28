@@ -6,14 +6,21 @@ final class AudioPlayerController: ObservableObject {
   @Published var currentTime: Double = 0
   @Published var duration: Double = 0
   @Published var title: String = ""
+  @Published var author: String = ""
+  @Published var artworkURL: URL?
 
   private var player: AVPlayer?
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
 
-  func load(url: URL, title: String) {
+  func load(url: URL, title: String, author: String? = nil, artworkURL: URL? = nil) {
     resetObservers()
     self.title = title
+    self.author = author ?? ""
+    self.artworkURL = artworkURL
+    self.currentTime = 0
+    self.duration = 0
+    self.isPlaying = false
 
     #if os(iOS)
       let session = AVAudioSession.sharedInstance()
@@ -48,6 +55,11 @@ final class AudioPlayerController: ObservableObject {
   func seek(to seconds: Double) {
     let time = CMTime(seconds: seconds, preferredTimescale: 600)
     player?.seek(to: time)
+  }
+
+  func skip(by seconds: Double) {
+    let target = max(0, currentTime + seconds)
+    seek(to: target)
   }
 
   func stop() {

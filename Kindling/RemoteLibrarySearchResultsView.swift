@@ -85,10 +85,7 @@ struct PodibleSearchResultRow: View {
             .lineLimit(1)
           if let item = effectiveItem {
             remoteLibraryStatusCluster(
-              item: item,
-              shouldOfferSearch: { status in
-                viewModel.shouldOfferSearch(status: status)
-              }
+              item: item
             )
           }
           Button {

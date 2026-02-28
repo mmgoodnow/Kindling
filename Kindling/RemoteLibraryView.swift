@@ -489,6 +489,7 @@ struct PodibleLibraryView: View {
   ) async {
     downloadErrorMessage = nil
     do {
+      purgeLocalDownloadedAssets(forBookID: bookID)
       try await client.reportImportIssue(bookID: bookID, library: library)
       viewModel.watchBookStatus(bookID: bookID, using: client)
       await viewModel.loadLibraryItems(using: client)
@@ -515,12 +516,67 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
+  private func purgeLocalDownloadedAssets(forBookID bookID: String) {
+    localDownloadingBookIDs.remove(bookID)
+    localDownloadProgressByBookID[bookID] = nil
+
+    guard let book = localBooksById[bookID] else { return }
+
+    let localFileURLs: [URL] = book.files.compactMap { file in
+      guard let relativePath = file.localRelativePath else { return nil }
+      return try? LibraryStorage().url(forRelativePath: relativePath)
+    }
+
+    for url in localFileURLs where FileManager.default.fileExists(atPath: url.path) {
+      try? FileManager.default.removeItem(at: url)
+    }
+
+    let parentFolders = Set(localFileURLs.map { $0.deletingLastPathComponent() })
+    for folder in parentFolders {
+      guard FileManager.default.fileExists(atPath: folder.path) else { continue }
+      let contents =
+        (try? FileManager.default.contentsOfDirectory(
+          at: folder,
+          includingPropertiesForKeys: nil,
+          options: [.skipsHiddenFiles]
+        )) ?? []
+      if contents.isEmpty {
+        try? FileManager.default.removeItem(at: folder)
+      }
+    }
+
+    for file in book.files {
+      file.localRelativePath = nil
+      file.downloadStatus = .notStarted
+      file.bytesDownloaded = 0
+      file.lastError = nil
+      file.format = .unknown
+    }
+
+    if let localState = book.localState {
+      localState.isDownloaded = false
+    }
+
+    if modelContext.hasChanges {
+      try? modelContext.save()
+    }
+  }
+
+  @MainActor
   private func deleteRemoteBook(_ item: PodibleLibraryItem, using client: RemoteLibraryServing)
     async
   {
     downloadErrorMessage = nil
     do {
       try await client.deleteLibraryBook(bookID: item.id)
+    } catch {
+      guard shouldTreatMissingRemoteDeleteAsSuccess(error) else {
+        downloadErrorMessage = error.localizedDescription
+        return
+      }
+    }
+    do {
+      viewModel.forgetBook(bookID: item.id)
       try deleteLocalMirror(forBookID: item.id)
       await refresh(using: client)
     } catch {
@@ -572,6 +628,11 @@ struct PodibleLibraryView: View {
     if modelContext.hasChanges {
       try modelContext.save()
     }
+  }
+
+  private func shouldTreatMissingRemoteDeleteAsSuccess(_ error: Error) -> Bool {
+    let message = error.localizedDescription.lowercased()
+    return message.contains("not found") || message.contains("id not found")
   }
 
   private func startEbookDownload(
@@ -730,10 +791,7 @@ struct PodibleLibraryView: View {
     syncErrorMessage = nil
     localDownloadProgressByBookID.removeAll()
     localDownloadingBookIDs.removeAll()
-    viewModel.libraryItems = []
-    viewModel.searchResults = []
-    viewModel.downloadProgressByBookID.removeAll()
-    viewModel.errorMessage = nil
+    viewModel.reset()
 
     Task { @MainActor in
       // Let SwiftUI re-render without local rows before deleting SwiftData objects.
@@ -796,10 +854,8 @@ struct PodibleLibraryView: View {
     localBook: LibraryBook?,
     client: RemoteLibraryServing?
   ) -> some View {
-    let ebookStatus = item.ebookStatus ?? item.status
     let rowProgressPercent = item.fullPseudoProgress
-    let rowIsAcquiring = viewModel.shouldShowDownloadProgress(
-      status: ebookStatus, audioStatus: item.audioStatus)
+    let rowIsAcquiring = rowProgressPercent.map { $0 < 100 } ?? false
 
     return VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .top, spacing: 12) {
@@ -832,12 +888,10 @@ struct PodibleLibraryView: View {
         }
         Spacer(minLength: 0)
         remoteLibraryStatusCluster(
-          item: item,
-          shouldOfferSearch: { status in
-            viewModel.shouldOfferSearch(status: status)
-          }
+          item: item
         )
       }
+      .padding(.horizontal, 16)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.vertical, 4)
@@ -847,6 +901,7 @@ struct PodibleLibraryView: View {
         isAcquiring: rowIsAcquiring
       )
     }
+    .listRowInsets(EdgeInsets())
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       if let client, client.supportsLibraryDelete {
         Button(role: .destructive) {
@@ -883,13 +938,13 @@ struct PodibleLibraryView: View {
     let canShareEbook = hasRemoteClient && hasEbookAvailable
     let canKindleExport =
       canShareEbook && userSettings.kindleEmailAddress.isEmpty == false
-    let localAudioStatus = audioStatus(for: localBook, fallback: item.audioStatus)
+    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
     let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
     let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
     let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.llId ?? item.id)
     let canStartLocalAudioDownload =
       localPlaybackURL == nil
-      && isImportedMediaStatus(localAudioStatus)
+      && isImportedMediaStatus(effectiveAudioStatus)
       && localFileStatus != .completed
       && localFileStatus != .downloading
       && hasRemoteClient
@@ -1120,7 +1175,12 @@ struct PodibleLibraryView: View {
     let localState = ensureLocalState(for: book)
     localState.lastPlayedAt = Date()
     try? modelContext.save()
-    player.load(url: url, title: book.title)
+    player.load(
+      url: url,
+      title: book.title,
+      author: book.author?.name,
+      artworkURL: book.coverURLString.flatMap(URL.init(string:))
+    )
     player.play()
     isShowingPlayer = true
   }
@@ -1488,18 +1548,12 @@ func remoteLibraryProgressCircles(
 
 @ViewBuilder
 func remoteLibraryStatusCluster(
-  item: PodibleLibraryItem,
-  shouldOfferSearch: (PodibleLibraryItemStatus?) -> Bool
+  item: PodibleLibraryItem
 ) -> some View {
-  let ebookStatus = item.ebookStatus ?? item.status
-  let ebookIncomplete = ebookStatus.isComplete == false
-  let audioIncomplete = item.audioStatus?.isComplete == false
-  let hasPendingAcquisition = ebookIncomplete || audioIncomplete
-  let isProgressComplete = (item.fullPseudoProgress ?? 0) >= 100
-  let shouldOfferAnySearch = shouldOfferSearch(ebookStatus) || shouldOfferSearch(item.audioStatus)
+  let isProgressIncomplete = (item.fullPseudoProgress ?? 100) < 100
 
   Group {
-    if hasPendingAcquisition, isProgressComplete == false, shouldOfferAnySearch {
+    if isProgressIncomplete {
       remoteLibraryPendingIndicator()
     }
   }
@@ -1531,11 +1585,9 @@ func remoteLibraryRowProgressBackground(
     let width = proxy.size.width
     let fillWidth = clamped.map { width * CGFloat($0) / 100.0 } ?? 0
     ZStack(alignment: .leading) {
-      Rectangle()
-        .fill(.secondary.opacity(isAcquiring ? 0.03 : 0))
       if let clamped, isAcquiring {
         Rectangle()
-          .fill(.accent.opacity(0.07))
+          .fill(.blue.opacity(0.14))
           .frame(width: fillWidth, alignment: .leading)
           .animation(.easeInOut(duration: 0.5), value: clamped)
       }

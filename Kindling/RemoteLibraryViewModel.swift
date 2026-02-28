@@ -254,7 +254,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   func shouldShowDownloadProgress(
     status: PodibleLibraryItemStatus, audioStatus: PodibleLibraryItemStatus?
   ) -> Bool {
-    isActive(status) || isActive(audioStatus)
+    isProgressActive(status) || isProgressActive(audioStatus)
   }
 
   func progressForBookID(_ id: String) -> DownloadProgress? {
@@ -262,7 +262,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   }
 
   func shouldOfferSearch(status: PodibleLibraryItemStatus?) -> Bool {
-    isActive(status)
+    isSearchActive(status)
   }
 
   func canTriggerSearch(bookID: String, library: PodibleLibraryMedia) -> Bool {
@@ -278,9 +278,31 @@ final class PodibleLibraryViewModel: ObservableObject {
   }
 
   func watchBookStatus(bookID: String, using client: RemoteLibraryServing) {
-    // Recovery flows can return before the backend has transitioned the book into
-    // an in-progress state; allow a short warmup window before stopping polling.
-    startPolling(bookID: bookID, client: client, initialMissTolerance: 6)
+    startPolling(bookID: bookID, client: client)
+  }
+
+  func forgetBook(bookID: String) {
+    pendingItemsByID[bookID] = nil
+    libraryItems.removeAll { $0.id == bookID }
+    downloadProgressByBookID[bookID] = nil
+    if let task = downloadPollingTasks.removeValue(forKey: bookID) {
+      task.cancel()
+    }
+  }
+
+  func reset() {
+    for task in downloadPollingTasks.values {
+      task.cancel()
+    }
+    downloadPollingTasks.removeAll()
+    searchResultsByQuery.removeAll()
+    lastSearchByKey.removeAll()
+    pendingItemsByID.removeAll()
+    downloadProgressByBookID.removeAll()
+    libraryItems = []
+    searchResults = []
+    errorMessage = nil
+    isLoading = false
   }
 
   private func markSearchTriggered(bookID: String, library: PodibleLibraryMedia) {
@@ -296,11 +318,7 @@ final class PodibleLibraryViewModel: ObservableObject {
     }
   }
 
-  private func startPolling(
-    bookID: String,
-    client: RemoteLibraryServing,
-    initialMissTolerance: Int = 0
-  ) {
+  private func startPolling(bookID: String, client: RemoteLibraryServing) {
     if let existing = downloadPollingTasks[bookID] {
       existing.cancel()
       downloadPollingTasks[bookID] = nil
@@ -321,20 +339,12 @@ final class PodibleLibraryViewModel: ObservableObject {
     downloadPollingTasks[bookID] = Task { [weak self] in
       guard let self else { return }
       let deadline = Date.now.addingTimeInterval(15 * 60)
-      var missesRemaining = initialMissTolerance
       while Task.isCancelled == false, Date.now < deadline {
         do {
           let activeItems = try await client.fetchInProgressLibraryItems(bookIDs: [bookID])
           if let item = activeItems.first(where: { $0.id == bookID }) {
-            missesRemaining = initialMissTolerance
             self.mergeInProgressItem(item, forBookID: bookID)
           } else {
-            if missesRemaining > 0 {
-              missesRemaining -= 1
-              await self.refreshLibrarySilently(using: client)
-              try? await Task.sleep(nanoseconds: self.downloadPollIntervalNanoseconds)
-              continue
-            }
             await self.refreshLibrarySilently(using: client)
             self.downloadProgressByBookID[bookID] = nil
             break
@@ -423,12 +433,22 @@ final class PodibleLibraryViewModel: ObservableObject {
     downloadProgressByBookID[bookID] = current
   }
 
-  private func isActive(_ status: PodibleLibraryItemStatus?) -> Bool {
+  private func isSearchActive(_ status: PodibleLibraryItemStatus?) -> Bool {
     guard let status else { return false }
     switch status {
     case .requested, .wanted, .snatched, .seeding:
       return true
     case .downloaded, .failed, .have, .skipped, .open, .processed, .ignored, .okay, .unknown:
+      return false
+    }
+  }
+
+  private func isProgressActive(_ status: PodibleLibraryItemStatus?) -> Bool {
+    guard let status else { return false }
+    switch status {
+    case .requested, .wanted, .snatched, .seeding, .downloaded, .open:
+      return true
+    case .failed, .have, .skipped, .processed, .ignored, .okay, .unknown:
       return false
     }
   }

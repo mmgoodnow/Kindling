@@ -296,7 +296,12 @@ struct LocalLibraryView: View {
     let localState = ensureLocalState(for: book)
     localState.lastPlayedAt = Date()
     try? modelContext.save()
-    player.load(url: url, title: book.title)
+    player.load(
+      url: url,
+      title: book.title,
+      author: book.author?.name,
+      artworkURL: book.coverURLString.flatMap(URL.init(string:))
+    )
     player.play()
     isShowingPlayer = true
   }

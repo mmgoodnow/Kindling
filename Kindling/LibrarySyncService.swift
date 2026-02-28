@@ -16,6 +16,7 @@ struct LibrarySyncService {
     let items = try await client.fetchLibraryItems()
     let existingAuthors = try modelContext.fetch(FetchDescriptor<Author>())
     let existingBooks = try modelContext.fetch(FetchDescriptor<LibraryBook>())
+    let remoteIDs = Set(items.map(\.id))
 
     var authorsById = Dictionary(
       uniqueKeysWithValues: existingAuthors.map { ($0.llId, $0) })
@@ -68,6 +69,16 @@ struct LibrarySyncService {
         insertedBooks += 1
       }
 
+    }
+
+    for book in existingBooks where remoteIDs.contains(book.llId) == false {
+      guard shouldDeleteLocalMirror(book) else { continue }
+      deleteLocalMirror(book, modelContext: modelContext)
+      booksById[book.llId] = nil
+    }
+
+    for author in existingAuthors where author.books.isEmpty {
+      modelContext.delete(author)
     }
 
     if modelContext.hasChanges {
@@ -126,5 +137,26 @@ struct LibrarySyncService {
       updated += 1
     }
     return updated > 0 ? 1 : 0
+  }
+
+  private func shouldDeleteLocalMirror(_ book: LibraryBook) -> Bool {
+    if let localState = book.localState, localState.isDownloaded {
+      return false
+    }
+    for file in book.files {
+      if file.localRelativePath?.isEmpty == false { return false }
+      if file.downloadStatus == .completed { return false }
+    }
+    return true
+  }
+
+  private func deleteLocalMirror(_ book: LibraryBook, modelContext: ModelContext) {
+    if let localState = book.localState {
+      modelContext.delete(localState)
+    }
+    for file in book.files {
+      modelContext.delete(file)
+    }
+    modelContext.delete(book)
   }
 }
