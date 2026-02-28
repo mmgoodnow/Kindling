@@ -358,9 +358,9 @@ struct PodibleLibraryView: View {
 
         Button(action: toggleBottomControlsMode) {
           Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
-            .font(.callout.weight(.semibold))
+            .font(.headline.weight(.bold))
             .foregroundStyle(.primary)
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
         }
         .modifier(BottomControlsActionButtonStyle())
         .accessibilityLabel(shouldShowBottomMiniPlayer ? "Show Search" : "Hide Search")
@@ -473,7 +473,8 @@ struct PodibleLibraryView: View {
       func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
           content
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
+            .glassEffect(in: Circle())
         } else {
           content
             .buttonStyle(.plain)
