@@ -333,29 +333,37 @@ struct PodibleLibraryView: View {
 
     @ViewBuilder
     private var remoteLibraryBottomControlsBar: some View {
-      VStack(spacing: 0) {
-        Divider()
-        HStack(spacing: 12) {
-          if shouldShowBottomMiniPlayer {
-            bottomMiniPlayerPill
-          } else {
-            bottomSearchField
+      Group {
+        if #available(iOS 26.0, *) {
+          GlassEffectContainer(spacing: 12) {
+            bottomControlsContent
           }
-
-          Button(action: toggleBottomControlsMode) {
-            Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
-              .font(.title3.weight(.medium))
-              .foregroundStyle(.primary)
-              .frame(width: 52, height: 52)
-              .background(.thinMaterial, in: Circle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel(shouldShowBottomMiniPlayer ? "Show Search" : "Hide Search")
+        } else {
+          bottomControlsContent
+            .background(.bar)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.bar)
+      }
+      .padding(.horizontal, 16)
+      .padding(.top, 10)
+      .padding(.bottom, 8)
+    }
+
+    private var bottomControlsContent: some View {
+      HStack(spacing: 12) {
+        if shouldShowBottomMiniPlayer {
+          bottomMiniPlayerPill
+        } else {
+          bottomSearchField
+        }
+
+        Button(action: toggleBottomControlsMode) {
+          Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
+            .font(.title3.weight(.medium))
+            .foregroundStyle(.primary)
+            .frame(width: 52, height: 52)
+        }
+        .modifier(BottomControlsActionButtonStyle())
+        .accessibilityLabel(shouldShowBottomMiniPlayer ? "Show Search" : "Hide Search")
       }
     }
 
@@ -370,7 +378,7 @@ struct PodibleLibraryView: View {
       }
       .padding(.horizontal, 16)
       .frame(height: 52)
-      .background(.thinMaterial, in: Capsule())
+      .modifier(BottomControlsPillStyle())
       .onSubmit {
         guard let client = configuredClient, isWipingLocalLibrary == false else { return }
         Task {
@@ -406,7 +414,7 @@ struct PodibleLibraryView: View {
       }
       .padding(.horizontal, 12)
       .frame(height: 52)
-      .background(.thinMaterial, in: Capsule())
+      .modifier(BottomControlsPillStyle())
       .contentShape(Capsule())
       .onTapGesture {
         isShowingPlayer = true
@@ -446,6 +454,31 @@ struct PodibleLibraryView: View {
         viewModel.query = ""
         pendingSearchItemIDs.removeAll()
         isBottomSearchPresented = false
+      }
+    }
+
+    private struct BottomControlsPillStyle: ViewModifier {
+      func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+          content
+            .glassEffect(in: Capsule())
+        } else {
+          content
+            .background(.thinMaterial, in: Capsule())
+        }
+      }
+    }
+
+    private struct BottomControlsActionButtonStyle: ViewModifier {
+      func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+          content
+            .buttonStyle(.glass)
+        } else {
+          content
+            .buttonStyle(.plain)
+            .background(.thinMaterial, in: Circle())
+        }
       }
     }
   #endif

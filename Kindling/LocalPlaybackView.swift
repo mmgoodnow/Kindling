@@ -29,9 +29,8 @@ struct LocalPlaybackView: View {
             Image(systemName: "chevron.down")
               .font(.headline.weight(.semibold))
               .frame(width: 36, height: 36)
-              .background(.thinMaterial, in: Circle())
           }
-          .buttonStyle(.plain)
+          .modifier(PlayerGlassCircleButtonStyle())
         }
 
         Spacer(minLength: 0)
@@ -190,14 +189,13 @@ struct LocalPlaybackView: View {
             .font(.callout.weight(.bold))
             .foregroundStyle(.secondary)
             .frame(width: 28, height: 28)
-            .background(.thinMaterial, in: Circle())
         }
-        .buttonStyle(.plain)
+        .modifier(PlayerGlassCircleButtonStyle())
       }
       .padding(.top, 10)
       .padding(.horizontal, 16)
       .padding(.bottom, 14)
-      .background(.ultraThinMaterial)
+      .modifier(MiniPlaybackGlassBarStyle())
       .overlay(alignment: .top) {
         ProgressView(value: playbackFraction(player))
           .tint(.primary.opacity(0.55))
@@ -206,6 +204,35 @@ struct LocalPlaybackView: View {
       }
       .contentShape(Rectangle())
       .onTapGesture(perform: onExpand)
+    }
+  }
+#endif
+
+#if os(iOS)
+  private struct MiniPlaybackGlassBarStyle: ViewModifier {
+    func body(content: Content) -> some View {
+      if #available(iOS 26.0, *) {
+        GlassEffectContainer {
+          content
+            .glassEffect()
+        }
+      } else {
+        content
+          .background(.ultraThinMaterial)
+      }
+    }
+  }
+
+  private struct PlayerGlassCircleButtonStyle: ViewModifier {
+    func body(content: Content) -> some View {
+      if #available(iOS 26.0, *) {
+        content
+          .buttonStyle(.glass)
+      } else {
+        content
+          .buttonStyle(.plain)
+          .background(.thinMaterial, in: Circle())
+      }
     }
   }
 #endif
