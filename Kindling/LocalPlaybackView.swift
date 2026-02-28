@@ -228,7 +228,10 @@ struct LocalPlaybackView: View {
           player.skip(by: -15)
         }
 
-        miniPlayerControlButton(systemName: player.isPlaying ? "pause.fill" : "play.fill") {
+        miniPlayerControlButton(
+          systemName: player.isPlaying ? "pause.fill" : "play.fill",
+          extraTrailingHitArea: 16
+        ) {
           player.togglePlayback()
         }
       }
@@ -243,18 +246,21 @@ struct LocalPlaybackView: View {
 @ViewBuilder
 private func miniPlayerControlButton(
   systemName: String,
+  extraTrailingHitArea: CGFloat = 0,
   action: @escaping () -> Void
 ) -> some View {
   Button(action: action) {
     Image(systemName: systemName)
       .font(.system(size: 25, weight: .semibold))
       .frame(width: 52, height: 44)
-      .contentShape(Rectangle())
-      .background {
-        Color.clear
-          .frame(width: 60, height: 60)
-      }
   }
+  .padding(.vertical, 8)
+  .padding(.horizontal, 4)
+  .padding(.trailing, extraTrailingHitArea)
+  .contentShape(Rectangle())
+  .padding(.vertical, -8)
+  .padding(.horizontal, -4)
+  .padding(.trailing, -extraTrailingHitArea)
   .buttonStyle(.plain)
 }
 
