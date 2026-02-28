@@ -6,33 +6,20 @@ struct LocalPlaybackView: View {
 
   var body: some View {
     #if os(iOS)
-      expandedPlayerView(showsDismissButton: false)
+      expandedPlayerView()
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
     #else
-      expandedPlayerView(showsDismissButton: true)
+      expandedPlayerView()
         .frame(minWidth: 420, minHeight: 560)
         .padding(28)
         .background(macPlayerBackground)
     #endif
   }
 
-  private func expandedPlayerView(showsDismissButton: Bool) -> some View {
+  private func expandedPlayerView() -> some View {
     VStack(spacing: 0) {
-      HStack(alignment: .center) {
-        Spacer(minLength: 0)
-
-        Text("Now Playing")
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
-
-        Spacer(minLength: 0)
-      }
-      .padding(.bottom, 28)
-
-      Spacer(minLength: 0)
-
       sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
         .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
@@ -51,48 +38,46 @@ struct LocalPlaybackView: View {
       }
       .padding(.top, 28)
 
-      VStack(spacing: 10) {
-        Slider(
-          value: Binding(
-            get: { min(player.currentTime, max(player.duration, 0)) },
-            set: { player.seek(to: $0) }
-          ),
-          in: 0...max(player.duration, 1)
-        )
-
-        HStack {
-          Text(formatTime(player.currentTime))
-          Spacer()
-          Text(formatTime(player.duration))
-        }
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(.secondary)
-      }
-      .padding(.top, 28)
-
-      HStack(spacing: 28) {
-        transportButton(systemName: "gobackward.15") {
-          player.skip(by: -15)
-        }
-        .font(.title2)
-
-        Button(action: player.togglePlayback) {
-          Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-            .font(.system(size: 72))
-        }
-        .buttonStyle(.plain)
-
-        transportButton(systemName: "goforward.30") {
-          player.skip(by: 30)
-        }
-        .font(.title2)
-      }
-      .padding(.top, 26)
-
       Spacer(minLength: 0)
+
+      VStack(spacing: 24) {
+        VStack(spacing: 10) {
+          Slider(
+            value: Binding(
+              get: { min(player.currentTime, max(player.duration, 0)) },
+              set: { player.seek(to: $0) }
+            ),
+            in: 0...max(player.duration, 1)
+          )
+
+          HStack {
+            Text(formatTime(player.currentTime))
+            Spacer()
+            Text(formatTime(player.duration))
+          }
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+        }
+
+        HStack(spacing: 36) {
+          transportButton(systemName: "gobackward.15", size: 72, iconFont: .title2) {
+            player.skip(by: -15)
+          }
+
+          Button(action: player.togglePlayback) {
+            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+              .font(.system(size: 88))
+          }
+          .buttonStyle(.plain)
+
+          transportButton(systemName: "goforward.30", size: 72, iconFont: .title2) {
+            player.skip(by: 30)
+          }
+        }
+      }
     }
     .padding(.horizontal, 24)
-    .padding(.top, 18)
+    .padding(.top, 28)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
   }
@@ -112,10 +97,16 @@ struct LocalPlaybackView: View {
       .fill(.ultraThinMaterial)
   }
 
-  private func transportButton(systemName: String, action: @escaping () -> Void) -> some View {
+  private func transportButton(
+    systemName: String,
+    size: CGFloat = 44,
+    iconFont: Font = .body,
+    action: @escaping () -> Void
+  ) -> some View {
     Button(action: action) {
       Image(systemName: systemName)
-        .frame(width: 44, height: 44)
+        .font(iconFont.weight(.semibold))
+        .frame(width: size, height: size)
     }
     .buttonStyle(.plain)
   }
