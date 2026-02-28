@@ -128,21 +128,27 @@ struct LocalPlaybackView: View {
 
     var body: some View {
       HStack(spacing: 14) {
-        sharedPlaybackArtwork(size: 52, cornerRadius: 12, player: player)
+        Button(action: onExpand) {
+          HStack(spacing: 14) {
+            sharedPlaybackArtwork(size: 52, cornerRadius: 12, player: player)
 
-        VStack(alignment: .leading, spacing: 3) {
-          Text(player.title)
-            .font(.subheadline.weight(.semibold))
-            .lineLimit(1)
-          if player.author.isEmpty == false {
-            Text(player.author)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
+            VStack(alignment: .leading, spacing: 3) {
+              Text(player.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+              if player.author.isEmpty == false {
+                Text(player.author)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .lineLimit(1)
+              }
+            }
+
+            Spacer(minLength: 0)
           }
         }
-
-        Spacer(minLength: 0)
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
 
         Button(action: player.togglePlayback) {
           Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -155,9 +161,9 @@ struct LocalPlaybackView: View {
           player.unload()
         } label: {
           Image(systemName: "xmark")
-            .font(.callout.weight(.bold))
+            .font(.headline.weight(.bold))
             .foregroundStyle(.secondary)
-            .frame(width: 28, height: 28)
+            .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
         .modifier(MiniPlaybackCloseButtonStyle())
@@ -172,8 +178,6 @@ struct LocalPlaybackView: View {
           .padding(.horizontal, 16)
           .padding(.top, 2)
       }
-      .contentShape(Rectangle())
-      .onTapGesture(perform: onExpand)
     }
   }
 #endif

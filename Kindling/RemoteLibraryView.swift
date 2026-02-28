@@ -377,7 +377,7 @@ struct PodibleLibraryView: View {
           .focused($isBottomSearchFocused)
       }
       .padding(.horizontal, 16)
-      .frame(height: 52)
+      .frame(height: 48)
       .modifier(BottomControlsPillStyle())
       .onSubmit {
         guard let client = configuredClient, isWipingLocalLibrary == false else { return }
@@ -413,7 +413,7 @@ struct PodibleLibraryView: View {
         .buttonStyle(.plain)
       }
       .padding(.horizontal, 12)
-      .frame(height: 52)
+      .frame(height: 48)
       .modifier(BottomControlsPillStyle())
       .contentShape(Capsule())
       .onTapGesture {
@@ -431,15 +431,15 @@ struct PodibleLibraryView: View {
           }
           .resizable()
           .scaledToFill()
-          .frame(width: 40, height: 40)
+          .frame(width: 36, height: 36)
           .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
       } else {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
           .fill(.tertiary)
-          .frame(width: 40, height: 40)
+          .frame(width: 36, height: 36)
           .overlay {
             Image(systemName: "headphones")
-              .font(.subheadline.weight(.semibold))
+              .font(.caption.weight(.semibold))
               .foregroundStyle(.secondary)
           }
       }
