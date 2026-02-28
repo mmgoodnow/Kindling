@@ -39,7 +39,6 @@ struct PodibleLibraryView: View {
   @State private var isWipingLocalLibrary = false
   @State private var pendingReportIssueBook: PendingReportIssueBook?
   #if os(iOS)
-    @State private var isBottomSearchPresented = false
     @FocusState private var isBottomSearchFocused: Bool
   #endif
 
@@ -321,14 +320,10 @@ struct PodibleLibraryView: View {
 
   #if os(iOS)
     private var isBottomSearchActive: Bool {
-      if isBottomSearchPresented || isBottomSearchFocused {
+      if isBottomSearchFocused {
         return true
       }
       return viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
-    private var shouldShowBottomMiniPlayer: Bool {
-      player.hasLoadedItem && isBottomSearchActive == false
     }
 
     @ViewBuilder
@@ -349,21 +344,23 @@ struct PodibleLibraryView: View {
     }
 
     private var bottomControlsContent: some View {
-      HStack(spacing: 12) {
-        if shouldShowBottomMiniPlayer {
+      VStack(spacing: 10) {
+        if player.hasLoadedItem {
           bottomMiniPlayerPill
-        } else {
-          bottomSearchField
         }
 
-        Button(action: toggleBottomControlsMode) {
-          Image(systemName: shouldShowBottomMiniPlayer ? "magnifyingglass" : "xmark")
-            .font(.title3.weight(.bold))
-            .foregroundStyle(.primary)
-            .frame(width: 44, height: 44)
+        HStack(spacing: 12) {
+          bottomSearchField
+
+          Button(action: toggleBottomControlsMode) {
+            Image(systemName: isBottomSearchActive ? "xmark" : "magnifyingglass")
+              .font(.title3.weight(.bold))
+              .foregroundStyle(.primary)
+              .frame(width: 44, height: 44)
+          }
+          .modifier(BottomControlsActionButtonStyle())
+          .accessibilityLabel(isBottomSearchActive ? "Clear Search" : "Focus Search")
         }
-        .modifier(BottomControlsActionButtonStyle())
-        .accessibilityLabel(shouldShowBottomMiniPlayer ? "Show Search" : "Hide Search")
       }
     }
 
@@ -415,7 +412,7 @@ struct PodibleLibraryView: View {
       .padding(.horizontal, 12)
       .frame(height: 48)
       .modifier(BottomControlsPillStyle())
-      .contentShape(Capsule())
+      .contentShape(Rectangle())
       .onTapGesture {
         isShowingPlayer = true
       }
@@ -446,14 +443,12 @@ struct PodibleLibraryView: View {
     }
 
     private func toggleBottomControlsMode() {
-      if shouldShowBottomMiniPlayer {
-        isBottomSearchPresented = true
-        isBottomSearchFocused = true
-      } else {
+      if isBottomSearchActive {
         isBottomSearchFocused = false
         viewModel.query = ""
         pendingSearchItemIDs.removeAll()
-        isBottomSearchPresented = false
+      } else {
+        isBottomSearchFocused = true
       }
     }
 
