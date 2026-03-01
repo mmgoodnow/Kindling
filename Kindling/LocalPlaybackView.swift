@@ -634,26 +634,43 @@ private struct MiniPlaybackGlassBarStyle: ViewModifier {
 }
 
 private struct ExpandedPlayerControlsGlassStyle: ViewModifier {
+  private let bubbleShape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+
   func body(content: Content) -> some View {
     #if os(iOS)
       if #available(iOS 26.0, *) {
         GlassEffectContainer {
           content
-            .glassEffect(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background {
+              bubbleShape
+                .fill(Color.black.opacity(0.001))
+            }
+            .contentShape(bubbleShape)
+            .glassEffect(in: bubbleShape)
         }
       } else {
         content
           .background(
             .ultraThinMaterial,
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+            in: bubbleShape
           )
+          .background {
+            bubbleShape
+              .fill(Color.black.opacity(0.001))
+          }
+          .contentShape(bubbleShape)
       }
     #else
       content
         .background(
           .ultraThinMaterial,
-          in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+          in: bubbleShape
         )
+        .background {
+          bubbleShape
+            .fill(Color.black.opacity(0.001))
+        }
+        .contentShape(bubbleShape)
     #endif
   }
 }
