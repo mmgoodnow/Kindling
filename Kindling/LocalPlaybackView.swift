@@ -1,3 +1,4 @@
+import AVKit
 import Kingfisher
 import SwiftUI
 
@@ -45,6 +46,11 @@ struct LocalPlaybackView: View {
         playbackProgressSection
 
         HStack(spacing: 26) {
+          #if os(iOS)
+            AirPlayRouteButton()
+              .frame(width: 84, height: 84)
+          #endif
+
           transportButton(systemName: "gobackward.15", size: 84, iconFont: .title) {
             player.skip(by: -15)
           }
@@ -480,6 +486,21 @@ struct LocalPlaybackView: View {
     #endif
   }
 }
+
+#if os(iOS)
+  private struct AirPlayRouteButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+      let view = AVRoutePickerView()
+      view.activeTintColor = UIColor.label
+      view.tintColor = UIColor.label
+      view.prioritizesVideoDevices = false
+      view.backgroundColor = .clear
+      return view
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+  }
+#endif
 
 #if os(iOS)
   struct MiniPlaybackBar: View {
