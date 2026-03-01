@@ -8,6 +8,7 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var isHeroVisible = true
+  @State private var isShowingPlaybackSpeedPicker = false
 
   var body: some View {
     #if os(iOS)
@@ -67,6 +68,20 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 24)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
+    .confirmationDialog(
+      "Playback Speed",
+      isPresented: $isShowingPlaybackSpeedPicker,
+      titleVisibility: .visible
+    ) {
+      ForEach([0.8, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+        Button(
+          rate == player.playbackRate ? "\(formatPlaybackRate(rate)) ✓" : formatPlaybackRate(rate)
+        ) {
+          player.setPlaybackRate(rate)
+        }
+      }
+      Button("Cancel", role: .cancel) {}
+    }
   }
 
   @ViewBuilder
@@ -173,18 +188,8 @@ struct LocalPlaybackView: View {
   }
 
   private var playbackSpeedButton: some View {
-    Menu {
-      ForEach([0.8, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-        Button {
-          player.setPlaybackRate(rate)
-        } label: {
-          if rate == player.playbackRate {
-            Label(formatPlaybackRate(rate), systemImage: "checkmark")
-          } else {
-            Text(formatPlaybackRate(rate))
-          }
-        }
-      }
+    Button {
+      isShowingPlaybackSpeedPicker = true
     } label: {
       Text(formatPlaybackRate(player.playbackRate))
         .font(.title3.weight(.semibold))
@@ -624,12 +629,12 @@ private func formatTime(_ seconds: Double) -> String {
 private func formatPlaybackRate(_ rate: Double) -> String {
   let roundedRate = (rate * 100).rounded() / 100
   if roundedRate.rounded() == roundedRate {
-    return String(format: "%.0fx", roundedRate)
+    return String(format: "%.0f×", roundedRate)
   }
   if (roundedRate * 10).rounded() == roundedRate * 10 {
-    return String(format: "%.1fx", roundedRate)
+    return String(format: "%.1f×", roundedRate)
   }
-  return String(format: "%.2fx", roundedRate)
+  return String(format: "%.2f×", roundedRate)
 }
 
 #Preview {
