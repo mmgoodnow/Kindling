@@ -4,6 +4,7 @@ import SwiftUI
 struct LocalPlaybackView: View {
   @ObservedObject var player: AudioPlayerController
   @State private var chapterScrubOriginTime: Double?
+  @State private var titleBlockMinY: CGFloat = .zero
 
   var body: some View {
     #if os(iOS)
@@ -40,6 +41,14 @@ struct LocalPlaybackView: View {
             }
           }
           .padding(.top, 28)
+          .background {
+            GeometryReader { proxy in
+              Color.clear.preference(
+                key: PlaybackTitleBlockMinYPreferenceKey.self,
+                value: proxy.frame(in: .named("playbackScroll")).minY
+              )
+            }
+          }
 
           if player.chapters.isEmpty == false {
             chapterListSection
@@ -49,6 +58,7 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 28)
       }
+      .coordinateSpace(name: "playbackScroll")
 
       VStack(spacing: 24) {
         playbackProgressSection
@@ -74,6 +84,12 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 24)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
+    .overlay(alignment: .top) {
+      stickyPlaybackHeader
+    }
+    .onPreferenceChange(PlaybackTitleBlockMinYPreferenceKey.self) { value in
+      titleBlockMinY = value
+    }
   }
 
   private var expandedPlayerBackground: some View {
@@ -89,6 +105,32 @@ struct LocalPlaybackView: View {
   private var macPlayerBackground: some View {
     RoundedRectangle(cornerRadius: 24, style: .continuous)
       .fill(.ultraThinMaterial)
+  }
+
+  private var stickyPlaybackHeader: some View {
+    let isVisible = titleBlockMinY < 16
+
+    return VStack(spacing: 2) {
+      Text(player.title)
+        .font(.headline.weight(.semibold))
+        .lineLimit(1)
+
+      if player.author.isEmpty == false {
+        Text(player.author)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.top, 10)
+    .padding(.horizontal, 48)
+    .padding(.bottom, 10)
+    .background(.ultraThinMaterial)
+    .opacity(isVisible ? 1 : 0)
+    .offset(y: isVisible ? 0 : -12)
+    .animation(.easeInOut(duration: 0.2), value: isVisible)
+    .allowsHitTesting(false)
   }
 
   private func transportButton(
@@ -490,6 +532,14 @@ private func formatTime(_ seconds: Double) -> String {
     return String(format: "%d:%02d:%02d", hours, minutes, secs)
   }
   return String(format: "%d:%02d", minutes, secs)
+}
+
+private struct PlaybackTitleBlockMinYPreferenceKey: PreferenceKey {
+  static var defaultValue: CGFloat = .zero
+
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    value = nextValue()
+  }
 }
 
 #Preview {
