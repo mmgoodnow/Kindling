@@ -3,6 +3,9 @@ import Kingfisher
 import SwiftUI
 
 struct LocalPlaybackView: View {
+  @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
+    ContentTab.chapters.rawValue
+
   private enum ContentTab: String, CaseIterable, Identifiable {
     case description = "About"
     case chapters = "Chapters"
@@ -16,7 +19,11 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var isHeroVisible = true
-  @State private var selectedContentTab: ContentTab = .chapters
+
+  private var selectedContentTab: ContentTab {
+    get { ContentTab(rawValue: selectedContentTabRawValue) ?? .chapters }
+    nonmutating set { selectedContentTabRawValue = newValue.rawValue }
+  }
 
   var body: some View {
     #if os(iOS)
