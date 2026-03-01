@@ -21,8 +21,12 @@ struct LibrarySyncService {
     var authorsById = Dictionary(
       uniqueKeysWithValues: existingAuthors.map { ($0.llId, $0) })
     var booksById = Dictionary(uniqueKeysWithValues: existingBooks.map { ($0.llId, $0) })
+    var booksByOpenLibraryWorkID: [String: LibraryBook] = [:]
     var booksByIdentity: [String: LibraryBook] = [:]
     for book in existingBooks {
+      if let workID = book.openLibraryWorkID, workID.isEmpty == false {
+        booksByOpenLibraryWorkID[workID] = booksByOpenLibraryWorkID[workID] ?? book
+      }
       guard let key = bookIdentityKey(title: book.title, author: book.author?.name) else {
         continue
       }
@@ -55,6 +59,14 @@ struct LibrarySyncService {
       if let existing = booksById[item.id] {
         book = existing
         updatedBooks += updateBook(book, with: item, author: author)
+      } else if let workID = item.openLibraryWorkID,
+        let existing = booksByOpenLibraryWorkID[workID]
+      {
+        booksById[existing.llId] = nil
+        existing.llId = item.id
+        booksById[item.id] = existing
+        book = existing
+        updatedBooks += updateBook(book, with: item, author: author)
       } else if let identityKey = bookIdentityKey(title: item.title, author: item.author),
         let existing = booksByIdentity[identityKey]
       {
@@ -66,6 +78,7 @@ struct LibrarySyncService {
       } else {
         let created = LibraryBook(
           llId: item.id,
+          openLibraryWorkID: item.openLibraryWorkID,
           title: item.title,
           summary: item.summary,
           coverURLString: item.bookImagePath,
@@ -80,6 +93,9 @@ struct LibrarySyncService {
         )
         modelContext.insert(created)
         booksById[item.id] = created
+        if let workID = item.openLibraryWorkID, workID.isEmpty == false {
+          booksByOpenLibraryWorkID[workID] = created
+        }
         if let identityKey = bookIdentityKey(title: item.title, author: item.author) {
           booksByIdentity[identityKey] = created
         }
@@ -132,6 +148,10 @@ struct LibrarySyncService {
     -> Int
   {
     var updated = 0
+    if book.openLibraryWorkID != item.openLibraryWorkID {
+      book.openLibraryWorkID = item.openLibraryWorkID
+      updated += 1
+    }
     if book.title != item.title {
       book.title = item.title
       updated += 1

@@ -135,6 +135,7 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
 
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
+  let openLibraryWorkID: String?
   let title: String
   let author: String
   let summary: String?
@@ -148,6 +149,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
 
   init(
     id: String,
+    openLibraryWorkID: String? = nil,
     title: String,
     author: String,
     summary: String? = nil,
@@ -160,6 +162,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     bookImagePath: String? = nil
   ) {
     self.id = id
+    self.openLibraryWorkID = openLibraryWorkID
     self.title = title
     self.author = author
     self.summary = summary
@@ -197,6 +200,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decodeIfPresent(String.self, forKeys: [.idLower, .idUpper, .idPlain])
+    openLibraryWorkID = nil
     title = try container.decodeIfPresent(String.self, forKeys: [.titleLower, .titleUpper])
     author = try container.decodeIfPresent(String.self, forKeys: [.authorLower, .authorUpper])
     summary = try? container.decodeIfPresent(String.self, forKeys: [.summaryLower, .summaryUpper])
@@ -781,8 +785,10 @@ private struct PodibleOpenLibraryCandidate: Decodable {
 
 private struct PodibleLibraryBook: Decodable {
   let id: Int
+  let identifiers: PodibleLibraryIdentifiers?
   let title: String
   let author: String
+  let description: String?
   let coverUrl: String?
   let addedAt: String
   let updatedAt: String
@@ -791,6 +797,10 @@ private struct PodibleLibraryBook: Decodable {
   let ebookStatus: String
   let status: String
   let fullPseudoProgress: Double?
+}
+
+private struct PodibleLibraryIdentifiers: Decodable {
+  let openlibrary: String?
 }
 
 private struct PodibleSearchRunResult: Decodable {
@@ -1081,8 +1091,10 @@ struct PodibleClient: PodibleLibraryServing {
     let updatedAt = PodibleDateParser.parse(book.updatedAt)
     return PodibleLibraryItem(
       id: String(book.id),
+      openLibraryWorkID: book.identifiers?.openlibrary,
       title: book.title,
       author: book.author,
+      summary: book.description,
       status: mapPodibleStatus(book.status),
       ebookStatus: ebookStatus,
       audioStatus: audioStatus,

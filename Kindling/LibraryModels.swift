@@ -69,6 +69,7 @@ final class Series {
 @Model
 final class LibraryBook {
   @Attribute(.unique) var llId: String
+  var openLibraryWorkID: String?
   var title: String
   var sortTitle: String?
   var summary: String?
@@ -88,6 +89,7 @@ final class LibraryBook {
 
   init(
     llId: String,
+    openLibraryWorkID: String? = nil,
     title: String,
     sortTitle: String? = nil,
     summary: String? = nil,
@@ -102,6 +104,7 @@ final class LibraryBook {
     series: Series? = nil
   ) {
     self.llId = llId
+    self.openLibraryWorkID = openLibraryWorkID
     self.title = title
     self.sortTitle = sortTitle
     self.summary = summary
