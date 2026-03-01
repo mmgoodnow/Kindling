@@ -315,15 +315,15 @@ struct LocalPlaybackView: View {
         HStack(spacing: 8) {
           chapterScrubBar
 
-          Button(action: player.restorePreviousSeek) {
-            Image(systemName: "arrow.counterclockwise")
-              .font(.subheadline.weight(.semibold))
-              .frame(width: 28, height: 28)
+          if player.canRestorePreviousSeek {
+            Button(action: player.restorePreviousSeek) {
+              Image(systemName: "arrow.counterclockwise")
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.accent)
           }
-          .buttonStyle(.plain)
-          .foregroundStyle(.accent)
-          .opacity(player.canRestorePreviousSeek ? 1 : 0.35)
-          .disabled(player.canRestorePreviousSeek == false)
         }
 
         HStack {
