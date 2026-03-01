@@ -19,7 +19,7 @@ struct LocalLibraryView: View {
   @State private var errorMessage: String?
   @State private var downloadProgressByBookID: [String: Double] = [:]
   @State private var downloadingBookIDs: Set<String> = []
-  @ObservedObject private var player = AudioPlayerController.shared
+  @StateObject private var player = AudioPlayerController()
   @State private var isShowingPlayer = false
   @State private var activePlaybackBook: LibraryBook?
 

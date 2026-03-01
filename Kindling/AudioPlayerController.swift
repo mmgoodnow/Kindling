@@ -12,7 +12,6 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private static let resumeRewindSeconds: Double = 2.5
-  static let shared = AudioPlayerController()
 
   struct Chapter: Identifiable, Equatable {
     let id: Int
@@ -97,11 +96,6 @@ final class AudioPlayerController: ObservableObject {
     observeEndOfPlayback(for: player)
     loadChapters(from: url)
     #if os(iOS)
-      if let currentBookID {
-        MPPlayableContentManager.shared().nowPlayingIdentifiers = [currentBookID]
-      } else {
-        MPPlayableContentManager.shared().nowPlayingIdentifiers = []
-      }
       updateNowPlayingInfo()
       loadNowPlayingArtwork(from: artworkURL)
     #endif
@@ -208,7 +202,6 @@ final class AudioPlayerController: ObservableObject {
     seekHistory = []
     #if os(iOS)
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-      MPPlayableContentManager.shared().nowPlayingIdentifiers = []
     #endif
   }
 
