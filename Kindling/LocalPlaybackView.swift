@@ -390,7 +390,7 @@ struct LocalPlaybackView: View {
     guard player.chapters.indices.contains(index) else { return 0 }
     let duration = effectiveDuration(for: player.chapters[index], at: index)
     let fraction = CGFloat(duration / max(totalDuration, 1))
-    return max(fraction * availableWidth, 6)
+    return max(fraction * availableWidth, 2)
   }
 
   private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
