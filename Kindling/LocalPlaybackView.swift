@@ -118,23 +118,27 @@ struct LocalPlaybackView: View {
   private var stickyPlaybackHeader: some View {
     let isVisible = !isHeroVisible
 
-    return VStack(spacing: 2) {
-      Text(player.title)
-        .font(.headline.weight(.semibold))
-        .lineLimit(1)
-
-      if player.author.isEmpty == false {
-        Text(player.author)
-          .font(.caption)
-          .foregroundStyle(.secondary)
+    return HStack {
+      Spacer()
+      VStack(spacing: 2) {
+        Text(player.title)
+          .font(.headline.weight(.semibold))
           .lineLimit(1)
+
+        if player.author.isEmpty == false {
+          Text(player.author)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
       }
+      .padding(.horizontal, 18)
+      .padding(.vertical, 10)
+      .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+      Spacer()
     }
-    .frame(maxWidth: .infinity)
-    .padding(.top, 10)
-    .padding(.horizontal, 48)
-    .padding(.bottom, 10)
-    .background(.ultraThinMaterial)
+    .padding(.top, 8)
+    .padding(.horizontal, 24)
     .opacity(isVisible ? 1 : 0)
     .animation(.easeInOut(duration: 0.2), value: isVisible)
     .allowsHitTesting(false)
