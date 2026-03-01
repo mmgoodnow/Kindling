@@ -3,12 +3,20 @@ import Kingfisher
 import SwiftUI
 
 struct LocalPlaybackView: View {
+  private enum ContentTab: String, CaseIterable, Identifiable {
+    case description = "Description"
+    case chapters = "Chapters"
+
+    var id: String { rawValue }
+  }
+
   @ObservedObject var player: AudioPlayerController
   @State private var chapterScrubOriginTime: Double?
   @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var isHeroVisible = true
+  @State private var selectedContentTab: ContentTab = .chapters
 
   var body: some View {
     #if os(iOS)
@@ -33,11 +41,8 @@ struct LocalPlaybackView: View {
         ScrollView(showsIndicators: false) {
           VStack(spacing: 0) {
             heroSection
-
-            if player.chapters.isEmpty == false {
-              chapterListSection
-                .padding(.top, 28)
-            }
+            playbackContentSection
+              .padding(.top, 28)
           }
           .frame(maxWidth: .infinity)
           .padding(.horizontal, 16)
@@ -55,11 +60,8 @@ struct LocalPlaybackView: View {
         ScrollView(showsIndicators: false) {
           VStack(spacing: 0) {
             heroSection
-
-            if player.chapters.isEmpty == false {
-              chapterListSection
-                .padding(.top, 28)
-            }
+            playbackContentSection
+              .padding(.top, 28)
           }
           .frame(maxWidth: .infinity)
           .padding(.horizontal, 24)
@@ -144,14 +146,6 @@ struct LocalPlaybackView: View {
       }
       .padding(.top, 28)
 
-      if player.bookDescription.isEmpty == false {
-        Text(player.bookDescription)
-          .font(.body)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.top, 22)
-      }
     }
 
     if #available(iOS 18.0, macOS 15.0, *) {
@@ -259,10 +253,6 @@ struct LocalPlaybackView: View {
 
   private var chapterListSection: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Chapters")
-        .font(.headline.weight(.semibold))
-        .foregroundStyle(.secondary)
-
       LazyVStack(spacing: 6) {
         ForEach(player.chapters) { chapter in
           Button {
@@ -296,6 +286,49 @@ struct LocalPlaybackView: View {
         }
       }
     }
+  }
+
+  @ViewBuilder
+  private var playbackContentSection: some View {
+    let hasDescription = player.bookDescription.isEmpty == false
+    let hasChapters = player.chapters.isEmpty == false
+
+    if hasDescription || hasChapters {
+      VStack(alignment: .leading, spacing: 18) {
+        if hasDescription && hasChapters {
+          Picker("Playback Content", selection: $selectedContentTab) {
+            ForEach(ContentTab.allCases) { tab in
+              Text(tab.rawValue).tag(tab)
+            }
+          }
+          .pickerStyle(.segmented)
+        }
+
+        switch effectiveContentTab(
+          hasDescription: hasDescription,
+          hasChapters: hasChapters
+        ) {
+        case .description:
+          descriptionSection
+        case .chapters:
+          chapterListSection
+        }
+      }
+    }
+  }
+
+  private func effectiveContentTab(hasDescription: Bool, hasChapters: Bool) -> ContentTab {
+    if hasDescription == false { return .chapters }
+    if hasChapters == false { return .description }
+    return selectedContentTab
+  }
+
+  private var descriptionSection: some View {
+    Text(player.bookDescription)
+      .font(.body)
+      .foregroundStyle(.secondary)
+      .multilineTextAlignment(.leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private var playbackProgressSection: some View {

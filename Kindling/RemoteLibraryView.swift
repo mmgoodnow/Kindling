@@ -972,7 +972,7 @@ struct PodibleLibraryView: View {
     let controls = HStack(spacing: 8) {
       trailingControlButton(
         label: "Share eBook",
-        systemName: "book",
+        systemName: "square.and.arrow.up",
         isEnabled: canShareEbook,
         action: {
           guard let client else { return }
@@ -987,7 +987,7 @@ struct PodibleLibraryView: View {
       )
       trailingControlButton(
         label: localPlaybackURL == nil ? "Download or Play Audiobook" : "Play Audiobook",
-        systemName: "headphones",
+        systemName: "play.fill",
         isEnabled: (localPlaybackURL != nil && localBook != nil) || canStartLocalAudioDownload,
         action: {
           if let localBook, let localPlaybackURL {
