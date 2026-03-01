@@ -266,17 +266,17 @@ struct LocalPlaybackView: View {
             player.seek(to: chapter.startTime)
           } label: {
             HStack(spacing: 12) {
-              VStack(alignment: .leading, spacing: 3) {
+              VStack(alignment: .leading, spacing: 0) {
                 Text(chapter.title)
                   .font(.body.weight(currentChapterID == chapter.id ? .semibold : .regular))
                   .foregroundStyle(.primary)
                   .multilineTextAlignment(.leading)
                   .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(formatTime(chapter.startTime))
-                  .font(.caption.monospacedDigit())
-                  .foregroundStyle(.secondary)
               }
+
+              Text(formatChapterDuration(chapter))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
 
               if currentChapterID == chapter.id {
                 Image(systemName: "speaker.wave.2.fill")
@@ -285,7 +285,7 @@ struct LocalPlaybackView: View {
               }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(chapterRowBackground(isCurrent: currentChapterID == chapter.id))
           }
@@ -466,6 +466,11 @@ struct LocalPlaybackView: View {
 
   private func clampToPlaybackBounds(_ time: Double) -> Double {
     min(max(time, 0), max(player.duration, 0))
+  }
+
+  private func formatChapterDuration(_ chapter: AudioPlayerController.Chapter) -> String {
+    let duration = effectiveDuration(for: chapter, at: nil)
+    return formatTime(duration)
   }
 
   private func effectiveDuration(
