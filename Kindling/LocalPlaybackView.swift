@@ -40,8 +40,8 @@ struct LocalPlaybackView: View {
             }
           }
           .frame(maxWidth: .infinity)
-          .padding(.horizontal, 12)
-          .padding(.top, 8)
+          .padding(.horizontal, 8)
+          .padding(.top, 0)
           .padding(.bottom, floatingControlsReservedHeight)
         }
 
@@ -116,8 +116,14 @@ struct LocalPlaybackView: View {
 
   @ViewBuilder
   private var heroSection: some View {
+    #if os(iOS)
+      let artworkSize: CGFloat = 336
+    #else
+      let artworkSize: CGFloat = 296
+    #endif
+
     let hero = VStack(spacing: 0) {
-      sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
+      sharedPlaybackArtwork(size: artworkSize, cornerRadius: 24, player: player)
         .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
       VStack(spacing: 8) {
