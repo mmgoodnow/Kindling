@@ -52,7 +52,7 @@ struct LibrarySyncService {
         let created = LibraryBook(
           llId: item.id,
           title: item.title,
-          summary: nil,
+          summary: item.summary,
           coverURLString: item.bookImagePath,
           runtimeSeconds: nil,
           addedAt: item.bookAdded,
@@ -107,6 +107,10 @@ struct LibrarySyncService {
     var updated = 0
     if book.title != item.title {
       book.title = item.title
+      updated += 1
+    }
+    if book.summary != item.summary {
+      book.summary = item.summary
       updated += 1
     }
     if book.coverURLString != item.bookImagePath {

@@ -137,6 +137,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let title: String
   let author: String
+  let summary: String?
   let status: PodibleLibraryItemStatus
   let ebookStatus: PodibleLibraryItemStatus?
   let audioStatus: PodibleLibraryItemStatus?
@@ -149,6 +150,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     id: String,
     title: String,
     author: String,
+    summary: String? = nil,
     status: PodibleLibraryItemStatus,
     ebookStatus: PodibleLibraryItemStatus? = nil,
     audioStatus: PodibleLibraryItemStatus? = nil,
@@ -160,6 +162,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.id = id
     self.title = title
     self.author = author
+    self.summary = summary
     self.status = status
     self.ebookStatus = ebookStatus
     self.audioStatus = audioStatus
@@ -177,6 +180,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case titleUpper = "BookName"
     case authorLower = "authorname"
     case authorUpper = "AuthorName"
+    case summaryLower = "description"
+    case summaryUpper = "Description"
     case status = "status"
     case statusAlt = "Status"
     case ebookStatus = "ebookStatus"
@@ -194,6 +199,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     id = try container.decodeIfPresent(String.self, forKeys: [.idLower, .idUpper, .idPlain])
     title = try container.decodeIfPresent(String.self, forKeys: [.titleLower, .titleUpper])
     author = try container.decodeIfPresent(String.self, forKeys: [.authorLower, .authorUpper])
+    summary = try? container.decodeIfPresent(String.self, forKeys: [.summaryLower, .summaryUpper])
     status =
       (try? container.decode(PodibleLibraryItemStatus.self, forKey: .status))
       ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .statusAlt))
