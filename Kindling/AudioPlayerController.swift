@@ -65,7 +65,11 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func seek(to seconds: Double) {
-    let time = CMTime(seconds: seconds, preferredTimescale: 600)
+    let clampedSeconds = min(max(seconds, 0), max(duration, 0))
+    currentTime = clampedSeconds
+
+    let time = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000)
+    player?.currentItem?.cancelPendingSeeks()
     player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
   }
 
