@@ -21,6 +21,13 @@ struct LibrarySyncService {
     var authorsById = Dictionary(
       uniqueKeysWithValues: existingAuthors.map { ($0.llId, $0) })
     var booksById = Dictionary(uniqueKeysWithValues: existingBooks.map { ($0.llId, $0) })
+    var booksByIdentity: [String: LibraryBook] = [:]
+    for book in existingBooks {
+      guard let key = bookIdentityKey(title: book.title, author: book.author?.name) else {
+        continue
+      }
+      booksByIdentity[key] = booksByIdentity[key] ?? book
+    }
 
     var insertedAuthors = 0
     var updatedAuthors = 0
@@ -48,6 +55,14 @@ struct LibrarySyncService {
       if let existing = booksById[item.id] {
         book = existing
         updatedBooks += updateBook(book, with: item, author: author)
+      } else if let identityKey = bookIdentityKey(title: item.title, author: item.author),
+        let existing = booksByIdentity[identityKey]
+      {
+        booksById[existing.llId] = nil
+        existing.llId = item.id
+        booksById[item.id] = existing
+        book = existing
+        updatedBooks += updateBook(book, with: item, author: author)
       } else {
         let created = LibraryBook(
           llId: item.id,
@@ -65,6 +80,9 @@ struct LibrarySyncService {
         )
         modelContext.insert(created)
         booksById[item.id] = created
+        if let identityKey = bookIdentityKey(title: item.title, author: item.author) {
+          booksByIdentity[identityKey] = created
+        }
         book = created
         insertedBooks += 1
       }
@@ -95,6 +113,15 @@ struct LibrarySyncService {
 
   private func normalizeAuthorKey(_ name: String) -> String {
     name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func normalizeBookKey(_ title: String) -> String {
+    title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func bookIdentityKey(title: String, author: String?) -> String? {
+    guard let author, author.isEmpty == false else { return nil }
+    return "\(normalizeAuthorKey(author))::\(normalizeBookKey(title))"
   }
 
   private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
