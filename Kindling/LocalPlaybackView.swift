@@ -290,6 +290,8 @@ struct LocalPlaybackView: View {
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
         }
 
         chapterScrubBar
