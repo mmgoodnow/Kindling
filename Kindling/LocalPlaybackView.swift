@@ -47,7 +47,7 @@ struct LocalPlaybackView: View {
 
         expandedPlayerControls
           .padding(.horizontal, 16)
-          .padding(.bottom, 0)
+          .padding(.bottom, -2)
       }
       .background(expandedPlayerBackground)
     #else
@@ -683,7 +683,7 @@ private struct MiniPlaybackGlassBarStyle: ViewModifier {
 }
 
 private struct ExpandedPlayerControlsGlassStyle: ViewModifier {
-  private let bubbleShape = RoundedRectangle(cornerRadius: 36, style: .continuous)
+  private let bubbleShape = RoundedRectangle(cornerRadius: 28, style: .continuous)
 
   func body(content: Content) -> some View {
     #if os(iOS)
