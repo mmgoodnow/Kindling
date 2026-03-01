@@ -28,8 +28,33 @@ struct LocalPlaybackView: View {
   }
 
   private func expandedPlayerView() -> some View {
-    VStack(spacing: 0) {
+    #if os(iOS)
       ZStack(alignment: .bottom) {
+        ScrollView(showsIndicators: false) {
+          VStack(spacing: 0) {
+            heroSection
+
+            if player.chapters.isEmpty == false {
+              chapterListSection
+                .padding(.top, 28)
+            }
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.horizontal, 24)
+          .padding(.top, 28)
+          .padding(.bottom, floatingControlsReservedHeight)
+        }
+
+        scrollViewportBottomFade
+          .padding(.bottom, floatingControlsFadeBottomPadding)
+
+        expandedPlayerControls
+          .padding(.horizontal, 16)
+          .padding(.bottom, 28)
+      }
+      .background(expandedPlayerBackground)
+    #else
+      VStack(spacing: 0) {
         ScrollView(showsIndicators: false) {
           VStack(spacing: 0) {
             heroSection
@@ -44,43 +69,56 @@ struct LocalPlaybackView: View {
           .padding(.top, 28)
         }
 
-        scrollViewportBottomFade
+        expandedPlayerControls
+          .padding(.horizontal, 24)
+          .padding(.top, 28)
       }
-      VStack(spacing: 24) {
-        playbackProgressSection
+      .padding(.bottom, 28)
+      .background(expandedPlayerBackground)
+    #endif
+  }
 
-        HStack(spacing: 12) {
-          #if os(iOS)
-            AirPlayRouteButton()
-              .frame(width: 52, height: 52)
-          #endif
+  private var expandedPlayerControls: some View {
+    VStack(spacing: 24) {
+      playbackProgressSection
 
-          transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
-            player.skip(by: -15)
-          }
+      HStack(spacing: 12) {
+        #if os(iOS)
+          AirPlayRouteButton()
+            .frame(width: 52, height: 52)
+        #endif
 
-          Button(action: player.togglePlayback) {
-            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-              .font(.system(size: 54, weight: .regular))
-              .frame(width: 68, height: 68)
-          }
-          .buttonStyle(.plain)
-
-          transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
-            player.skip(by: 30)
-          }
-
-          playbackSpeedButton
+        transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
+          player.skip(by: -15)
         }
-        .foregroundStyle(.accent)
+
+        Button(action: player.togglePlayback) {
+          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 54, weight: .regular))
+            .frame(width: 68, height: 68)
+        }
+        .buttonStyle(.plain)
+
+        transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
+          player.skip(by: 30)
+        }
+
+        playbackSpeedButton
       }
-      .padding(.horizontal, 24)
-      .padding(.top, 28)
-      .padding(.vertical, 18)
-      .modifier(ExpandedPlayerControlsGlassStyle())
+      .foregroundStyle(.accent)
     }
-    .padding(.bottom, 28)
-    .background(expandedPlayerBackground)
+    .padding(.horizontal, 24)
+    .padding(.top, 28)
+    .padding(.vertical, 18)
+    .modifier(ExpandedPlayerControlsGlassStyle())
+  }
+
+  private var floatingControlsReservedHeight: CGFloat {
+    260
+  }
+
+  private var floatingControlsFadeBottomPadding: CGFloat {
+    232
   }
 
   private var scrollViewportBottomFade: some View {
