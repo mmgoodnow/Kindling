@@ -7,7 +7,7 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
-  @State private var heroSectionMaxY: CGFloat = .greatestFiniteMagnitude
+  @State private var heroSectionBottomInWindow: CGFloat = .greatestFiniteMagnitude
 
   var body: some View {
     #if os(iOS)
@@ -50,7 +50,7 @@ struct LocalPlaybackView: View {
             GeometryReader { proxy in
               Color.clear.preference(
                 key: PlaybackHeroSectionMaxYPreferenceKey.self,
-                value: proxy.frame(in: .named("playbackScroll")).maxY
+                value: proxy.frame(in: .global).maxY
               )
             }
           }
@@ -63,8 +63,6 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 28)
       }
-      .coordinateSpace(name: "playbackScroll")
-
       VStack(spacing: 24) {
         playbackProgressSection
 
@@ -93,7 +91,7 @@ struct LocalPlaybackView: View {
       stickyPlaybackHeader
     }
     .onPreferenceChange(PlaybackHeroSectionMaxYPreferenceKey.self) { value in
-      heroSectionMaxY = value
+      heroSectionBottomInWindow = value
     }
   }
 
@@ -113,7 +111,7 @@ struct LocalPlaybackView: View {
   }
 
   private var stickyPlaybackHeader: some View {
-    let isVisible = heroSectionMaxY < 12
+    let isVisible = heroSectionBottomInWindow < 120
 
     return VStack(spacing: 2) {
       Text(player.title)
