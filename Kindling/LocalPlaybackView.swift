@@ -3,6 +3,7 @@ import SwiftUI
 
 struct LocalPlaybackView: View {
   @ObservedObject var player: AudioPlayerController
+  @State private var chapterScrubOriginTime: Double?
 
   var body: some View {
     #if os(iOS)
@@ -157,8 +158,7 @@ struct LocalPlaybackView: View {
             .lineLimit(1)
         }
 
-        ProgressView(value: currentChapterProgress)
-          .progressViewStyle(.linear)
+        chapterScrubBar
 
         HStack {
           Text(formatTime(currentChapterElapsed))
@@ -196,6 +196,41 @@ struct LocalPlaybackView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(height: 10)
+  }
+
+  private var chapterScrubBar: some View {
+    GeometryReader { proxy in
+      let progress = currentChapterProgress
+
+      ZStack(alignment: .leading) {
+        Capsule(style: .continuous)
+          .fill(Color.primary.opacity(0.12))
+
+        Capsule(style: .continuous)
+          .fill(Color.primary)
+          .frame(width: max(proxy.size.width * progress, 10))
+      }
+      .frame(height: 8)
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            if chapterScrubOriginTime == nil {
+              chapterScrubOriginTime = player.currentTime
+            }
+
+            let width = max(proxy.size.width, 1)
+            let deltaFraction = value.translation.width / width
+            let deltaSeconds = Double(deltaFraction) * currentChapterDuration
+            let candidateTime = (chapterScrubOriginTime ?? player.currentTime) + deltaSeconds
+            player.seek(to: clampToCurrentChapter(candidateTime))
+          }
+          .onEnded { _ in
+            chapterScrubOriginTime = nil
+          }
+      )
+    }
+    .frame(height: 8)
   }
 
   private var currentChapterID: Int? {
@@ -250,6 +285,12 @@ struct LocalPlaybackView: View {
   private var currentChapterProgress: Double {
     let duration = max(currentChapterDuration, 1)
     return min(max(currentChapterElapsed / duration, 0), 1)
+  }
+
+  private func clampToCurrentChapter(_ time: Double) -> Double {
+    guard let currentChapter else { return max(0, min(time, player.duration)) }
+    let chapterEnd = currentChapter.startTime + currentChapterDuration
+    return min(max(time, currentChapter.startTime), chapterEnd)
   }
 
   private func effectiveDuration(
