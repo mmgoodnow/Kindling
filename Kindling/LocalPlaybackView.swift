@@ -180,7 +180,7 @@ struct LocalPlaybackView: View {
 
   private var playbackSpeedButton: some View {
     Menu {
-      ForEach([0.8, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+      ForEach([0.8, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0], id: \.self) { rate in
         Button {
           player.setPlaybackRate(rate)
         } label: {
