@@ -41,6 +41,9 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 28)
       }
+      .overlay(alignment: .bottom) {
+        scrollViewportBottomFade
+      }
       VStack(spacing: 24) {
         playbackProgressSection
 
@@ -67,12 +70,33 @@ struct LocalPlaybackView: View {
 
           playbackSpeedButton
         }
+        .foregroundStyle(.accent)
       }
       .padding(.top, 28)
     }
     .padding(.horizontal, 24)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
+  }
+
+  private var scrollViewportBottomFade: some View {
+    Rectangle()
+      .fill(.ultraThinMaterial)
+      .mask {
+        LinearGradient(
+          stops: [
+            .init(color: .clear, location: 0.0),
+            .init(color: .black.opacity(0.22), location: 0.28),
+            .init(color: .black.opacity(0.72), location: 0.68),
+            .init(color: .black.opacity(0.98), location: 1.0),
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 52)
+      .allowsHitTesting(false)
   }
 
   @ViewBuilder
@@ -486,16 +510,16 @@ struct LocalPlaybackView: View {
   private struct AirPlayRouteButton: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
       let view = AVRoutePickerView()
-      view.activeTintColor = UIColor.label
-      view.tintColor = UIColor.label
+      view.activeTintColor = UIColor(Color.accentColor)
+      view.tintColor = UIColor(Color.accentColor)
       view.prioritizesVideoDevices = false
       view.backgroundColor = .clear
       return view
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
-      uiView.activeTintColor = UIColor.label
-      uiView.tintColor = UIColor.label
+      uiView.activeTintColor = UIColor(Color.accentColor)
+      uiView.tintColor = UIColor(Color.accentColor)
     }
   }
 #endif
