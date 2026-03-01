@@ -7,7 +7,7 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
-  @State private var heroTopOffset: CGFloat = 0
+  @State private var isHeroVisible = true
 
   var body: some View {
     #if os(iOS)
@@ -30,33 +30,7 @@ struct LocalPlaybackView: View {
     VStack(spacing: 0) {
       ScrollView(showsIndicators: false) {
         VStack(spacing: 0) {
-          VStack(spacing: 0) {
-            sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
-              .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
-
-            VStack(spacing: 8) {
-              Text(player.title)
-                .font(.title2.weight(.bold))
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-              if player.author.isEmpty == false {
-                Text(player.author)
-                  .font(.headline)
-                  .foregroundStyle(.secondary)
-                  .multilineTextAlignment(.center)
-                  .lineLimit(2)
-              }
-            }
-            .padding(.top, 28)
-          }
-          .background {
-            GeometryReader { proxy in
-              Color.clear.preference(
-                key: PlaybackHeroTopPreferenceKey.self,
-                value: proxy.frame(in: .named("playbackScroll")).minY
-              )
-            }
-          }
+          heroSection
 
           if player.chapters.isEmpty == false {
             chapterListSection
@@ -66,7 +40,6 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 28)
       }
-      .coordinateSpace(name: "playbackScroll")
       VStack(spacing: 24) {
         playbackProgressSection
 
@@ -91,8 +64,36 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 24)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
-    .onPreferenceChange(PlaybackHeroTopPreferenceKey.self) { value in
-      heroTopOffset = value
+  }
+
+  @ViewBuilder
+  private var heroSection: some View {
+    let hero = VStack(spacing: 0) {
+      sharedPlaybackArtwork(size: 296, cornerRadius: 24, player: player)
+        .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
+
+      VStack(spacing: 8) {
+        Text(player.title)
+          .font(.title2.weight(.bold))
+          .multilineTextAlignment(.center)
+          .lineLimit(3)
+        if player.author.isEmpty == false {
+          Text(player.author)
+            .font(.headline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+        }
+      }
+      .padding(.top, 28)
+    }
+
+    if #available(iOS 18.0, macOS 15.0, *) {
+      hero.onScrollVisibilityChange(threshold: 0.1) { isVisible in
+        isHeroVisible = isVisible
+      }
+    } else {
+      hero
     }
   }
 
@@ -112,7 +113,7 @@ struct LocalPlaybackView: View {
   }
 
   private var stickyPlaybackHeader: some View {
-    let isVisible = heroTopOffset < -140
+    let isVisible = !isHeroVisible
 
     return VStack(spacing: 2) {
       Text(player.title)
@@ -575,14 +576,6 @@ private func formatTime(_ seconds: Double) -> String {
     return String(format: "%d:%02d:%02d", hours, minutes, secs)
   }
   return String(format: "%d:%02d", minutes, secs)
-}
-
-private struct PlaybackHeroTopPreferenceKey: PreferenceKey {
-  static var defaultValue: CGFloat = .greatestFiniteMagnitude
-
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-    value = nextValue()
-  }
 }
 
 #Preview {
