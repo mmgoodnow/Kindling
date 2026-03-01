@@ -148,7 +148,7 @@ struct LocalPlaybackView: View {
             .lineLimit(1)
         }
       }
-      .padding(.top, 8)
+      .padding(.top, 20)
       .padding(.horizontal, 48)
       .padding(.bottom, 18)
     }
