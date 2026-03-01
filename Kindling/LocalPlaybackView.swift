@@ -40,8 +40,8 @@ struct LocalPlaybackView: View {
             }
           }
           .frame(maxWidth: .infinity)
-          .padding(.horizontal, 8)
-          .padding(.top, 0)
+          .padding(.horizontal, 4)
+          .padding(.top, -10)
           .padding(.bottom, floatingControlsReservedHeight)
         }
 
@@ -117,7 +117,7 @@ struct LocalPlaybackView: View {
   @ViewBuilder
   private var heroSection: some View {
     #if os(iOS)
-      let artworkSize: CGFloat = 336
+      let artworkSize = min(UIScreen.main.bounds.width - 24, 368)
     #else
       let artworkSize: CGFloat = 296
     #endif
