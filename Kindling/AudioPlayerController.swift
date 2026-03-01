@@ -224,10 +224,21 @@ final class AudioPlayerController: ObservableObject {
       let title = titleItem.stringValue,
       title.isEmpty == false
     {
-      return title
+      return normalizedChapterTitle(title, fallbackIndex: index)
     }
 
     return "Chapter \(index + 1)"
+  }
+
+  private static func normalizedChapterTitle(_ rawTitle: String, fallbackIndex: Int) -> String {
+    let trimmed = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.isEmpty == false else { return "Chapter \(fallbackIndex + 1)" }
+
+    if let chapterNumber = Int(trimmed), trimmed.allSatisfy(\.isNumber) {
+      return "Chapter \(chapterNumber)"
+    }
+
+    return trimmed
   }
 
   deinit {
