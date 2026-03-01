@@ -536,8 +536,19 @@ struct LocalPlaybackView: View {
   private func chapterRowBackground(isCurrent: Bool) -> some View {
     #if os(iOS)
       if isCurrent {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(Color.primary.opacity(0.08))
+        GeometryReader { proxy in
+          let progressWidth = max(proxy.size.width * currentChapterProgress, 0)
+
+          ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+              .fill(Color.primary.opacity(0.08))
+
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+              .fill(Color.accentColor.opacity(0.14))
+              .frame(width: progressWidth)
+              .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+          }
+        }
       } else {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
           .fill(Color.primary.opacity(0.04))
