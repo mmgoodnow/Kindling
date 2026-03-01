@@ -299,7 +299,7 @@ struct LocalPlaybackView: View {
         HStack {
           Text(formatTime(currentChapterElapsed))
           Spacer()
-          Text("-\(formatTime(currentChapterRemaining))")
+          Text(chapterRemainingSummary)
         }
         .font(.caption.monospacedDigit())
         .foregroundStyle(.secondary)
@@ -441,6 +441,26 @@ struct LocalPlaybackView: View {
   private var currentChapterProgress: Double {
     let duration = max(currentChapterDuration, 1)
     return min(max(currentChapterElapsed / duration, 0), 1)
+  }
+
+  private var chapterRemainingSummary: String {
+    let remaining = max(currentChapterRemaining, 0)
+    let totalSeconds = Int(remaining.rounded())
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+
+    if hours > 0 {
+      let hourUnit = hours == 1 ? "hour" : "hours"
+      if minutes > 0 {
+        let minuteUnit = minutes == 1 ? "minute" : "minutes"
+        return "\(hours) \(hourUnit) \(minutes) \(minuteUnit) left in chapter"
+      }
+      return "\(hours) \(hourUnit) left in chapter"
+    }
+
+    let clampedMinutes = max(minutes, totalSeconds > 0 ? 1 : 0)
+    let minuteUnit = clampedMinutes == 1 ? "minute" : "minutes"
+    return "\(clampedMinutes) \(minuteUnit) left in chapter"
   }
 
   private var bookProgressPercent: Int {
