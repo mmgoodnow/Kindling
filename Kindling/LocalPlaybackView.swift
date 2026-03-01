@@ -51,7 +51,7 @@ struct LocalPlaybackView: View {
               .frame(width: 52, height: 52)
           #endif
 
-          transportButton(systemName: "gobackward.15", size: 60, iconFont: .title2) {
+          transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
             player.skip(by: -15)
           }
 
@@ -62,7 +62,7 @@ struct LocalPlaybackView: View {
           }
           .buttonStyle(.plain)
 
-          transportButton(systemName: "goforward.30", size: 60, iconFont: .title2) {
+          transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
             player.skip(by: 30)
           }
 
