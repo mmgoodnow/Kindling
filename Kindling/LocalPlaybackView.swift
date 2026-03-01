@@ -4,6 +4,7 @@ import SwiftUI
 struct LocalPlaybackView: View {
   @ObservedObject var player: AudioPlayerController
   @State private var chapterScrubOriginTime: Double?
+  @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var heroSectionMaxY: CGFloat = .greatestFiniteMagnitude
@@ -263,12 +264,14 @@ struct LocalPlaybackView: View {
           .onChanged { value in
             if chapterScrubOriginTime == nil {
               chapterScrubOriginTime = currentPlaybackTime
+              chapterScrubOriginDuration = max(currentChapterDuration, 1)
             }
 
             let width = max(proxy.size.width, 1)
             let deltaFraction = value.translation.width / width
-            let deltaSeconds = Double(deltaFraction) * currentChapterDuration
-            let candidateTime = clampToCurrentChapter(
+            let deltaSeconds =
+              Double(deltaFraction) * (chapterScrubOriginDuration ?? currentChapterDuration)
+            let candidateTime = clampToPlaybackBounds(
               (chapterScrubOriginTime ?? currentPlaybackTime) + deltaSeconds
             )
             chapterScrubPreviewTime = candidateTime
@@ -284,6 +287,7 @@ struct LocalPlaybackView: View {
               player.seek(to: chapterScrubPreviewTime)
             }
             chapterScrubOriginTime = nil
+            chapterScrubOriginDuration = nil
             chapterScrubPreviewTime = nil
             chapterScrubLastSeekTimestamp = 0
           }
@@ -350,10 +354,8 @@ struct LocalPlaybackView: View {
     return min(max(currentChapterElapsed / duration, 0), 1)
   }
 
-  private func clampToCurrentChapter(_ time: Double) -> Double {
-    guard let currentChapter else { return max(0, min(time, player.duration)) }
-    let chapterEnd = currentChapter.startTime + currentChapterDuration
-    return min(max(time, currentChapter.startTime), chapterEnd)
+  private func clampToPlaybackBounds(_ time: Double) -> Double {
+    min(max(time, 0), max(player.duration, 0))
   }
 
   private func effectiveDuration(

@@ -66,7 +66,7 @@ final class AudioPlayerController: ObservableObject {
 
   func seek(to seconds: Double) {
     let time = CMTime(seconds: seconds, preferredTimescale: 600)
-    player?.seek(to: time)
+    player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
   }
 
   func skip(by seconds: Double) {
