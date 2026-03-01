@@ -7,8 +7,7 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
-  @State private var heroTopInWindow: CGFloat = .greatestFiniteMagnitude
-  @State private var heroTopBaseline: CGFloat?
+  @State private var heroTopOffset: CGFloat = 0
 
   var body: some View {
     #if os(iOS)
@@ -54,7 +53,7 @@ struct LocalPlaybackView: View {
             GeometryReader { proxy in
               Color.clear.preference(
                 key: PlaybackHeroTopPreferenceKey.self,
-                value: proxy.frame(in: .global).minY
+                value: proxy.frame(in: .named("playbackScroll")).minY
               )
             }
           }
@@ -67,6 +66,7 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 28)
       }
+      .coordinateSpace(name: "playbackScroll")
       VStack(spacing: 24) {
         playbackProgressSection
 
@@ -92,10 +92,7 @@ struct LocalPlaybackView: View {
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
     .onPreferenceChange(PlaybackHeroTopPreferenceKey.self) { value in
-      heroTopInWindow = value
-      if heroTopBaseline == nil, value.isFinite {
-        heroTopBaseline = value
-      }
+      heroTopOffset = value
     }
   }
 
@@ -115,8 +112,7 @@ struct LocalPlaybackView: View {
   }
 
   private var stickyPlaybackHeader: some View {
-    let baseline = heroTopBaseline ?? heroTopInWindow
-    let isVisible = (baseline - heroTopInWindow) > 180
+    let isVisible = heroTopOffset < -140
 
     return VStack(spacing: 2) {
       Text(player.title)
