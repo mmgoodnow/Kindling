@@ -134,6 +134,15 @@ struct LocalPlaybackView: View {
         }
       }
       .padding(.top, 28)
+
+      if player.bookDescription.isEmpty == false {
+        Text(player.bookDescription)
+          .font(.body)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 22)
+      }
     }
 
     if #available(iOS 18.0, macOS 15.0, *) {

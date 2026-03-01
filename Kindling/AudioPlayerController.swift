@@ -14,6 +14,7 @@ final class AudioPlayerController: ObservableObject {
   @Published var duration: Double = 0
   @Published var title: String = ""
   @Published var author: String = ""
+  @Published var bookDescription: String = ""
   @Published var artworkURL: URL?
   @Published var chapters: [Chapter] = []
   @Published var playbackRate: Double = 1.0
@@ -23,11 +24,18 @@ final class AudioPlayerController: ObservableObject {
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
 
-  func load(url: URL, title: String, author: String? = nil, artworkURL: URL? = nil) {
+  func load(
+    url: URL,
+    title: String,
+    author: String? = nil,
+    description: String? = nil,
+    artworkURL: URL? = nil
+  ) {
     resetObservers()
     chapterLoadTask?.cancel()
     self.title = title
     self.author = author ?? ""
+    self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
     self.currentTime = 0
     self.duration = 0
@@ -103,6 +111,7 @@ final class AudioPlayerController: ObservableObject {
     duration = 0
     title = ""
     author = ""
+    bookDescription = ""
     artworkURL = nil
     chapters = []
   }

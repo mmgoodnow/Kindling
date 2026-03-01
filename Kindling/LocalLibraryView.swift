@@ -312,6 +312,7 @@ struct LocalLibraryView: View {
       url: url,
       title: book.title,
       author: book.author?.name,
+      description: book.summary,
       artworkURL: book.coverURLString.flatMap(URL.init(string:))
     )
     player.play()
