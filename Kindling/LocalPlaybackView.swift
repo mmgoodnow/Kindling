@@ -47,7 +47,7 @@ struct LocalPlaybackView: View {
 
         expandedPlayerControls
           .padding(.horizontal, 16)
-          .padding(.bottom, 12)
+          .padding(.bottom, 2)
       }
       .background(expandedPlayerBackground)
     #else
@@ -106,7 +106,7 @@ struct LocalPlaybackView: View {
     }
     .padding(.horizontal, 14)
     .padding(.top, 14)
-    .padding(.bottom, 10)
+    .padding(.bottom, 4)
     .modifier(ExpandedPlayerControlsGlassStyle())
   }
 
