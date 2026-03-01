@@ -1,6 +1,11 @@
 import AVFoundation
 import Foundation
 
+#if os(iOS)
+  import MediaPlayer
+  import UIKit
+#endif
+
 final class AudioPlayerController: ObservableObject {
   private enum ResumeStore {
     static let keyPrefix = "audioPlayer.resumePosition."
@@ -31,6 +36,24 @@ final class AudioPlayerController: ObservableObject {
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
   private var currentBookID: String?
+  #if os(iOS)
+    private var artworkLoadTask: Task<Void, Never>?
+  #endif
+
+  init() {
+    #if os(iOS)
+      configureRemoteCommands()
+    #endif
+  }
+
+  deinit {
+    chapterLoadTask?.cancel()
+    resetObservers()
+    #if os(iOS)
+      artworkLoadTask?.cancel()
+      teardownRemoteCommands()
+    #endif
+  }
 
   func load(
     url: URL,
@@ -42,6 +65,9 @@ final class AudioPlayerController: ObservableObject {
   ) {
     resetObservers()
     chapterLoadTask?.cancel()
+    #if os(iOS)
+      artworkLoadTask?.cancel()
+    #endif
     currentBookID = bookID
     self.title = title
     self.author = author ?? ""
@@ -69,6 +95,10 @@ final class AudioPlayerController: ObservableObject {
     attachTimeObserver(to: player)
     observeEndOfPlayback(for: player)
     loadChapters(from: url)
+    #if os(iOS)
+      updateNowPlayingInfo()
+      loadNowPlayingArtwork(from: artworkURL)
+    #endif
   }
 
   func play() {
@@ -83,12 +113,18 @@ final class AudioPlayerController: ObservableObject {
     player?.play()
     player?.rate = Float(playbackRate)
     isPlaying = true
+    #if os(iOS)
+      updateNowPlayingInfo()
+    #endif
   }
 
   func pause() {
     player?.pause()
     isPlaying = false
     persistCurrentPosition()
+    #if os(iOS)
+      updateNowPlayingInfo()
+    #endif
   }
 
   func togglePlayback() {
@@ -105,6 +141,9 @@ final class AudioPlayerController: ObservableObject {
     if isPlaying {
       player?.rate = Float(clampedRate)
     }
+    #if os(iOS)
+      updateNowPlayingInfo()
+    #endif
   }
 
   func seek(to seconds: Double, recordHistory: Bool = true) {
@@ -118,6 +157,9 @@ final class AudioPlayerController: ObservableObject {
     let time = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000)
     player?.currentItem?.cancelPendingSeeks()
     player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+    #if os(iOS)
+      updateNowPlayingInfo()
+    #endif
   }
 
   func skip(by seconds: Double) {
@@ -139,6 +181,9 @@ final class AudioPlayerController: ObservableObject {
     isPlaying = false
     persistCurrentPosition()
     currentTime = 0
+    #if os(iOS)
+      updateNowPlayingInfo()
+    #endif
   }
 
   func unload() {
@@ -155,6 +200,9 @@ final class AudioPlayerController: ObservableObject {
     artworkURL = nil
     chapters = []
     seekHistory = []
+    #if os(iOS)
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    #endif
   }
 
   var hasLoadedItem: Bool {
@@ -174,9 +222,15 @@ final class AudioPlayerController: ObservableObject {
       if seconds.isFinite {
         self.currentTime = seconds
         self.persistCurrentPosition()
+        #if os(iOS)
+          self.updateNowPlayingInfo()
+        #endif
       }
       if let duration = player.currentItem?.duration.seconds, duration.isFinite {
         self.duration = duration
+        #if os(iOS)
+          self.updateNowPlayingInfo()
+        #endif
       }
     }
   }
@@ -190,6 +244,9 @@ final class AudioPlayerController: ObservableObject {
       self?.isPlaying = false
       self?.currentTime = self?.duration ?? 0
       self?.clearPersistedPosition()
+      #if os(iOS)
+        self?.updateNowPlayingInfo()
+      #endif
     }
   }
 
@@ -231,6 +288,85 @@ final class AudioPlayerController: ObservableObject {
     }
     return true
   }
+
+  #if os(iOS)
+    private func configureRemoteCommands() {
+      let commandCenter = MPRemoteCommandCenter.shared()
+      commandCenter.playCommand.isEnabled = true
+      commandCenter.pauseCommand.isEnabled = true
+      commandCenter.changePlaybackPositionCommand.isEnabled = true
+      commandCenter.skipBackwardCommand.isEnabled = true
+      commandCenter.skipForwardCommand.isEnabled = true
+      commandCenter.skipBackwardCommand.preferredIntervals = [15]
+      commandCenter.skipForwardCommand.preferredIntervals = [30]
+
+      commandCenter.playCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.play()
+        return .success
+      }
+      commandCenter.pauseCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.pause()
+        return .success
+      }
+      commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+        guard
+          let self,
+          let positionEvent = event as? MPChangePlaybackPositionCommandEvent
+        else { return .commandFailed }
+        self.seek(to: positionEvent.positionTime)
+        return .success
+      }
+      commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: -15)
+        return .success
+      }
+      commandCenter.skipForwardCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: 30)
+        return .success
+      }
+    }
+
+    private func teardownRemoteCommands() {
+      let commandCenter = MPRemoteCommandCenter.shared()
+      commandCenter.playCommand.removeTarget(nil)
+      commandCenter.pauseCommand.removeTarget(nil)
+      commandCenter.changePlaybackPositionCommand.removeTarget(nil)
+      commandCenter.skipBackwardCommand.removeTarget(nil)
+      commandCenter.skipForwardCommand.removeTarget(nil)
+    }
+
+    private func updateNowPlayingInfo(artwork: MPMediaItemArtwork? = nil) {
+      var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+      nowPlayingInfo[MPMediaItemPropertyTitle] = title
+      nowPlayingInfo[MPMediaItemPropertyArtist] = author
+      nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = duration
+      nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+      nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
+      if let artwork {
+        nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+      }
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
+
+    private func loadNowPlayingArtwork(from url: URL?) {
+      guard let url else { return }
+      artworkLoadTask = Task { [weak self] in
+        guard
+          let (data, _) = try? await URLSession.shared.data(from: url),
+          let image = UIImage(data: data)
+        else { return }
+        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        guard Task.isCancelled == false else { return }
+        await MainActor.run { [weak self] in
+          self?.updateNowPlayingInfo(artwork: artwork)
+        }
+      }
+    }
+  #endif
 
   private func loadChapters(from url: URL) {
     chapterLoadTask = Task { [weak self] in
@@ -323,10 +459,5 @@ final class AudioPlayerController: ObservableObject {
     }
 
     return trimmed
-  }
-
-  deinit {
-    chapterLoadTask?.cancel()
-    resetObservers()
   }
 }
