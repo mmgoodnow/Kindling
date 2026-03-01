@@ -2,6 +2,10 @@ import AVFoundation
 import Foundation
 
 final class AudioPlayerController: ObservableObject {
+  private enum ResumeStore {
+    static let keyPrefix = "audioPlayer.resumePosition."
+  }
+
   struct Chapter: Identifiable, Equatable {
     let id: Int
     let title: String
@@ -24,9 +28,11 @@ final class AudioPlayerController: ObservableObject {
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
+  private var currentBookID: String?
 
   func load(
     url: URL,
+    bookID: String,
     title: String,
     author: String? = nil,
     description: String? = nil,
@@ -34,11 +40,13 @@ final class AudioPlayerController: ObservableObject {
   ) {
     resetObservers()
     chapterLoadTask?.cancel()
+    currentBookID = bookID
     self.title = title
     self.author = author ?? ""
     self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
-    self.currentTime = 0
+    let savedPosition = persistedPosition(for: bookID)
+    self.currentTime = savedPosition
     self.duration = 0
     self.isPlaying = false
     self.chapters = []
@@ -52,6 +60,10 @@ final class AudioPlayerController: ObservableObject {
 
     let player = AVPlayer(url: url)
     self.player = player
+    if savedPosition > 0 {
+      let resumeTime = CMTime(seconds: savedPosition, preferredTimescale: 1_000)
+      player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
     attachTimeObserver(to: player)
     observeEndOfPlayback(for: player)
     loadChapters(from: url)
@@ -66,6 +78,7 @@ final class AudioPlayerController: ObservableObject {
   func pause() {
     player?.pause()
     isPlaying = false
+    persistCurrentPosition()
   }
 
   func togglePlayback() {
@@ -90,6 +103,7 @@ final class AudioPlayerController: ObservableObject {
       rememberSeekOrigin(currentTime)
     }
     currentTime = clampedSeconds
+    persistCurrentPosition()
 
     let time = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000)
     player?.currentItem?.cancelPendingSeeks()
@@ -113,10 +127,12 @@ final class AudioPlayerController: ObservableObject {
   func stop() {
     player?.pause()
     isPlaying = false
+    persistCurrentPosition()
     currentTime = 0
   }
 
   func unload() {
+    persistCurrentPosition()
     stop()
     resetObservers()
     chapterLoadTask?.cancel()
@@ -147,6 +163,7 @@ final class AudioPlayerController: ObservableObject {
       let seconds = time.seconds
       if seconds.isFinite {
         self.currentTime = seconds
+        self.persistCurrentPosition()
       }
       if let duration = player.currentItem?.duration.seconds, duration.isFinite {
         self.duration = duration
@@ -162,6 +179,7 @@ final class AudioPlayerController: ObservableObject {
     ) { [weak self] _ in
       self?.isPlaying = false
       self?.currentTime = self?.duration ?? 0
+      self?.clearPersistedPosition()
     }
   }
 
@@ -180,6 +198,20 @@ final class AudioPlayerController: ObservableObject {
     let normalized = min(max(seconds, 0), max(duration, 0))
     guard seekHistory.last.map({ abs($0 - normalized) < 0.25 }) != true else { return }
     seekHistory.append(normalized)
+  }
+
+  private func persistedPosition(for bookID: String) -> Double {
+    UserDefaults.standard.double(forKey: ResumeStore.keyPrefix + bookID)
+  }
+
+  private func persistCurrentPosition() {
+    guard let currentBookID else { return }
+    UserDefaults.standard.set(currentTime, forKey: ResumeStore.keyPrefix + currentBookID)
+  }
+
+  private func clearPersistedPosition() {
+    guard let currentBookID else { return }
+    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + currentBookID)
   }
 
   private func loadChapters(from url: URL) {

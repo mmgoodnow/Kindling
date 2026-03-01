@@ -310,6 +310,7 @@ struct LocalLibraryView: View {
     try? modelContext.save()
     player.load(
       url: url,
+      bookID: book.llId,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
