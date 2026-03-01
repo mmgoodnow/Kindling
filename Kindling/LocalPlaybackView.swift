@@ -29,17 +29,21 @@ struct LocalPlaybackView: View {
 
   private func expandedPlayerView() -> some View {
     VStack(spacing: 0) {
-      ScrollView(showsIndicators: false) {
-        VStack(spacing: 0) {
-          heroSection
+      ZStack(alignment: .bottom) {
+        ScrollView(showsIndicators: false) {
+          VStack(spacing: 0) {
+            heroSection
 
-          if player.chapters.isEmpty == false {
-            chapterListSection
-              .padding(.top, 28)
+            if player.chapters.isEmpty == false {
+              chapterListSection
+                .padding(.top, 28)
+            }
           }
+          .frame(maxWidth: .infinity)
+          .padding(.top, 28)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 28)
+
+        scrollViewportBottomFade
       }
       VStack(spacing: 24) {
         playbackProgressSection
@@ -74,10 +78,6 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 24)
     .padding(.bottom, 28)
     .background(expandedPlayerBackground)
-    .overlay(alignment: .bottom) {
-      scrollViewportBottomFade
-        .padding(.bottom, 164)
-    }
   }
 
   private var scrollViewportBottomFade: some View {
