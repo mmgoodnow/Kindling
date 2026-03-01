@@ -45,9 +45,6 @@ struct LocalPlaybackView: View {
           .padding(.bottom, floatingControlsReservedHeight)
         }
 
-        scrollViewportBottomFade
-          .padding(.bottom, floatingControlsFadeBottomPadding)
-
         expandedPlayerControls
           .padding(.horizontal, 16)
           .padding(.bottom, 28)
@@ -79,7 +76,7 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerControls: some View {
-    VStack(spacing: 24) {
+    VStack(spacing: 16) {
       playbackProgressSection
 
       HStack(spacing: 12) {
@@ -115,30 +112,6 @@ struct LocalPlaybackView: View {
 
   private var floatingControlsReservedHeight: CGFloat {
     260
-  }
-
-  private var floatingControlsFadeBottomPadding: CGFloat {
-    232
-  }
-
-  private var scrollViewportBottomFade: some View {
-    Rectangle()
-      .fill(.ultraThinMaterial)
-      .mask {
-        LinearGradient(
-          stops: [
-            .init(color: .clear, location: 0.0),
-            .init(color: .black.opacity(0.22), location: 0.28),
-            .init(color: .black.opacity(0.72), location: 0.68),
-            .init(color: .black.opacity(0.98), location: 1.0),
-          ],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 52)
-      .allowsHitTesting(false)
   }
 
   @ViewBuilder
