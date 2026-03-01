@@ -47,7 +47,7 @@ struct LocalPlaybackView: View {
 
         expandedPlayerControls
           .padding(.horizontal, 16)
-          .padding(.bottom, 28)
+          .padding(.bottom, 12)
       }
       .background(expandedPlayerBackground)
     #else
@@ -105,13 +105,13 @@ struct LocalPlaybackView: View {
       .foregroundStyle(.accent)
     }
     .padding(.horizontal, 24)
-    .padding(.top, 28)
-    .padding(.vertical, 18)
+    .padding(.top, 14)
+    .padding(.bottom, 16)
     .modifier(ExpandedPlayerControlsGlassStyle())
   }
 
   private var floatingControlsReservedHeight: CGFloat {
-    260
+    228
   }
 
   @ViewBuilder
