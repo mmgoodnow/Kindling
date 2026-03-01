@@ -76,7 +76,7 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerControls: some View {
-    VStack(spacing: 6) {
+    VStack(spacing: 2) {
       playbackProgressSection
 
       HStack(spacing: 12) {
@@ -106,7 +106,7 @@ struct LocalPlaybackView: View {
     }
     .padding(.horizontal, 14)
     .padding(.top, 14)
-    .padding(.bottom, 14)
+    .padding(.bottom, 10)
     .modifier(ExpandedPlayerControlsGlassStyle())
   }
 
