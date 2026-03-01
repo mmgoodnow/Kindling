@@ -9,7 +9,6 @@ struct LocalPlaybackView: View {
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var isHeroVisible = true
-  @State private var isShowingPlaybackSpeedPopover = false
 
   var body: some View {
     #if os(iOS)
@@ -180,8 +179,18 @@ struct LocalPlaybackView: View {
   }
 
   private var playbackSpeedButton: some View {
-    Button {
-      isShowingPlaybackSpeedPopover = true
+    Menu {
+      ForEach([0.8, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+        Button {
+          player.setPlaybackRate(rate)
+        } label: {
+          if rate == player.playbackRate {
+            Label(formatPlaybackRate(rate), systemImage: "checkmark")
+          } else {
+            Text(formatPlaybackRate(rate))
+          }
+        }
+      }
     } label: {
       Text(formatPlaybackRate(player.playbackRate))
         .font(.headline.weight(.semibold))
@@ -189,31 +198,6 @@ struct LocalPlaybackView: View {
         .frame(width: 52, height: 52)
     }
     .buttonStyle(.plain)
-    .popover(isPresented: $isShowingPlaybackSpeedPopover, attachmentAnchor: .rect(.bounds)) {
-      VStack(alignment: .leading, spacing: 4) {
-        ForEach([0.8, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-          Button {
-            player.setPlaybackRate(rate)
-            isShowingPlaybackSpeedPopover = false
-          } label: {
-            HStack(spacing: 8) {
-              Text(formatPlaybackRate(rate))
-              Spacer(minLength: 0)
-              if rate == player.playbackRate {
-                Image(systemName: "checkmark")
-              }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-          }
-          .buttonStyle(.plain)
-          .padding(.horizontal, 14)
-          .padding(.vertical, 8)
-        }
-      }
-      .frame(width: 120)
-      .padding(.vertical, 8)
-      .presentationCompactAdaptation(.popover)
-    }
   }
 
   private var chapterListSection: some View {
