@@ -49,5 +49,7 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>UISupportsCarPlay</key>
+	<true/>
 </dict>
 </plist>

@@ -33,7 +33,7 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
-  @StateObject private var player = AudioPlayerController()
+  @ObservedObject private var player = AudioPlayerController.shared
   @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
