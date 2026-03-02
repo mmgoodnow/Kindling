@@ -6,6 +6,7 @@ import SwiftUI
 struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @Environment(\.modelContext) private var modelContext
+  @Environment(\.colorScheme) private var colorScheme
   @Query(
     sort: [
       SortDescriptor(\LibraryBook.addedAt, order: .reverse),
@@ -153,7 +154,9 @@ struct PodibleLibraryView: View {
       }
     }
     #if os(iOS)
-      .listStyle(.grouped)
+      .listStyle(.plain)
+      .scrollContentBackground(.hidden)
+      .background(listBackgroundColor)
     #endif
     .navigationTitle("Library")
     .toolbar {
@@ -328,6 +331,18 @@ struct PodibleLibraryView: View {
     }
     return parts.isEmpty ? nil : parts.joined(separator: "  •  ")
   }
+
+  private var listBackgroundColor: Color {
+    if colorScheme == .dark {
+      return .black
+    }
+    #if os(iOS)
+      return Color(uiColor: .systemBackground)
+    #else
+      return Color(nsColor: .windowBackgroundColor)
+    #endif
+  }
+
   @ViewBuilder
   private func summaryRow(_ summary: LibrarySyncService.Summary) -> some View {
     let totalAdded = summary.insertedBooks + summary.insertedAuthors
