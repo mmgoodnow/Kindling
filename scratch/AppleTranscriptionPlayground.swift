@@ -69,7 +69,6 @@ enum AppleTranscriptionPlayground {
         guard text.isEmpty == false else { continue }
 
         printLine(
-          prefix: "final",
           startSeconds: result.range.start.seconds,
           endSeconds: result.range.end.seconds,
           text: text
@@ -152,16 +151,13 @@ enum AppleTranscriptionPlayground {
     return String(format: "%02d:%02d", minutes, remainingSeconds)
   }
 
-  static func printLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String) {
-    print(
-      formattedLine(prefix: prefix, startSeconds: startSeconds, endSeconds: endSeconds, text: text))
+  static func printLine(startSeconds: Double, endSeconds: Double, text: String) {
+    print(formattedLine(startSeconds: startSeconds, endSeconds: endSeconds, text: text))
     fflush(stdout)
   }
 
-  static func formattedLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String)
-    -> String
-  {
-    "[\(prefix)] [\(formatTime(startSeconds)) - \(formatTime(endSeconds))] \(text)"
+  static func formattedLine(startSeconds: Double, endSeconds: Double, text: String) -> String {
+    "\(formatTime(startSeconds)) - \(formatTime(endSeconds)) | \(text)"
   }
 }
 
