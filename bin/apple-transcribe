@@ -1,0 +1,15 @@
+#!/bin/zsh
+set -euo pipefail
+
+ROOT_DIR="${0:A:h:h}"
+SOURCE_FILE="$ROOT_DIR/scratch/AppleTranscriptionPlayground.swift"
+BUILD_DIR="$ROOT_DIR/.build"
+BINARY="$BUILD_DIR/apple-transcription-playground"
+
+mkdir -p "$BUILD_DIR"
+
+if [[ ! -x "$BINARY" || "$SOURCE_FILE" -nt "$BINARY" ]]; then
+  swiftc -parse-as-library "$SOURCE_FILE" -o "$BINARY"
+fi
+
+exec "$BINARY" "$@"
