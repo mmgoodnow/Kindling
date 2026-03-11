@@ -20,12 +20,14 @@ enum AppleTranscriptionPlayground {
   static func main() async {
     do {
       let configuration = try Configuration(arguments: CommandLine.arguments)
+      print("=== Streaming Transcription ===")
       let transcript = try await transcribeAudio(
         at: configuration.audioURL,
-        locale: configuration.locale
+        locale: configuration.locale,
+        streamResults: true
       )
 
-      print("=== Transcript ===")
+      print("\n=== Final Transcript ===")
       for segment in transcript {
         print(
           "[\(formatTime(segment.startSeconds)) - \(formatTime(segment.endSeconds))] \(segment.text)"
@@ -44,7 +46,11 @@ enum AppleTranscriptionPlayground {
     }
   }
 
-  static func transcribeAudio(at audioURL: URL, locale requestedLocale: Locale?) async throws
+  static func transcribeAudio(
+    at audioURL: URL,
+    locale requestedLocale: Locale?,
+    streamResults: Bool
+  ) async throws
     -> [Segment]
   {
     guard SpeechTranscriber.isAvailable else {
@@ -54,7 +60,7 @@ enum AppleTranscriptionPlayground {
     let locale = try await resolveLocale(requestedLocale)
     let audioFile = try AVAudioFile(forReading: audioURL)
     let transcriber = SpeechTranscriber(
-      locale: locale, preset: .timeIndexedTranscriptionWithAlternatives)
+      locale: locale, preset: .timeIndexedProgressiveTranscription)
     let analyzer = SpeechAnalyzer(
       modules: [transcriber],
       options: .init(priority: .userInitiated, modelRetention: .whileInUse)
@@ -62,16 +68,38 @@ enum AppleTranscriptionPlayground {
 
     let resultsTask = Task { () throws -> [Segment] in
       var segments: [Segment] = []
+      var lastVolatileText: String?
       for try await result in transcriber.results {
-        guard result.isFinal else { continue }
         let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.isEmpty == false else { continue }
-        segments.append(
-          Segment(
-            startSeconds: result.range.start.seconds,
-            endSeconds: result.range.end.seconds,
-            text: text
+
+        if result.isFinal {
+          if streamResults {
+            streamLine(
+              prefix: "final",
+              startSeconds: result.range.start.seconds,
+              endSeconds: result.range.end.seconds,
+              text: text
+            )
+          }
+          segments.append(
+            Segment(
+              startSeconds: result.range.start.seconds,
+              endSeconds: result.range.end.seconds,
+              text: text
+            )
           )
+          lastVolatileText = nil
+          continue
+        }
+
+        guard streamResults, text != lastVolatileText else { continue }
+        lastVolatileText = text
+        streamLine(
+          prefix: "live ",
+          startSeconds: result.range.start.seconds,
+          endSeconds: result.range.end.seconds,
+          text: text
         )
       }
       return segments
@@ -142,6 +170,11 @@ enum AppleTranscriptionPlayground {
       return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
     }
     return String(format: "%02d:%02d", minutes, remainingSeconds)
+  }
+
+  static func streamLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String) {
+    print("[\(prefix)] [\(formatTime(startSeconds)) - \(formatTime(endSeconds))] \(text)")
+    fflush(stdout)
   }
 }
 
