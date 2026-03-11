@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT_DIR="${0:A:h:h}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 SOURCE_FILE="$ROOT_DIR/scratch/AppleTranscriptionPlayground.swift"
 BUILD_DIR="$ROOT_DIR/.build"
 BINARY="$BUILD_DIR/apple-transcription-playground"

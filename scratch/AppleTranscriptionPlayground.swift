@@ -17,6 +17,8 @@ struct Segment: Sendable {
 @available(macOS 26.0, *)
 @main
 enum AppleTranscriptionPlayground {
+  private static let livePadWidth = 140
+
   static func main() async {
     do {
       let configuration = try Configuration(arguments: CommandLine.arguments)
@@ -69,13 +71,18 @@ enum AppleTranscriptionPlayground {
     let resultsTask = Task { () throws -> [Segment] in
       var segments: [Segment] = []
       var lastVolatileText: String?
+      var hasActiveLiveLine = false
       for try await result in transcriber.results {
         let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.isEmpty == false else { continue }
 
         if result.isFinal {
           if streamResults {
-            streamLine(
+            if hasActiveLiveLine {
+              clearLiveLine()
+              hasActiveLiveLine = false
+            }
+            printLine(
               prefix: "final",
               startSeconds: result.range.start.seconds,
               endSeconds: result.range.end.seconds,
@@ -95,12 +102,16 @@ enum AppleTranscriptionPlayground {
 
         guard streamResults, text != lastVolatileText else { continue }
         lastVolatileText = text
-        streamLine(
+        hasActiveLiveLine = true
+        overwriteLiveLine(
           prefix: "live ",
           startSeconds: result.range.start.seconds,
           endSeconds: result.range.end.seconds,
           text: text
         )
+      }
+      if hasActiveLiveLine {
+        clearLiveLine()
       }
       return segments
     }
@@ -172,9 +183,32 @@ enum AppleTranscriptionPlayground {
     return String(format: "%02d:%02d", minutes, remainingSeconds)
   }
 
-  static func streamLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String) {
-    print("[\(prefix)] [\(formatTime(startSeconds)) - \(formatTime(endSeconds))] \(text)")
+  static func printLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String) {
+    print(
+      formattedLine(prefix: prefix, startSeconds: startSeconds, endSeconds: endSeconds, text: text))
     fflush(stdout)
+  }
+
+  static func overwriteLiveLine(
+    prefix: String, startSeconds: Double, endSeconds: Double, text: String
+  ) {
+    let line = formattedLine(
+      prefix: prefix, startSeconds: startSeconds, endSeconds: endSeconds, text: text)
+    let padded = line.padding(toLength: max(livePadWidth, line.count), withPad: " ", startingAt: 0)
+    fputs("\r\(padded)", stdout)
+    fflush(stdout)
+  }
+
+  static func clearLiveLine() {
+    let blank = String(repeating: " ", count: livePadWidth)
+    fputs("\r\(blank)\r", stdout)
+    fflush(stdout)
+  }
+
+  static func formattedLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String)
+    -> String
+  {
+    "[\(prefix)] [\(formatTime(startSeconds)) - \(formatTime(endSeconds))] \(text)"
   }
 }
 
