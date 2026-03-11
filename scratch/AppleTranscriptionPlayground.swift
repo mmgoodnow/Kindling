@@ -17,16 +17,13 @@ struct Segment: Sendable {
 @available(macOS 26.0, *)
 @main
 enum AppleTranscriptionPlayground {
-  private static let livePadWidth = 140
-
   static func main() async {
     do {
       let configuration = try Configuration(arguments: CommandLine.arguments)
-      print("=== Streaming Transcription ===")
+      print("=== Transcription ===")
       let transcript = try await transcribeAudio(
         at: configuration.audioURL,
-        locale: configuration.locale,
-        streamResults: true
+        locale: configuration.locale
       )
 
       print("\n=== Final Transcript ===")
@@ -48,11 +45,7 @@ enum AppleTranscriptionPlayground {
     }
   }
 
-  static func transcribeAudio(
-    at audioURL: URL,
-    locale requestedLocale: Locale?,
-    streamResults: Bool
-  ) async throws
+  static func transcribeAudio(at audioURL: URL, locale requestedLocale: Locale?) async throws
     -> [Segment]
   {
     guard SpeechTranscriber.isAvailable else {
@@ -70,48 +63,24 @@ enum AppleTranscriptionPlayground {
 
     let resultsTask = Task { () throws -> [Segment] in
       var segments: [Segment] = []
-      var lastVolatileText: String?
-      var hasActiveLiveLine = false
       for try await result in transcriber.results {
+        guard result.isFinal else { continue }
         let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.isEmpty == false else { continue }
 
-        if result.isFinal {
-          if streamResults {
-            if hasActiveLiveLine {
-              clearLiveLine()
-              hasActiveLiveLine = false
-            }
-            printLine(
-              prefix: "final",
-              startSeconds: result.range.start.seconds,
-              endSeconds: result.range.end.seconds,
-              text: text
-            )
-          }
-          segments.append(
-            Segment(
-              startSeconds: result.range.start.seconds,
-              endSeconds: result.range.end.seconds,
-              text: text
-            )
-          )
-          lastVolatileText = nil
-          continue
-        }
-
-        guard streamResults, text != lastVolatileText else { continue }
-        lastVolatileText = text
-        hasActiveLiveLine = true
-        overwriteLiveLine(
-          prefix: "live ",
+        printLine(
+          prefix: "final",
           startSeconds: result.range.start.seconds,
           endSeconds: result.range.end.seconds,
           text: text
         )
-      }
-      if hasActiveLiveLine {
-        clearLiveLine()
+        segments.append(
+          Segment(
+            startSeconds: result.range.start.seconds,
+            endSeconds: result.range.end.seconds,
+            text: text
+          )
+        )
       }
       return segments
     }
@@ -186,22 +155,6 @@ enum AppleTranscriptionPlayground {
   static func printLine(prefix: String, startSeconds: Double, endSeconds: Double, text: String) {
     print(
       formattedLine(prefix: prefix, startSeconds: startSeconds, endSeconds: endSeconds, text: text))
-    fflush(stdout)
-  }
-
-  static func overwriteLiveLine(
-    prefix: String, startSeconds: Double, endSeconds: Double, text: String
-  ) {
-    let line = formattedLine(
-      prefix: prefix, startSeconds: startSeconds, endSeconds: endSeconds, text: text)
-    let padded = line.padding(toLength: max(livePadWidth, line.count), withPad: " ", startingAt: 0)
-    fputs("\r\(padded)", stdout)
-    fflush(stdout)
-  }
-
-  static func clearLiveLine() {
-    let blank = String(repeating: " ", count: livePadWidth)
-    fputs("\r\(blank)\r", stdout)
     fflush(stdout)
   }
 
