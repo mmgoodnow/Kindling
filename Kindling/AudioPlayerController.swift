@@ -38,11 +38,14 @@ final class AudioPlayerController: ObservableObject {
   private var currentBookID: String?
   #if os(iOS)
     private var artworkLoadTask: Task<Void, Never>?
+    private var interruptionObserver: NSObjectProtocol?
+    private var shouldResumeAfterInterruption = false
   #endif
 
   init() {
     #if os(iOS)
       configureRemoteCommands()
+      observeAudioInterruptions()
     #endif
   }
 
@@ -52,6 +55,9 @@ final class AudioPlayerController: ObservableObject {
     #if os(iOS)
       artworkLoadTask?.cancel()
       teardownRemoteCommands()
+      if let interruptionObserver {
+        NotificationCenter.default.removeObserver(interruptionObserver)
+      }
     #endif
   }
 
@@ -290,6 +296,46 @@ final class AudioPlayerController: ObservableObject {
   }
 
   #if os(iOS)
+    private func observeAudioInterruptions() {
+      interruptionObserver = NotificationCenter.default.addObserver(
+        forName: AVAudioSession.interruptionNotification,
+        object: AVAudioSession.sharedInstance(),
+        queue: .main
+      ) { [weak self] notification in
+        self?.handleAudioInterruption(notification)
+      }
+    }
+
+    private func handleAudioInterruption(_ notification: Notification) {
+      guard
+        let info = notification.userInfo,
+        let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+        let interruptionType = AVAudioSession.InterruptionType(rawValue: rawType)
+      else { return }
+
+      switch interruptionType {
+      case .began:
+        shouldResumeAfterInterruption = isPlaying
+        if isPlaying {
+          player?.pause()
+          isPlaying = false
+          updateNowPlayingInfo()
+        }
+      case .ended:
+        let rawOptions = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+        let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+        let shouldResume = shouldResumeAfterInterruption && options.contains(.shouldResume)
+        shouldResumeAfterInterruption = false
+        guard shouldResume else { return }
+
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(true)
+        play()
+      @unknown default:
+        shouldResumeAfterInterruption = false
+      }
+    }
+
     private func configureRemoteCommands() {
       let commandCenter = MPRemoteCommandCenter.shared()
       commandCenter.playCommand.isEnabled = true
