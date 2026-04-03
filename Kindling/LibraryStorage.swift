@@ -17,7 +17,8 @@ struct LibraryStorage {
     let baseURL = try ensureBaseDirectory()
     let bookFolder = try ensureBookDirectory(baseURL: baseURL, book: book)
     let filename = sanitizeFilename(suggestedFilename)
-    let destination = uniqueDestinationURL(in: bookFolder, filename: filename)
+    try removeExistingFiles(in: bookFolder)
+    let destination = bookFolder.appendingPathComponent(filename, isDirectory: false)
 
     if fileManager.fileExists(atPath: destination.path) {
       try fileManager.removeItem(at: destination)
@@ -51,7 +52,7 @@ struct LibraryStorage {
   }
 
   private func ensureBookDirectory(baseURL: URL, book: LibraryBook) throws -> URL {
-    let folderName = sanitizeFilename(book.llId)
+    let folderName = sanitizeFilename(storageDirectoryName(for: book))
     let target = baseURL.appendingPathComponent(folderName, isDirectory: true)
     if fileManager.fileExists(atPath: target.path) == false {
       try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
@@ -68,16 +69,23 @@ struct LibraryStorage {
     return replaced.isEmpty ? UUID().uuidString : replaced
   }
 
-  private func uniqueDestinationURL(in folder: URL, filename: String) -> URL {
-    let base = folder.appendingPathComponent(filename)
-    if fileManager.fileExists(atPath: base.path) == false {
-      return base
+  private func storageDirectoryName(for book: LibraryBook) -> String {
+    if let openLibraryWorkID = book.openLibraryWorkID, openLibraryWorkID.isEmpty == false {
+      return openLibraryWorkID
     }
-    let stem = base.deletingPathExtension().lastPathComponent
-    let ext = base.pathExtension
-    let suffix = UUID().uuidString.prefix(8)
-    let uniqueName = ext.isEmpty ? "\(stem)-\(suffix)" : "\(stem)-\(suffix).\(ext)"
-    return folder.appendingPathComponent(uniqueName)
+    return book.llId
+  }
+
+  private func removeExistingFiles(in folder: URL) throws {
+    guard fileManager.fileExists(atPath: folder.path) else { return }
+    let contents = try fileManager.contentsOfDirectory(
+      at: folder,
+      includingPropertiesForKeys: nil,
+      options: [.skipsHiddenFiles]
+    )
+    for url in contents {
+      try fileManager.removeItem(at: url)
+    }
   }
 
   private func makeRelativePath(_ fileURL: URL, baseURL: URL) -> String {
