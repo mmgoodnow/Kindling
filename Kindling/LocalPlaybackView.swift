@@ -4,6 +4,8 @@ import SwiftUI
 
 struct LocalPlaybackView: View {
   private static let chapterTimelineDurationExponent = 0.8
+  private static let playbackTabBarHeight: CGFloat = 34
+  private static let playbackTabSectionSpacing: CGFloat = 18
 
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
     ContentTab.artwork.rawValue
@@ -369,11 +371,12 @@ struct LocalPlaybackView: View {
           .tag(ContentTab.transcript)
       }
       .frame(maxWidth: .infinity)
-      .frame(height: playbackContentHeight, alignment: .top)
+      .frame(height: playbackPageBodyHeight, alignment: .top)
       #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
       #endif
     }
+    .frame(height: playbackContentHeight, alignment: .top)
   }
 
   private var transcriptSection: some View {
@@ -630,6 +633,13 @@ struct LocalPlaybackView: View {
     #else
       520
     #endif
+  }
+
+  private var playbackPageBodyHeight: CGFloat {
+    max(
+      playbackContentHeight - Self.playbackTabBarHeight - Self.playbackTabSectionSpacing,
+      120
+    )
   }
 
   private func formatChapterDuration(_ chapter: AudioPlayerController.Chapter) -> String {
