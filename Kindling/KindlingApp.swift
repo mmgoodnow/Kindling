@@ -36,6 +36,9 @@ struct KindlingApp: App {
       ContentView()
         .environmentObject(userSettings)
         .environmentObject(audioPlayer)
+        .task {
+          _ = audioPlayer.restoreLastSession()
+        }
     }
     .modelContainer(sharedModelContainer)
     #if os(macOS)

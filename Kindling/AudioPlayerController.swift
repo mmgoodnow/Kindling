@@ -9,6 +9,16 @@ import Foundation
 final class AudioPlayerController: ObservableObject {
   private enum ResumeStore {
     static let keyPrefix = "audioPlayer.resumePosition."
+    static let sessionKey = "audioPlayer.lastSession"
+  }
+
+  private struct PersistedSession: Codable {
+    let resumeID: String
+    let filePath: String
+    let title: String
+    let author: String
+    let description: String
+    let artworkURLString: String?
   }
 
   private static let resumeRewindSeconds: Double = 2.5
@@ -37,6 +47,7 @@ final class AudioPlayerController: ObservableObject {
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
   private var currentResumeID: String?
+  private var currentFileURL: URL?
   #if os(iOS)
     private var artworkLoadTask: Task<Void, Never>?
     private var interruptionObserver: NSObjectProtocol?
@@ -76,6 +87,7 @@ final class AudioPlayerController: ObservableObject {
       artworkLoadTask?.cancel()
     #endif
     currentResumeID = resumeID
+    currentFileURL = url
     self.title = title
     self.author = author ?? ""
     self.bookDescription = description ?? ""
@@ -96,6 +108,7 @@ final class AudioPlayerController: ObservableObject {
 
     let player = AVPlayer(url: url)
     self.player = player
+    persistSession()
     if savedPosition > 0 {
       let resumeTime = CMTime(seconds: savedPosition, preferredTimescale: 1_000)
       player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -201,6 +214,7 @@ final class AudioPlayerController: ObservableObject {
     chapterLoadTask?.cancel()
     chapterLoadTask = nil
     player = nil
+    currentFileURL = nil
     duration = 0
     title = ""
     author = ""
@@ -216,6 +230,27 @@ final class AudioPlayerController: ObservableObject {
 
   var hasLoadedItem: Bool {
     player != nil && title.isEmpty == false
+  }
+
+  @discardableResult
+  func restoreLastSession() -> Bool {
+    guard let session = persistedSession() else { return false }
+    let url = URL(fileURLWithPath: session.filePath)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+      clearPersistedSession()
+      clearPersistedPosition(for: session.resumeID)
+      return false
+    }
+
+    load(
+      url: url,
+      resumeID: session.resumeID,
+      title: session.title,
+      author: session.author.isEmpty ? nil : session.author,
+      description: session.description.isEmpty ? nil : session.description,
+      artworkURL: session.artworkURLString.flatMap(URL.init(string:))
+    )
+    return true
   }
 
   var canRestorePreviousSeek: Bool {
@@ -315,7 +350,36 @@ final class AudioPlayerController: ObservableObject {
 
   private func clearPersistedPosition() {
     guard let currentResumeID else { return }
-    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + currentResumeID)
+    clearPersistedPosition(for: currentResumeID)
+  }
+
+  private func clearPersistedPosition(for resumeID: String) {
+    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + resumeID)
+  }
+
+  private func persistSession() {
+    guard let currentResumeID, let currentFileURL else { return }
+
+    let session = PersistedSession(
+      resumeID: currentResumeID,
+      filePath: currentFileURL.path,
+      title: title,
+      author: author,
+      description: bookDescription,
+      artworkURLString: artworkURL?.absoluteString
+    )
+
+    guard let data = try? JSONEncoder().encode(session) else { return }
+    UserDefaults.standard.set(data, forKey: ResumeStore.sessionKey)
+  }
+
+  private func persistedSession() -> PersistedSession? {
+    guard let data = UserDefaults.standard.data(forKey: ResumeStore.sessionKey) else { return nil }
+    return try? JSONDecoder().decode(PersistedSession.self, from: data)
+  }
+
+  private func clearPersistedSession() {
+    UserDefaults.standard.removeObject(forKey: ResumeStore.sessionKey)
   }
 
   private var shouldRewindOnResume: Bool {
