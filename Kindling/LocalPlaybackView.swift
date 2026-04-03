@@ -2,6 +2,102 @@ import AVKit
 import Kingfisher
 import SwiftUI
 
+private struct MarqueeText: View {
+  let text: String
+  let font: Font
+  let textColor: Color
+
+  private let gap: CGFloat = 28
+  private let pointsPerSecond: CGFloat = 36
+
+  @State private var containerWidth: CGFloat = 0
+  @State private var textWidth: CGFloat = 0
+  @State private var xOffset: CGFloat = 0
+
+  var body: some View {
+    GeometryReader { proxy in
+      Group {
+        if shouldScroll {
+          scrollingContent
+        } else {
+          Text(text)
+            .font(font)
+            .foregroundStyle(textColor)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+      .clipped()
+      .onAppear {
+        containerWidth = proxy.size.width
+        restartAnimationIfNeeded()
+      }
+      .onChange(of: proxy.size.width) { _, newValue in
+        containerWidth = newValue
+        restartAnimationIfNeeded()
+      }
+    }
+    .frame(height: 20)
+    .background(
+      Text(text)
+        .font(font)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .hidden()
+        .background(
+          GeometryReader { proxy in
+            Color.clear
+              .onAppear {
+                textWidth = proxy.size.width
+                restartAnimationIfNeeded()
+              }
+              .onChange(of: proxy.size.width) { _, newValue in
+                textWidth = newValue
+                restartAnimationIfNeeded()
+              }
+          }
+        )
+    )
+  }
+
+  private var shouldScroll: Bool {
+    textWidth > containerWidth && containerWidth > 0
+  }
+
+  private var scrollingContent: some View {
+    HStack(spacing: gap) {
+      marqueeLabel
+      marqueeLabel
+    }
+    .offset(x: xOffset)
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var marqueeLabel: some View {
+    Text(text)
+      .font(font)
+      .foregroundStyle(textColor)
+      .lineLimit(1)
+      .fixedSize(horizontal: true, vertical: false)
+  }
+
+  private func restartAnimationIfNeeded() {
+    guard shouldScroll else {
+      xOffset = 0
+      return
+    }
+
+    let travelDistance = textWidth + gap
+    let duration = max(Double(travelDistance / pointsPerSecond), 6)
+
+    xOffset = 0
+    withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
+      xOffset = -travelDistance
+    }
+  }
+}
+
 struct LocalPlaybackView: View {
   private static let playbackTabBarHeight: CGFloat = 34
   private static let playbackTabSectionSpacing: CGFloat = 18
@@ -410,12 +506,11 @@ struct LocalPlaybackView: View {
 
       VStack(alignment: .leading, spacing: 8) {
         if let currentChapter {
-          Text(bookProgressLabel(for: currentChapter))
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .multilineTextAlignment(.center)
+          MarqueeText(
+            text: bookProgressLabel(for: currentChapter),
+            font: .subheadline.weight(.semibold),
+            textColor: .secondary
+          )
         }
 
         HStack(spacing: 8) {
