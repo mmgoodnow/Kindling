@@ -9,6 +9,7 @@ struct LocalPlaybackView: View {
   private enum ContentTab: String, CaseIterable, Identifiable {
     case description = "About"
     case chapters = "Chapters"
+    case transcript = "Transcript"
 
     var id: String { rawValue }
   }
@@ -23,6 +24,13 @@ struct LocalPlaybackView: View {
   private var selectedContentTab: ContentTab {
     get { ContentTab(rawValue: selectedContentTabRawValue) ?? .chapters }
     nonmutating set { selectedContentTabRawValue = newValue.rawValue }
+  }
+
+  private var selectedContentTabBinding: Binding<ContentTab> {
+    Binding(
+      get: { selectedContentTab },
+      set: { selectedContentTab = $0 }
+    )
   }
 
   var body: some View {
@@ -259,7 +267,7 @@ struct LocalPlaybackView: View {
   }
 
   private var chapterListSection: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    ScrollView(showsIndicators: false) {
       LazyVStack(spacing: 6) {
         ForEach(player.chapters) { chapter in
           Button {
@@ -297,60 +305,69 @@ struct LocalPlaybackView: View {
 
   @ViewBuilder
   private var playbackContentSection: some View {
-    let hasDescription = player.bookDescription.isEmpty == false
-    let hasChapters = player.chapters.isEmpty == false
+    VStack(alignment: .leading, spacing: 18) {
+      HStack(spacing: 18) {
+        ForEach(ContentTab.allCases) { tab in
+          let isSelected = selectedContentTab == tab
+          Button {
+            selectedContentTab = tab
+          } label: {
+            VStack(spacing: 6) {
+              Text(tab.rawValue)
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .accent : .secondary)
 
-    if hasDescription || hasChapters {
-      VStack(alignment: .leading, spacing: 18) {
-        if hasDescription && hasChapters {
-          HStack(spacing: 18) {
-            ForEach(ContentTab.allCases) { tab in
-              let isSelected = selectedContentTab == tab
-              Button {
-                selectedContentTab = tab
-              } label: {
-                VStack(spacing: 6) {
-                  Text(tab.rawValue)
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .accent : .secondary)
-
-                  Rectangle()
-                    .fill(isSelected ? Color.accentColor : .clear)
-                    .frame(height: 2)
-                }
-                .frame(width: 72, alignment: .leading)
-              }
-              .buttonStyle(.plain)
+              Rectangle()
+                .fill(isSelected ? Color.accentColor : .clear)
+                .frame(height: 2)
             }
+            .frame(width: 84, alignment: .center)
           }
-          .frame(maxWidth: .infinity, alignment: .center)
-        }
-
-        switch effectiveContentTab(
-          hasDescription: hasDescription,
-          hasChapters: hasChapters
-        ) {
-        case .description:
-          descriptionSection
-        case .chapters:
-          chapterListSection
+          .buttonStyle(.plain)
         }
       }
+      .frame(maxWidth: .infinity, alignment: .center)
+
+      TabView(selection: selectedContentTabBinding) {
+        descriptionSection
+          .tag(ContentTab.description)
+
+        chapterListSection
+          .tag(ContentTab.chapters)
+
+        transcriptSection
+          .tag(ContentTab.transcript)
+      }
+      .tabViewStyle(.page(indexDisplayMode: .never))
+      .frame(maxWidth: .infinity)
+      .frame(height: playbackContentHeight, alignment: .top)
     }
   }
 
-  private func effectiveContentTab(hasDescription: Bool, hasChapters: Bool) -> ContentTab {
-    if hasDescription == false { return .chapters }
-    if hasChapters == false { return .description }
-    return selectedContentTab
-  }
-
   private var descriptionSection: some View {
-    Text(player.bookDescription)
+    ScrollView(showsIndicators: false) {
+      Group {
+        if player.bookDescription.isEmpty {
+          Text("No description available.")
+        } else {
+          Text(player.bookDescription)
+        }
+      }
       .font(.body)
       .foregroundStyle(.secondary)
       .multilineTextAlignment(.leading)
       .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private var transcriptSection: some View {
+    ScrollView(showsIndicators: false) {
+      Text("No transcript available yet.")
+        .font(.body)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
   }
 
   private var playbackProgressSection: some View {
@@ -548,6 +565,14 @@ struct LocalPlaybackView: View {
 
   private func clampToPlaybackBounds(_ time: Double) -> Double {
     min(max(time, 0), max(player.duration, 0))
+  }
+
+  private var playbackContentHeight: CGFloat {
+    #if os(iOS)
+      228
+    #else
+      260
+    #endif
   }
 
   private func formatChapterDuration(_ chapter: AudioPlayerController.Chapter) -> String {
