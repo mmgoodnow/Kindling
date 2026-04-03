@@ -333,21 +333,45 @@ struct LocalPlaybackView: View {
 
   @ViewBuilder
   private var playbackContentSection: some View {
-    TabView(selection: selectedContentTabBinding) {
-      aboutAndChaptersSection
-        .tag(ContentTab.about)
+    VStack(spacing: 18) {
+      HStack(spacing: 18) {
+        ForEach([ContentTab.about, .artwork, .transcript]) { tab in
+          let isSelected = selectedContentTab == tab
+          Button {
+            selectedContentTab = tab
+          } label: {
+            VStack(spacing: 6) {
+              Text(tab.rawValue)
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .accent : .secondary)
 
-      artworkSection
-        .tag(ContentTab.artwork)
+              Rectangle()
+                .fill(isSelected ? Color.accentColor : .clear)
+                .frame(height: 2)
+            }
+            .frame(width: 84, alignment: .center)
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .center)
 
-      transcriptSection
-        .tag(ContentTab.transcript)
+      TabView(selection: selectedContentTabBinding) {
+        aboutAndChaptersSection
+          .tag(ContentTab.about)
+
+        artworkSection
+          .tag(ContentTab.artwork)
+
+        transcriptSection
+          .tag(ContentTab.transcript)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: playbackContentHeight, alignment: .top)
+      #if os(iOS)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+      #endif
     }
-    .frame(maxWidth: .infinity)
-    .frame(height: playbackContentHeight, alignment: .top)
-    #if os(iOS)
-      .tabViewStyle(.page(indexDisplayMode: .never))
-    #endif
   }
 
   private var transcriptSection: some View {
