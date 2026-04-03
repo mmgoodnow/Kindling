@@ -394,14 +394,12 @@ struct LocalPlaybackView: View {
 
       VStack(alignment: .leading, spacing: 8) {
         if let currentChapter {
-          Text(
-            "\(bookProgressPercent)% through book • \(chapterPositionLabel(for: currentChapter))"
-          )
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .multilineTextAlignment(.center)
+          Text(bookProgressLabel(for: currentChapter))
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
         }
 
         HStack(spacing: 8) {
@@ -418,13 +416,10 @@ struct LocalPlaybackView: View {
           }
         }
 
-        Text("\(currentChapterProgressPercent)%")
-          .font(.caption2.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .center)
-
         HStack {
           Text(formatTime(currentChapterElapsed))
+          Spacer()
+          Text("\(currentChapterProgressPercent)%")
           Spacer()
           Text("-\(formatTime(currentChapterRemaining))")
         }
@@ -437,23 +432,42 @@ struct LocalPlaybackView: View {
   private var chapterTimelineBar: some View {
     GeometryReader { proxy in
       let chapters = player.chapters
-      let spacing: CGFloat = 2
+      let spacing: CGFloat = 1
       let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
       let availableWidth = max(proxy.size.width - totalSpacing, 0)
       let totalDuration = max(chapterTimelineDuration, 1)
+      let minimumSegmentWidth: CGFloat = 2
+      let minimumRequiredWidth =
+        CGFloat(chapters.count) * minimumSegmentWidth
+        + CGFloat(max(chapters.count - 1, 0)) * spacing
+      let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
 
-      HStack(spacing: spacing) {
-        ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
-          chapterSegmentShape(for: index, count: chapters.count)
-            .fill(chapterSegmentColor(for: index))
-            .frame(
-              width: chapterSegmentWidth(
-                for: index,
-                totalDuration: totalDuration,
-                availableWidth: availableWidth
-              ),
-              height: 10
-            )
+      Group {
+        if shouldUsePlainProgressBar {
+          ZStack(alignment: .leading) {
+            Capsule(style: .continuous)
+              .fill(Color.accentColor.opacity(0.14))
+
+            Capsule(style: .continuous)
+              .fill(Color.accentColor)
+              .frame(width: max(proxy.size.width * bookProgress, 10))
+          }
+        } else {
+          HStack(spacing: spacing) {
+            ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
+              chapterSegmentShape(for: index, count: chapters.count)
+                .fill(chapterSegmentColor(for: index))
+                .frame(
+                  width: chapterSegmentWidth(
+                    for: index,
+                    totalDuration: totalDuration,
+                    availableWidth: availableWidth,
+                    minimumSegmentWidth: minimumSegmentWidth
+                  ),
+                  height: 10
+                )
+            }
+          }
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -581,6 +595,11 @@ struct LocalPlaybackView: View {
     return Int(percent.rounded())
   }
 
+  private var bookProgress: Double {
+    let totalDuration = max(player.duration, 1)
+    return min(max(currentPlaybackTime / totalDuration, 0), 1)
+  }
+
   private func clampToPlaybackBounds(_ time: Double) -> Double {
     min(max(time, 0), max(player.duration, 0))
   }
@@ -602,7 +621,11 @@ struct LocalPlaybackView: View {
     guard let index = player.chapters.firstIndex(where: { $0.id == chapter.id }) else {
       return chapter.title
     }
-    return "Chapter \(index + 1) of \(player.chapters.count)"
+    return "\(index + 1)/\(player.chapters.count) chapters"
+  }
+
+  private func bookProgressLabel(for chapter: AudioPlayerController.Chapter) -> String {
+    "\(chapter.title) • \(chapterPositionLabel(for: chapter)) • \(bookProgressPercent)% through book"
   }
 
   private func effectiveDuration(
@@ -634,12 +657,13 @@ struct LocalPlaybackView: View {
   private func chapterSegmentWidth(
     for index: Int,
     totalDuration: Double,
-    availableWidth: CGFloat
+    availableWidth: CGFloat,
+    minimumSegmentWidth: CGFloat
   ) -> CGFloat {
     guard player.chapters.indices.contains(index) else { return 0 }
     let duration = effectiveDuration(for: player.chapters[index], at: index)
     let fraction = CGFloat(duration / max(totalDuration, 1))
-    return max(fraction * availableWidth, 2)
+    return max(fraction * availableWidth, minimumSegmentWidth)
   }
 
   private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
