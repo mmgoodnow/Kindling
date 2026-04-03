@@ -136,7 +136,7 @@ struct LocalPlaybackView: View {
   var body: some View {
     #if os(iOS)
       expandedPlayerView()
-        .safeAreaInset(edge: .top, spacing: 0) {
+        .overlay(alignment: .top) {
           stickyPlaybackHeader
         }
         .presentationDragIndicator(.visible)
@@ -179,37 +179,41 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerControls: some View {
-    HStack(spacing: 12) {
-      #if os(iOS)
-        AirPlayRouteButton()
-          .frame(width: 52, height: 52)
-      #endif
+    VStack(spacing: 14) {
+      chapterPlaybackProgressSection
 
-      transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
-        player.skip(by: -15)
+      HStack(spacing: 12) {
+        #if os(iOS)
+          AirPlayRouteButton()
+            .frame(width: 52, height: 52)
+        #endif
+
+        transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
+          player.skip(by: -15)
+        }
+
+        Button(action: player.togglePlayback) {
+          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 54, weight: .regular))
+            .frame(width: 68, height: 68)
+        }
+        .buttonStyle(.plain)
+
+        transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
+          player.skip(by: 30)
+        }
+
+        playbackSpeedButton
       }
-
-      Button(action: player.togglePlayback) {
-        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-          .font(.system(size: 54, weight: .regular))
-          .frame(width: 68, height: 68)
-      }
-      .buttonStyle(.plain)
-
-      transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
-        player.skip(by: 30)
-      }
-
-      playbackSpeedButton
+      .foregroundStyle(.accent)
     }
-    .foregroundStyle(.accent)
     .padding(.horizontal, 14)
     .padding(.top, 8)
     .padding(.bottom, 4)
   }
 
   private var floatingControlsReservedHeight: CGFloat {
-    82
+    148
   }
 
   @ViewBuilder
@@ -255,9 +259,7 @@ struct LocalPlaybackView: View {
 
   private var expandedPlayerBackground: some View {
     #if os(iOS)
-      Color(uiColor: .systemBackground)
-        .opacity(0.92)
-        .ignoresSafeArea()
+      Color.clear
     #else
       Color.clear
     #endif
@@ -419,14 +421,10 @@ struct LocalPlaybackView: View {
 
   private var artworkSection: some View {
     ScrollView(showsIndicators: false) {
-      VStack(spacing: 18) {
-        heroSection
-          .frame(maxWidth: .infinity)
-
-        chapterPlaybackProgressSection
-      }
-      .padding(.top, 4)
-      .padding(.bottom, 8)
+      heroSection
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
   }
 
@@ -734,7 +732,7 @@ struct LocalPlaybackView: View {
 
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
-      min(UIScreen.main.bounds.height * 0.62, 568)
+      min(UIScreen.main.bounds.height * 0.7, 620)
     #else
       520
     #endif
