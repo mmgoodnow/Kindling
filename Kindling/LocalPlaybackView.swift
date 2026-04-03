@@ -3,6 +3,8 @@ import Kingfisher
 import SwiftUI
 
 struct LocalPlaybackView: View {
+  private static let chapterTimelineDurationExponent = 0.8
+
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
     ContentTab.artwork.rawValue
 
@@ -447,11 +449,11 @@ struct LocalPlaybackView: View {
       let spacing: CGFloat = 1
       let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
       let availableWidth = max(proxy.size.width - totalSpacing, 0)
-      let totalDuration = max(chapterTimelineDuration, 1)
       let minimumSegmentWidth: CGFloat = 1
       let minimumRequiredWidth =
         CGFloat(chapters.count) * minimumSegmentWidth
         + CGFloat(max(chapters.count - 1, 0)) * spacing
+      let scaledTotalDuration = max(chapterTimelineScaledDuration, 1)
       let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
 
       Group {
@@ -472,7 +474,7 @@ struct LocalPlaybackView: View {
                 .frame(
                   width: chapterSegmentWidth(
                     for: index,
-                    totalDuration: totalDuration,
+                    scaledTotalDuration: scaledTotalDuration,
                     availableWidth: availableWidth,
                     minimumSegmentWidth: minimumSegmentWidth
                   ),
@@ -578,6 +580,12 @@ struct LocalPlaybackView: View {
     return max(chapterDurationSum, player.duration)
   }
 
+  private var chapterTimelineScaledDuration: Double {
+    player.chapters.reduce(0.0) { partialResult, chapter in
+      partialResult + scaledChapterTimelineDuration(for: chapter)
+    }
+  }
+
   private var currentChapterElapsed: Double {
     guard let currentChapter else { return min(currentPlaybackTime, max(player.duration, 0)) }
     return max(0, currentPlaybackTime - currentChapter.startTime)
@@ -668,14 +676,22 @@ struct LocalPlaybackView: View {
 
   private func chapterSegmentWidth(
     for index: Int,
-    totalDuration: Double,
+    scaledTotalDuration: Double,
     availableWidth: CGFloat,
     minimumSegmentWidth: CGFloat
   ) -> CGFloat {
     guard player.chapters.indices.contains(index) else { return 0 }
-    let duration = effectiveDuration(for: player.chapters[index], at: index)
-    let fraction = CGFloat(duration / max(totalDuration, 1))
+    let scaledDuration = scaledChapterTimelineDuration(for: player.chapters[index], at: index)
+    let fraction = CGFloat(scaledDuration / max(scaledTotalDuration, 1))
     return max(fraction * availableWidth, minimumSegmentWidth)
+  }
+
+  private func scaledChapterTimelineDuration(
+    for chapter: AudioPlayerController.Chapter,
+    at index: Int? = nil
+  ) -> Double {
+    let duration = max(effectiveDuration(for: chapter, at: index), 1)
+    return pow(duration, Self.chapterTimelineDurationExponent)
   }
 
   private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
