@@ -3,7 +3,6 @@ import Kingfisher
 import SwiftUI
 
 struct LocalPlaybackView: View {
-  private static let chapterTimelineDurationExponent = 0.8
   private static let playbackTabBarHeight: CGFloat = 34
   private static let playbackTabSectionSpacing: CGFloat = 18
 
@@ -452,18 +451,18 @@ struct LocalPlaybackView: View {
       let spacing: CGFloat = 1
       let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
       let availableWidth = max(proxy.size.width - totalSpacing, 0)
-      let minimumSegmentWidth: CGFloat = 1
+      let minimumSegmentWidth: CGFloat = 2
       let minimumRequiredWidth =
         CGFloat(chapters.count) * minimumSegmentWidth
         + CGFloat(max(chapters.count - 1, 0)) * spacing
       let extraSegmentWidth = max(availableWidth - CGFloat(chapters.count) * minimumSegmentWidth, 0)
-      let scaledDurations = chapters.enumerated().map { index, chapter in
-        scaledChapterTimelineDuration(for: chapter, at: index)
+      let durations = chapters.enumerated().map { index, chapter in
+        effectiveDuration(for: chapter, at: index)
       }
-      let scaledTotalDuration = max(scaledDurations.reduce(0, +), 1)
+      let totalDuration = max(durations.reduce(0, +), 1)
       let segmentWidths = chapterSegmentWidths(
-        scaledDurations: scaledDurations,
-        scaledTotalDuration: scaledTotalDuration,
+        durations: durations,
+        totalDuration: totalDuration,
         extraSegmentWidth: extraSegmentWidth,
         minimumSegmentWidth: minimumSegmentWidth
       )
@@ -697,25 +696,25 @@ struct LocalPlaybackView: View {
   }
 
   private func chapterSegmentWidths(
-    scaledDurations: [Double],
-    scaledTotalDuration: Double,
+    durations: [Double],
+    totalDuration: Double,
     extraSegmentWidth: CGFloat,
     minimumSegmentWidth: CGFloat
   ) -> [CGFloat] {
-    guard scaledDurations.isEmpty == false else { return [] }
+    guard durations.isEmpty == false else { return [] }
 
     var widths: [CGFloat] = []
-    widths.reserveCapacity(scaledDurations.count)
+    widths.reserveCapacity(durations.count)
 
     var accumulatedExtraWidth: CGFloat = 0
     var allocatedExtraWidth: CGFloat = 0
 
-    for (index, scaledDuration) in scaledDurations.enumerated() {
-      let fraction = CGFloat(scaledDuration / max(scaledTotalDuration, 1))
+    for (index, duration) in durations.enumerated() {
+      let fraction = CGFloat(duration / max(totalDuration, 1))
       accumulatedExtraWidth += fraction * extraSegmentWidth
 
       let roundedAccumulatedWidth: CGFloat
-      if index == scaledDurations.count - 1 {
+      if index == durations.count - 1 {
         roundedAccumulatedWidth = extraSegmentWidth
       } else {
         roundedAccumulatedWidth = accumulatedExtraWidth.rounded(.toNearestOrAwayFromZero)
@@ -727,14 +726,6 @@ struct LocalPlaybackView: View {
     }
 
     return widths
-  }
-
-  private func scaledChapterTimelineDuration(
-    for chapter: AudioPlayerController.Chapter,
-    at index: Int? = nil
-  ) -> Double {
-    let duration = max(effectiveDuration(for: chapter, at: index), 1)
-    return pow(duration, Self.chapterTimelineDurationExponent)
   }
 
   private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
