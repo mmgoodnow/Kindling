@@ -381,6 +381,11 @@ struct LocalPlaybackView: View {
           }
         }
 
+        Text("\(currentChapterProgressPercent)%")
+          .font(.caption2.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .center)
+
         HStack {
           Text(formatTime(currentChapterElapsed))
           Spacer()
@@ -527,6 +532,10 @@ struct LocalPlaybackView: View {
   private var currentChapterProgress: Double {
     let duration = max(currentChapterDuration, 1)
     return min(max(currentChapterElapsed / duration, 0), 1)
+  }
+
+  private var currentChapterProgressPercent: Int {
+    Int((currentChapterProgress * 100).rounded())
   }
 
   private var bookProgressPercent: Int {
