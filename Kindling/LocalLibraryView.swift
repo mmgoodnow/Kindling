@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct LocalLibraryView: View {
+  @EnvironmentObject var player: AudioPlayerController
   @Environment(\.modelContext) private var modelContext
   @Query(
     sort: [
@@ -19,7 +20,6 @@ struct LocalLibraryView: View {
   @State private var errorMessage: String?
   @State private var downloadProgressByBookID: [String: Double] = [:]
   @State private var downloadingBookIDs: Set<String> = []
-  @StateObject private var player = AudioPlayerController()
   @State private var isShowingPlayer = false
   @State private var activePlaybackBook: LibraryBook?
 
@@ -387,6 +387,7 @@ struct LocalLibraryView: View {
     NavigationStack {
       LocalLibraryView(client: PreviewPodibleClient())
     }
+    .environmentObject(AudioPlayerController())
     .modelContainer(
       for: [
         Author.self,

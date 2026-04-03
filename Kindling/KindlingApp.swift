@@ -11,6 +11,7 @@ import SwiftUI
 @main
 struct KindlingApp: App {
   @StateObject private var userSettings = UserSettings()
+  @StateObject private var audioPlayer = AudioPlayerController()
   var sharedModelContainer: ModelContainer = {
     let schema = Schema([
       Author.self,
@@ -34,6 +35,7 @@ struct KindlingApp: App {
     WindowGroup {
       ContentView()
         .environmentObject(userSettings)
+        .environmentObject(audioPlayer)
     }
     .modelContainer(sharedModelContainer)
     #if os(macOS)

@@ -5,6 +5,7 @@ import SwiftUI
 
 struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
+  @EnvironmentObject var player: AudioPlayerController
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
   @Query(
@@ -34,7 +35,6 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
-  @StateObject private var player = AudioPlayerController()
   @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
@@ -1820,6 +1820,7 @@ struct ActivityShareSheet: View {
   NavigationStack {
     RemoteLibraryView(client: PodibleMockClient())
       .environmentObject(UserSettings())
+      .environmentObject(AudioPlayerController())
   }
   .modelContainer(
     for: [
