@@ -98,6 +98,100 @@ private struct MarqueeText: View {
   }
 }
 
+private struct ChapterRowView: View, Equatable {
+  let chapter: AudioPlayerController.Chapter
+  let durationText: String
+  let isCurrent: Bool
+  let activeProgress: Double?
+  let onSelect: () -> Void
+
+  static func == (lhs: ChapterRowView, rhs: ChapterRowView) -> Bool {
+    lhs.chapter == rhs.chapter
+      && lhs.durationText == rhs.durationText
+      && lhs.isCurrent == rhs.isCurrent
+      && lhs.activeProgress == rhs.activeProgress
+  }
+
+  var body: some View {
+    Button(action: onSelect) {
+      HStack(spacing: 12) {
+        Text(chapter.title)
+          .font(.body.weight(isCurrent ? .semibold : .regular))
+          .foregroundStyle(.primary)
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+        Text(durationText)
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+
+        if isCurrent {
+          Image(systemName: "speaker.wave.2.fill")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+        }
+      }
+      .padding(.horizontal, 14)
+      .padding(.vertical, 9)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(chapterRowBackground)
+    }
+    .buttonStyle(.plain)
+  }
+
+  @ViewBuilder
+  private var chapterRowBackground: some View {
+    #if os(iOS)
+      if isCurrent {
+        GeometryReader { proxy in
+          let progressWidth = max(proxy.size.width * (activeProgress ?? 0), 0)
+          let rowShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
+          ZStack(alignment: .leading) {
+            rowShape
+              .fill(Color.primary.opacity(0.08))
+
+            Rectangle()
+              .fill(Color.accentColor.opacity(0.14))
+              .frame(width: progressWidth)
+          }
+          .clipShape(rowShape)
+        }
+      } else {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(Color.primary.opacity(0.04))
+      }
+    #else
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(isCurrent ? Color.primary.opacity(0.10) : Color.primary.opacity(0.05))
+    #endif
+  }
+}
+
+private struct ChapterListView: View {
+  let chapters: [AudioPlayerController.Chapter]
+  let currentChapterID: Int?
+  let currentChapterProgress: Double
+  let formatDuration: (AudioPlayerController.Chapter) -> String
+  let onSelectChapter: (AudioPlayerController.Chapter) -> Void
+
+  var body: some View {
+    LazyVStack(spacing: 6) {
+      ForEach(chapters) { chapter in
+        ChapterRowView(
+          chapter: chapter,
+          durationText: formatDuration(chapter),
+          isCurrent: currentChapterID == chapter.id,
+          activeProgress: currentChapterID == chapter.id ? currentChapterProgress : nil
+        ) {
+          onSelectChapter(chapter)
+        }
+        .equatable()
+      }
+    }
+  }
+}
+
 struct LocalPlaybackView: View {
   private static let playbackTabBarHeight: CGFloat = 34
   private static let playbackBookProgressSectionHeight: CGFloat = 38
@@ -350,37 +444,13 @@ struct LocalPlaybackView: View {
   }
 
   private var chapterListContent: some View {
-    LazyVStack(spacing: 6) {
-      ForEach(player.chapters) { chapter in
-        Button {
-          player.seek(to: chapter.startTime)
-        } label: {
-          HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-              Text(chapter.title)
-                .font(.body.weight(currentChapterID == chapter.id ? .semibold : .regular))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Text(formatChapterDuration(chapter))
-              .font(.caption.monospacedDigit())
-              .foregroundStyle(.secondary)
-
-            if currentChapterID == chapter.id {
-              Image(systemName: "speaker.wave.2.fill")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-            }
-          }
-          .padding(.horizontal, 14)
-          .padding(.vertical, 9)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(chapterRowBackground(isCurrent: currentChapterID == chapter.id))
-        }
-        .buttonStyle(.plain)
-      }
+    ChapterListView(
+      chapters: player.chapters,
+      currentChapterID: currentChapterID,
+      currentChapterProgress: currentChapterProgress,
+      formatDuration: formatChapterDuration
+    ) { chapter in
+      player.seek(to: chapter.startTime)
     }
   }
 
@@ -863,33 +933,6 @@ struct LocalPlaybackView: View {
     return AnyShape(Rectangle())
   }
 
-  @ViewBuilder
-  private func chapterRowBackground(isCurrent: Bool) -> some View {
-    #if os(iOS)
-      if isCurrent {
-        GeometryReader { proxy in
-          let progressWidth = max(proxy.size.width * currentChapterProgress, 0)
-          let rowShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-
-          ZStack(alignment: .leading) {
-            rowShape
-              .fill(Color.primary.opacity(0.08))
-
-            Rectangle()
-              .fill(Color.accentColor.opacity(0.14))
-              .frame(width: progressWidth)
-          }
-          .clipShape(rowShape)
-        }
-      } else {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(Color.primary.opacity(0.04))
-      }
-    #else
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(isCurrent ? Color.primary.opacity(0.10) : Color.primary.opacity(0.05))
-    #endif
-  }
 }
 
 #if os(iOS)
