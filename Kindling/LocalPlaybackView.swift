@@ -100,6 +100,7 @@ private struct MarqueeText: View {
 
 struct LocalPlaybackView: View {
   private static let playbackTabBarHeight: CGFloat = 34
+  private static let playbackProgressSectionHeight: CGFloat = 72
   private static let playbackTabSectionSpacing: CGFloat = 18
 
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
@@ -178,42 +179,37 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerControls: some View {
-    VStack(spacing: 2) {
-      playbackProgressSection
+    HStack(spacing: 12) {
+      #if os(iOS)
+        AirPlayRouteButton()
+          .frame(width: 52, height: 52)
+      #endif
 
-      HStack(spacing: 12) {
-        #if os(iOS)
-          AirPlayRouteButton()
-            .frame(width: 52, height: 52)
-        #endif
-
-        transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
-          player.skip(by: -15)
-        }
-
-        Button(action: player.togglePlayback) {
-          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 54, weight: .regular))
-            .frame(width: 68, height: 68)
-        }
-        .buttonStyle(.plain)
-
-        transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
-          player.skip(by: 30)
-        }
-
-        playbackSpeedButton
+      transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
+        player.skip(by: -15)
       }
-      .foregroundStyle(.accent)
+
+      Button(action: player.togglePlayback) {
+        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+          .font(.system(size: 54, weight: .regular))
+          .frame(width: 68, height: 68)
+      }
+      .buttonStyle(.plain)
+
+      transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
+        player.skip(by: 30)
+      }
+
+      playbackSpeedButton
     }
+    .foregroundStyle(.accent)
     .padding(.horizontal, 14)
-    .padding(.top, 14)
+    .padding(.top, 8)
     .padding(.bottom, 4)
-    .modifier(ExpandedPlayerControlsGlassStyle())
   }
 
   private var floatingControlsReservedHeight: CGFloat {
-    228
+    92
   }
 
   @ViewBuilder
@@ -433,6 +429,8 @@ struct LocalPlaybackView: View {
   @ViewBuilder
   private var playbackContentSection: some View {
     VStack(spacing: 18) {
+      playbackProgressSection
+
       HStack(spacing: 18) {
         ForEach([ContentTab.about, .artwork, .transcript]) { tab in
           let isSelected = selectedContentTab == tab
@@ -734,7 +732,10 @@ struct LocalPlaybackView: View {
 
   private var playbackPageBodyHeight: CGFloat {
     max(
-      playbackContentHeight - Self.playbackTabBarHeight - Self.playbackTabSectionSpacing,
+      playbackContentHeight
+        - Self.playbackProgressSectionHeight
+        - Self.playbackTabBarHeight
+        - (Self.playbackTabSectionSpacing * 2),
       120
     )
   }
@@ -979,48 +980,6 @@ private struct MiniPlaybackGlassBarStyle: ViewModifier {
     #else
       content
         .background(.ultraThinMaterial)
-    #endif
-  }
-}
-
-private struct ExpandedPlayerControlsGlassStyle: ViewModifier {
-  private let bubbleShape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-
-  func body(content: Content) -> some View {
-    #if os(iOS)
-      if #available(iOS 26.0, *) {
-        GlassEffectContainer {
-          content
-            .background {
-              bubbleShape
-                .fill(Color.black.opacity(0.001))
-            }
-            .contentShape(bubbleShape)
-            .glassEffect(in: bubbleShape)
-        }
-      } else {
-        content
-          .background(
-            .ultraThinMaterial,
-            in: bubbleShape
-          )
-          .background {
-            bubbleShape
-              .fill(Color.black.opacity(0.001))
-          }
-          .contentShape(bubbleShape)
-      }
-    #else
-      content
-        .background(
-          .ultraThinMaterial,
-          in: bubbleShape
-        )
-        .background {
-          bubbleShape
-            .fill(Color.black.opacity(0.001))
-        }
-        .contentShape(bubbleShape)
     #endif
   }
 }
