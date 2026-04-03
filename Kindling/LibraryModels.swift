@@ -40,7 +40,7 @@ extension BookFileFormat {
 
 @Model
 final class Author {
-  @Attribute(.unique) var podibleId: String
+  @Attribute(.unique, originalName: "llId") var podibleId: String
   var name: String
   var sortName: String?
   @Relationship(deleteRule: .nullify, inverse: \LibraryBook.author) var books: [LibraryBook] = []
@@ -54,7 +54,7 @@ final class Author {
 
 @Model
 final class Series {
-  @Attribute(.unique) var podibleId: String
+  @Attribute(.unique, originalName: "llId") var podibleId: String
   var title: String
   var sortTitle: String?
   @Relationship(deleteRule: .nullify, inverse: \LibraryBook.series) var books: [LibraryBook] = []
@@ -68,7 +68,7 @@ final class Series {
 
 @Model
 final class LibraryBook {
-  @Attribute(.unique) var podibleId: String
+  @Attribute(.unique, originalName: "llId") var podibleId: String
   var openLibraryWorkID: String?
   var title: String
   var sortTitle: String?
@@ -122,7 +122,7 @@ final class LibraryBook {
 
 @Model
 final class LibraryBookFile {
-  @Attribute(.unique) var podibleId: String
+  @Attribute(.unique, originalName: "llId") var podibleId: String
   var filename: String
   var format: BookFileFormat
   var sizeBytes: Int64
@@ -167,7 +167,7 @@ final class LibraryBookFile {
 
 @Model
 final class LocalBookState {
-  @Attribute(.unique) var bookPodibleId: String
+  @Attribute(.unique, originalName: "bookLlId") var bookPodibleId: String
   var isDownloaded: Bool
   var progressSeconds: Double
   var lastPlayedAt: Date?
