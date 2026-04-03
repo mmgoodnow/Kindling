@@ -98,6 +98,108 @@ private struct MarqueeText: View {
   }
 }
 
+private func playbackEffectiveDuration(
+  for chapter: AudioPlayerController.Chapter,
+  at index: Int?,
+  chapters: [AudioPlayerController.Chapter],
+  totalDuration: Double
+) -> Double {
+  if chapter.duration > 0 {
+    return chapter.duration
+  }
+
+  let resolvedIndex = index ?? chapters.firstIndex(where: { $0.id == chapter.id }) ?? chapters.count
+  if chapters.indices.contains(resolvedIndex + 1) {
+    return max(chapters[resolvedIndex + 1].startTime - chapter.startTime, 0)
+  }
+  return max(totalDuration - chapter.startTime, 0)
+}
+
+private func playbackCurrentChapterID(
+  time: Double,
+  chapters: [AudioPlayerController.Chapter],
+  totalDuration: Double
+) -> Int? {
+  guard chapters.isEmpty == false else { return nil }
+
+  let currentTime = max(time, 0)
+  for (index, chapter) in chapters.enumerated() {
+    let nextStart =
+      chapters.indices.contains(index + 1) ? chapters[index + 1].startTime : totalDuration
+    if currentTime >= chapter.startTime, currentTime < max(nextStart, chapter.startTime + 0.01) {
+      return chapter.id
+    }
+  }
+
+  return chapters.last?.id
+}
+
+private func playbackCurrentChapterIndex(
+  time: Double,
+  chapters: [AudioPlayerController.Chapter],
+  totalDuration: Double
+) -> Int? {
+  guard
+    let chapterID = playbackCurrentChapterID(
+      time: time, chapters: chapters, totalDuration: totalDuration)
+  else {
+    return nil
+  }
+  return chapters.firstIndex { $0.id == chapterID }
+}
+
+private func playbackCurrentChapterProgress(
+  time: Double,
+  chapters: [AudioPlayerController.Chapter],
+  totalDuration: Double
+) -> Double {
+  guard
+    let index = playbackCurrentChapterIndex(
+      time: time, chapters: chapters, totalDuration: totalDuration),
+    chapters.indices.contains(index)
+  else { return 0 }
+
+  let chapter = chapters[index]
+  let duration = max(
+    playbackEffectiveDuration(
+      for: chapter, at: index, chapters: chapters, totalDuration: totalDuration),
+    1
+  )
+  let elapsed = max(0, time - chapter.startTime)
+  return min(max(elapsed / duration, 0), 1)
+}
+
+private func playbackBookProgress(time: Double, totalDuration: Double) -> Double {
+  guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
+  return min(max(time / totalDuration, 0), 1)
+}
+
+private func playbackBookProgressPercent(time: Double, totalDuration: Double) -> Int {
+  Int((playbackBookProgress(time: time, totalDuration: totalDuration) * 100).rounded())
+}
+
+private func playbackChapterPositionLabel(
+  for chapter: AudioPlayerController.Chapter,
+  chapters: [AudioPlayerController.Chapter]
+) -> String {
+  guard let index = chapters.firstIndex(where: { $0.id == chapter.id }) else {
+    return chapter.title
+  }
+  return "\(index + 1)/\(chapters.count) chapters"
+}
+
+private func formatPlaybackTime(_ seconds: Double) -> String {
+  let totalSeconds = Int(seconds.rounded())
+  let hours = totalSeconds / 3600
+  let minutes = (totalSeconds % 3600) / 60
+  let remainingSeconds = totalSeconds % 60
+
+  if hours > 0 {
+    return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+  }
+  return String(format: "%d:%02d", minutes, remainingSeconds)
+}
+
 private struct ChapterRowView: View, Equatable {
   let chapter: AudioPlayerController.Chapter
   let durationText: String
@@ -170,17 +272,34 @@ private struct ChapterRowView: View, Equatable {
 
 private struct ChapterListView: View {
   let chapters: [AudioPlayerController.Chapter]
-  let currentChapterID: Int?
-  let currentChapterProgress: Double
-  let formatDuration: (AudioPlayerController.Chapter) -> String
+  let totalDuration: Double
+  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
   let onSelectChapter: (AudioPlayerController.Chapter) -> Void
 
   var body: some View {
+    let currentChapterID = playbackCurrentChapterID(
+      time: progress.currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    )
+    let currentChapterProgress = playbackCurrentChapterProgress(
+      time: progress.currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    )
+
     LazyVStack(spacing: 6) {
       ForEach(chapters) { chapter in
         ChapterRowView(
           chapter: chapter,
-          durationText: formatDuration(chapter),
+          durationText: formatPlaybackTime(
+            playbackEffectiveDuration(
+              for: chapter,
+              at: nil,
+              chapters: chapters,
+              totalDuration: totalDuration
+            )
+          ),
           isCurrent: currentChapterID == chapter.id,
           activeProgress: currentChapterID == chapter.id ? currentChapterProgress : nil
         ) {
@@ -188,6 +307,300 @@ private struct ChapterListView: View {
         }
         .equatable()
       }
+    }
+  }
+}
+
+private struct PlaybackBookProgressSectionView: View {
+  let player: AudioPlayerController
+  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
+
+  var body: some View {
+    let chapters = player.chapters
+    let currentTime = progress.currentTime
+    let totalDuration = progress.duration
+    let currentChapterIndex = playbackCurrentChapterIndex(
+      time: currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    )
+    let currentChapter = currentChapterIndex.flatMap {
+      chapters.indices.contains($0) ? chapters[$0] : nil
+    }
+    let bookProgress = playbackBookProgress(time: currentTime, totalDuration: totalDuration)
+
+    VStack(spacing: 8) {
+      GeometryReader { proxy in
+        let spacing: CGFloat = 1
+        let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
+        let availableWidth = max(proxy.size.width - totalSpacing, 0)
+        let minimumSegmentWidth: CGFloat = 1
+        let minimumRequiredWidth =
+          CGFloat(chapters.count) * minimumSegmentWidth
+          + CGFloat(max(chapters.count - 1, 0)) * spacing
+        let extraSegmentWidth = max(
+          availableWidth - CGFloat(chapters.count) * minimumSegmentWidth,
+          0
+        )
+        let durations = chapters.enumerated().map { index, chapter in
+          playbackEffectiveDuration(
+            for: chapter,
+            at: index,
+            chapters: chapters,
+            totalDuration: totalDuration
+          )
+        }
+        let durationTotal = max(durations.reduce(0, +), 1)
+        let segmentWidths = chapterSegmentWidths(
+          durations: durations,
+          totalDuration: durationTotal,
+          extraSegmentWidth: extraSegmentWidth,
+          minimumSegmentWidth: minimumSegmentWidth
+        )
+        let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
+
+        Group {
+          if shouldUsePlainProgressBar {
+            ZStack(alignment: .leading) {
+              Capsule(style: .continuous)
+                .fill(Color.accentColor.opacity(0.14))
+
+              Capsule(style: .continuous)
+                .fill(Color.accentColor)
+                .frame(width: max(proxy.size.width * bookProgress, 10))
+            }
+          } else {
+            HStack(spacing: spacing) {
+              ForEach(Array(chapters.enumerated()), id: \.element.id) { index, _ in
+                chapterSegmentShape(
+                  for: index,
+                  count: chapters.count,
+                  currentChapterIndex: currentChapterIndex
+                )
+                .frame(
+                  width: chapterSegmentWidth(
+                    for: index,
+                    segmentWidths: segmentWidths,
+                    minimumSegmentWidth: minimumSegmentWidth
+                  ),
+                  height: 10
+                )
+              }
+            }
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .frame(height: 10)
+
+      if let currentChapter {
+        MarqueeText(
+          text:
+            "\(player.title) • \(playbackChapterPositionLabel(for: currentChapter, chapters: chapters)) • \(playbackBookProgressPercent(time: currentTime, totalDuration: totalDuration))% through book",
+          font: .subheadline.weight(.semibold),
+          textColor: .secondary
+        )
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func chapterSegmentShape(
+    for index: Int,
+    count: Int,
+    currentChapterIndex: Int?
+  ) -> some View {
+    let radius: CGFloat = 4
+    let fill: Color
+    if let currentChapterIndex {
+      fill =
+        index == currentChapterIndex
+        ? .accentColor
+        : Color.accentColor.opacity(index < currentChapterIndex ? 0.34 : 0.10)
+    } else {
+      fill = Color.accentColor.opacity(0.14)
+    }
+
+    if count == 1 {
+      RoundedRectangle(cornerRadius: radius, style: .continuous)
+        .fill(fill)
+    } else if index == 0 {
+      UnevenRoundedRectangle(
+        cornerRadii: .init(topLeading: radius, bottomLeading: radius),
+        style: .continuous
+      )
+      .fill(fill)
+    } else if index == count - 1 {
+      UnevenRoundedRectangle(
+        cornerRadii: .init(bottomTrailing: radius, topTrailing: radius),
+        style: .continuous
+      )
+      .fill(fill)
+    } else {
+      Rectangle()
+        .fill(fill)
+    }
+  }
+
+  private func chapterSegmentWidth(
+    for index: Int,
+    segmentWidths: [CGFloat],
+    minimumSegmentWidth: CGFloat
+  ) -> CGFloat {
+    guard segmentWidths.indices.contains(index) else { return minimumSegmentWidth }
+    return segmentWidths[index]
+  }
+
+  private func chapterSegmentWidths(
+    durations: [Double],
+    totalDuration: Double,
+    extraSegmentWidth: CGFloat,
+    minimumSegmentWidth: CGFloat
+  ) -> [CGFloat] {
+    guard durations.isEmpty == false else { return [] }
+
+    var widths: [CGFloat] = []
+    widths.reserveCapacity(durations.count)
+
+    var accumulatedExtraWidth: CGFloat = 0
+    var allocatedExtraWidth: CGFloat = 0
+
+    for (index, duration) in durations.enumerated() {
+      let fraction = CGFloat(duration / max(totalDuration, 1))
+      accumulatedExtraWidth += fraction * extraSegmentWidth
+
+      let roundedAccumulatedWidth: CGFloat
+      if index == durations.count - 1 {
+        roundedAccumulatedWidth = extraSegmentWidth
+      } else {
+        roundedAccumulatedWidth = accumulatedExtraWidth.rounded(.toNearestOrAwayFromZero)
+      }
+
+      let roundedExtraWidth = max(roundedAccumulatedWidth - allocatedExtraWidth, 0)
+      allocatedExtraWidth += roundedExtraWidth
+      widths.append(minimumSegmentWidth + roundedExtraWidth)
+    }
+
+    return widths
+  }
+}
+
+private struct ChapterPlaybackProgressSectionView: View {
+  let player: AudioPlayerController
+  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
+
+  @State private var chapterScrubOriginTime: Double?
+  @State private var chapterScrubOriginDuration: Double?
+  @State private var chapterScrubPreviewTime: Double?
+  @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
+
+  var body: some View {
+    let chapters = player.chapters
+    let totalDuration = progress.duration
+    let currentTime = chapterScrubPreviewTime ?? progress.currentTime
+    let currentChapterIndex = playbackCurrentChapterIndex(
+      time: currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    )
+    let currentChapter = currentChapterIndex.flatMap {
+      chapters.indices.contains($0) ? chapters[$0] : nil
+    }
+    let currentChapterDuration =
+      currentChapter.flatMap {
+        currentChapterIndex.map {
+          playbackEffectiveDuration(
+            for: $0, at: $1, chapters: chapters, totalDuration: totalDuration)
+        }
+      } ?? max(totalDuration, 1)
+    let currentChapterElapsed =
+      currentChapter.map { max(0, currentTime - $0.startTime) }
+      ?? min(currentTime, max(totalDuration, 0))
+    let currentChapterRemaining = max(currentChapterDuration - currentChapterElapsed, 0)
+    let currentChapterProgress = min(
+      max(currentChapterElapsed / max(currentChapterDuration, 1), 0), 1)
+    let currentChapterProgressPercent = Int((currentChapterProgress * 100).rounded())
+
+    VStack(alignment: .leading, spacing: 8) {
+      if let currentChapter {
+        Text(currentChapter.title)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .center)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+      }
+
+      HStack(spacing: 8) {
+        GeometryReader { proxy in
+          ZStack(alignment: .leading) {
+            Capsule(style: .continuous)
+              .fill(Color.accentColor.opacity(0.14))
+
+            Capsule(style: .continuous)
+              .fill(Color.accentColor)
+              .frame(width: max(proxy.size.width * currentChapterProgress, 10))
+          }
+          .frame(height: 8)
+          .contentShape(Rectangle())
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { value in
+                if chapterScrubOriginTime == nil {
+                  chapterScrubOriginTime = currentTime
+                  chapterScrubOriginDuration = max(currentChapterDuration, 1)
+                  player.rememberCurrentPositionForSeek()
+                }
+
+                let width = max(proxy.size.width, 1)
+                let deltaFraction = value.translation.width / width
+                let deltaSeconds =
+                  Double(deltaFraction) * (chapterScrubOriginDuration ?? currentChapterDuration)
+                let candidateTime = min(
+                  max((chapterScrubOriginTime ?? currentTime) + deltaSeconds, 0),
+                  max(totalDuration, 0)
+                )
+                chapterScrubPreviewTime = candidateTime
+
+                let now = Date().timeIntervalSinceReferenceDate
+                if now - chapterScrubLastSeekTimestamp >= (1.0 / 30.0) {
+                  chapterScrubLastSeekTimestamp = now
+                  player.seek(to: candidateTime, recordHistory: false)
+                }
+              }
+              .onEnded { _ in
+                if let chapterScrubPreviewTime {
+                  player.seek(to: chapterScrubPreviewTime, recordHistory: false)
+                }
+                chapterScrubOriginTime = nil
+                chapterScrubOriginDuration = nil
+                chapterScrubPreviewTime = nil
+                chapterScrubLastSeekTimestamp = 0
+              }
+          )
+        }
+        .frame(height: 8)
+
+        if player.canRestorePreviousSeek {
+          Button(action: player.restorePreviousSeek) {
+            Image(systemName: "arrow.counterclockwise")
+              .font(.subheadline.weight(.semibold))
+              .frame(width: 28, height: 28)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(.accent)
+        }
+      }
+
+      HStack {
+        Text(formatPlaybackTime(currentChapterElapsed))
+        Spacer()
+        Text("\(currentChapterProgressPercent)%")
+        Spacer()
+        Text("-\(formatPlaybackTime(currentChapterRemaining))")
+      }
+      .font(.caption.monospacedDigit())
+      .foregroundStyle(.secondary)
     }
   }
 }
@@ -209,10 +622,6 @@ struct LocalPlaybackView: View {
   }
 
   @ObservedObject var player: AudioPlayerController
-  @State private var chapterScrubOriginTime: Double?
-  @State private var chapterScrubOriginDuration: Double?
-  @State private var chapterScrubPreviewTime: Double?
-  @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
   @State private var isHeroVisible = true
 
   private var selectedContentTab: ContentTab {
@@ -274,7 +683,7 @@ struct LocalPlaybackView: View {
 
   private var expandedPlayerControls: some View {
     VStack(spacing: 14) {
-      chapterPlaybackProgressSection
+      ChapterPlaybackProgressSectionView(player: player, progress: player.progress)
 
       HStack(spacing: 12) {
         #if os(iOS)
@@ -446,9 +855,8 @@ struct LocalPlaybackView: View {
   private var chapterListContent: some View {
     ChapterListView(
       chapters: player.chapters,
-      currentChapterID: currentChapterID,
-      currentChapterProgress: currentChapterProgress,
-      formatDuration: formatChapterDuration
+      totalDuration: player.duration,
+      progress: player.progress
     ) { chapter in
       player.seek(to: chapter.startTime)
     }
@@ -501,7 +909,7 @@ struct LocalPlaybackView: View {
   @ViewBuilder
   private var playbackContentSection: some View {
     VStack(spacing: 12) {
-      playbackBookProgressSection
+      PlaybackBookProgressSectionView(player: player, progress: player.progress)
 
       HStack(spacing: 18) {
         ForEach([ContentTab.about, .artwork, .transcript]) { tab in

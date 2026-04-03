@@ -7,6 +7,11 @@ import Foundation
 #endif
 
 final class AudioPlayerController: ObservableObject {
+  final class PlaybackProgressState: ObservableObject {
+    @Published var currentTime: Double = 0
+    @Published var duration: Double = 0
+  }
+
   private enum ResumeStore {
     static let keyPrefix = "audioPlayer.resumePosition."
     static let sessionKey = "audioPlayer.lastSession"
@@ -31,8 +36,6 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @Published var isPlaying: Bool = false
-  @Published var currentTime: Double = 0
-  @Published var duration: Double = 0
   @Published var title: String = ""
   @Published var author: String = ""
   @Published var bookDescription: String = ""
@@ -41,6 +44,8 @@ final class AudioPlayerController: ObservableObject {
   @Published var transcript: PodibleTranscript?
   @Published var playbackRate: Double = 1.0
   @Published private(set) var seekHistory: [Double] = []
+
+  let progress = PlaybackProgressState()
 
   private var player: AVPlayer?
   private var timeObserver: Any?
@@ -93,8 +98,8 @@ final class AudioPlayerController: ObservableObject {
     self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
     let savedPosition = persistedPosition(for: resumeID)
-    self.currentTime = savedPosition
-    self.duration = 0
+    progress.currentTime = savedPosition
+    progress.duration = 0
     self.isPlaying = false
     self.chapters = []
     self.transcript = nil
@@ -124,11 +129,11 @@ final class AudioPlayerController: ObservableObject {
 
   func play() {
     if shouldRewindOnResume {
-      let rewindTarget = max(0, currentTime - Self.resumeRewindSeconds)
+      let rewindTarget = max(0, progress.currentTime - Self.resumeRewindSeconds)
       let rewindTime = CMTime(seconds: rewindTarget, preferredTimescale: 1_000)
       player?.currentItem?.cancelPendingSeeks()
       player?.seek(to: rewindTime, toleranceBefore: .zero, toleranceAfter: .zero)
-      currentTime = rewindTarget
+      progress.currentTime = rewindTarget
       persistCurrentPosition()
     }
     player?.play()
@@ -168,11 +173,11 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func seek(to seconds: Double, recordHistory: Bool = true) {
-    let clampedSeconds = min(max(seconds, 0), max(duration, 0))
+    let clampedSeconds = min(max(seconds, 0), max(progress.duration, 0))
     if recordHistory {
-      rememberSeekOrigin(currentTime)
+      rememberSeekOrigin(progress.currentTime)
     }
-    currentTime = clampedSeconds
+    progress.currentTime = clampedSeconds
     persistCurrentPosition()
 
     let time = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000)
@@ -184,12 +189,12 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func skip(by seconds: Double) {
-    let target = max(0, currentTime + seconds)
+    let target = max(0, progress.currentTime + seconds)
     seek(to: target)
   }
 
   func rememberCurrentPositionForSeek() {
-    rememberSeekOrigin(currentTime)
+    rememberSeekOrigin(progress.currentTime)
   }
 
   func restorePreviousSeek() {
@@ -201,7 +206,7 @@ final class AudioPlayerController: ObservableObject {
     player?.pause()
     isPlaying = false
     persistCurrentPosition()
-    currentTime = 0
+    progress.currentTime = 0
     #if os(iOS)
       updateNowPlayingInfo()
     #endif
@@ -215,7 +220,7 @@ final class AudioPlayerController: ObservableObject {
     chapterLoadTask = nil
     player = nil
     currentFileURL = nil
-    duration = 0
+    progress.duration = 0
     title = ""
     author = ""
     bookDescription = ""
@@ -230,6 +235,14 @@ final class AudioPlayerController: ObservableObject {
 
   var hasLoadedItem: Bool {
     player != nil && title.isEmpty == false
+  }
+
+  var currentTime: Double {
+    progress.currentTime
+  }
+
+  var duration: Double {
+    progress.duration
   }
 
   @discardableResult
@@ -277,7 +290,7 @@ final class AudioPlayerController: ObservableObject {
       let nextStart =
         sorted.indices.contains(index + 1)
         ? sorted[index + 1].startTime
-        : duration
+        : progress.duration
       let duration = max(nextStart - marker.startTime, 0)
       return Chapter(
         id: index,
@@ -296,14 +309,14 @@ final class AudioPlayerController: ObservableObject {
       guard let self else { return }
       let seconds = time.seconds
       if seconds.isFinite {
-        self.currentTime = seconds
+        self.progress.currentTime = seconds
         self.persistCurrentPosition()
         #if os(iOS)
           self.updateNowPlayingInfo()
         #endif
       }
       if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-        self.duration = duration
+        self.progress.duration = duration
         #if os(iOS)
           self.updateNowPlayingInfo()
         #endif
@@ -318,7 +331,7 @@ final class AudioPlayerController: ObservableObject {
       queue: .main
     ) { [weak self] _ in
       self?.isPlaying = false
-      self?.currentTime = self?.duration ?? 0
+      self?.progress.currentTime = self?.progress.duration ?? 0
       self?.clearPersistedPosition()
       #if os(iOS)
         self?.updateNowPlayingInfo()
@@ -338,7 +351,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func rememberSeekOrigin(_ seconds: Double) {
-    let normalized = min(max(seconds, 0), max(duration, 0))
+    let normalized = min(max(seconds, 0), max(progress.duration, 0))
     guard seekHistory.last.map({ abs($0 - normalized) < 0.25 }) != true else { return }
     seekHistory.append(normalized)
   }
@@ -349,7 +362,7 @@ final class AudioPlayerController: ObservableObject {
 
   private func persistCurrentPosition() {
     guard let currentResumeID else { return }
-    UserDefaults.standard.set(currentTime, forKey: ResumeStore.keyPrefix + currentResumeID)
+    UserDefaults.standard.set(progress.currentTime, forKey: ResumeStore.keyPrefix + currentResumeID)
   }
 
   private func clearPersistedPosition() {
@@ -390,8 +403,10 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private var shouldRewindOnResume: Bool {
-    guard currentTime > 0.5 else { return false }
-    if duration.isFinite, duration > 0, currentTime >= duration - 0.5 {
+    guard progress.currentTime > 0.5 else { return false }
+    if progress.duration.isFinite, progress.duration > 0,
+      progress.currentTime >= progress.duration - 0.5
+    {
       return false
     }
     return true
@@ -491,8 +506,8 @@ final class AudioPlayerController: ObservableObject {
       var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
       nowPlayingInfo[MPMediaItemPropertyTitle] = title
       nowPlayingInfo[MPMediaItemPropertyArtist] = author
-      nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = duration
-      nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+      nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = progress.duration
+      nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress.currentTime
       nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
       if let artwork {
         nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
