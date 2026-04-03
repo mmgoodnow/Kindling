@@ -359,12 +359,14 @@ struct LocalPlaybackView: View {
 
       VStack(alignment: .leading, spacing: 8) {
         if let currentChapter {
-          Text("\(bookProgressPercent)% • \(currentChapter.title)")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .multilineTextAlignment(.center)
+          Text(
+            "\(bookProgressPercent)% through book • \(chapterPositionLabel(for: currentChapter))"
+          )
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .frame(maxWidth: .infinity, alignment: .center)
+          .multilineTextAlignment(.center)
         }
 
         HStack(spacing: 8) {
@@ -551,6 +553,13 @@ struct LocalPlaybackView: View {
   private func formatChapterDuration(_ chapter: AudioPlayerController.Chapter) -> String {
     let duration = effectiveDuration(for: chapter, at: nil)
     return formatTime(duration)
+  }
+
+  private func chapterPositionLabel(for chapter: AudioPlayerController.Chapter) -> String {
+    guard let index = player.chapters.firstIndex(where: { $0.id == chapter.id }) else {
+      return chapter.title
+    }
+    return "Chapter \(index + 1) of \(player.chapters.count)"
   }
 
   private func effectiveDuration(
