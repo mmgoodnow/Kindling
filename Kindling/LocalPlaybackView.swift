@@ -456,7 +456,17 @@ struct LocalPlaybackView: View {
       let minimumRequiredWidth =
         CGFloat(chapters.count) * minimumSegmentWidth
         + CGFloat(max(chapters.count - 1, 0)) * spacing
-      let scaledTotalDuration = max(chapterTimelineScaledDuration, 1)
+      let extraSegmentWidth = max(availableWidth - CGFloat(chapters.count) * minimumSegmentWidth, 0)
+      let scaledDurations = chapters.enumerated().map { index, chapter in
+        scaledChapterTimelineDuration(for: chapter, at: index)
+      }
+      let scaledTotalDuration = max(scaledDurations.reduce(0, +), 1)
+      let segmentWidths = chapterSegmentWidths(
+        scaledDurations: scaledDurations,
+        scaledTotalDuration: scaledTotalDuration,
+        extraSegmentWidth: extraSegmentWidth,
+        minimumSegmentWidth: minimumSegmentWidth
+      )
       let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
 
       Group {
@@ -477,8 +487,7 @@ struct LocalPlaybackView: View {
                 .frame(
                   width: chapterSegmentWidth(
                     for: index,
-                    scaledTotalDuration: scaledTotalDuration,
-                    availableWidth: availableWidth,
+                    segmentWidths: segmentWidths,
                     minimumSegmentWidth: minimumSegmentWidth
                   ),
                   height: 10
@@ -583,12 +592,6 @@ struct LocalPlaybackView: View {
     return max(chapterDurationSum, player.duration)
   }
 
-  private var chapterTimelineScaledDuration: Double {
-    player.chapters.reduce(0.0) { partialResult, chapter in
-      partialResult + scaledChapterTimelineDuration(for: chapter)
-    }
-  }
-
   private var currentChapterElapsed: Double {
     guard let currentChapter else { return min(currentPlaybackTime, max(player.duration, 0)) }
     return max(0, currentPlaybackTime - currentChapter.startTime)
@@ -686,14 +689,44 @@ struct LocalPlaybackView: View {
 
   private func chapterSegmentWidth(
     for index: Int,
-    scaledTotalDuration: Double,
-    availableWidth: CGFloat,
+    segmentWidths: [CGFloat],
     minimumSegmentWidth: CGFloat
   ) -> CGFloat {
-    guard player.chapters.indices.contains(index) else { return 0 }
-    let scaledDuration = scaledChapterTimelineDuration(for: player.chapters[index], at: index)
-    let fraction = CGFloat(scaledDuration / max(scaledTotalDuration, 1))
-    return max(fraction * availableWidth, minimumSegmentWidth)
+    guard segmentWidths.indices.contains(index) else { return minimumSegmentWidth }
+    return segmentWidths[index]
+  }
+
+  private func chapterSegmentWidths(
+    scaledDurations: [Double],
+    scaledTotalDuration: Double,
+    extraSegmentWidth: CGFloat,
+    minimumSegmentWidth: CGFloat
+  ) -> [CGFloat] {
+    guard scaledDurations.isEmpty == false else { return [] }
+
+    var widths: [CGFloat] = []
+    widths.reserveCapacity(scaledDurations.count)
+
+    var accumulatedExtraWidth: CGFloat = 0
+    var allocatedExtraWidth: CGFloat = 0
+
+    for (index, scaledDuration) in scaledDurations.enumerated() {
+      let fraction = CGFloat(scaledDuration / max(scaledTotalDuration, 1))
+      accumulatedExtraWidth += fraction * extraSegmentWidth
+
+      let roundedAccumulatedWidth: CGFloat
+      if index == scaledDurations.count - 1 {
+        roundedAccumulatedWidth = extraSegmentWidth
+      } else {
+        roundedAccumulatedWidth = accumulatedExtraWidth.rounded(.toNearestOrAwayFromZero)
+      }
+
+      let roundedExtraWidth = max(roundedAccumulatedWidth - allocatedExtraWidth, 0)
+      allocatedExtraWidth += roundedExtraWidth
+      widths.append(minimumSegmentWidth + roundedExtraWidth)
+    }
+
+    return widths
   }
 
   private func scaledChapterTimelineDuration(
