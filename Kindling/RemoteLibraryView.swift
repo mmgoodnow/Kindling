@@ -37,7 +37,6 @@ struct PodibleLibraryView: View {
   @State private var localDownloadingBookIDs: Set<String> = []
   @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
-  @State private var isShowingClearDownloadsConfirmation = false
   @State private var isWipingLocalLibrary = false
   @State private var pendingReportIssueBook: PendingReportIssueBook?
 
@@ -174,15 +173,6 @@ struct PodibleLibraryView: View {
       }
       ToolbarItem {
         Button(role: .destructive) {
-          isShowingClearDownloadsConfirmation = true
-        } label: {
-          Image(systemName: "externaldrive.badge.minus")
-        }
-        .disabled(isSyncing || isWipingLocalLibrary || localBooks.isEmpty)
-        .help("Clear downloaded local audiobook files")
-      }
-      ToolbarItem {
-        Button(role: .destructive) {
           isShowingWipeLocalLibraryConfirmation = true
         } label: {
           Image(systemName: "trash")
@@ -193,20 +183,6 @@ struct PodibleLibraryView: View {
         )
         .help("Wipe local library cache and downloads")
       }
-    }
-    .confirmationDialog(
-      "Clear Downloaded Audio?",
-      isPresented: $isShowingClearDownloadsConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Clear Downloaded Audio", role: .destructive) {
-        clearAllLocalDownloads()
-      }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(
-        "Removes downloaded local audiobook files and clears local playback caches, but keeps your mirrored library and sync state."
-      )
     }
     .confirmationDialog(
       "Wipe Local Library?",
@@ -618,15 +594,6 @@ struct PodibleLibraryView: View {
 
     if modelContext.hasChanges {
       try? modelContext.save()
-    }
-  }
-
-  @MainActor
-  private func clearAllLocalDownloads() {
-    player.stop()
-    isShowingPlayer = false
-    for book in localBooks {
-      purgeLocalDownloadedAssets(forBookID: book.llId)
     }
   }
 
