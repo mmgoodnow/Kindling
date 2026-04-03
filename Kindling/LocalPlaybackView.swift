@@ -4,11 +4,11 @@ import SwiftUI
 
 struct LocalPlaybackView: View {
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
-    ContentTab.chapters.rawValue
+    ContentTab.artwork.rawValue
 
   private enum ContentTab: String, CaseIterable, Identifiable {
-    case description = "About"
-    case chapters = "Chapters"
+    case about = "About"
+    case artwork = "Artwork"
     case transcript = "Transcript"
 
     var id: String { rawValue }
@@ -22,7 +22,7 @@ struct LocalPlaybackView: View {
   @State private var isHeroVisible = true
 
   private var selectedContentTab: ContentTab {
-    get { ContentTab(rawValue: selectedContentTabRawValue) ?? .chapters }
+    get { ContentTab(rawValue: selectedContentTabRawValue) ?? .artwork }
     nonmutating set { selectedContentTabRawValue = newValue.rawValue }
   }
 
@@ -53,17 +53,10 @@ struct LocalPlaybackView: View {
   private func expandedPlayerView() -> some View {
     #if os(iOS)
       ZStack(alignment: .bottom) {
-        ScrollView(showsIndicators: false) {
-          VStack(spacing: 0) {
-            heroSection
-            playbackContentSection
-              .padding(.top, 28)
-          }
-          .frame(maxWidth: .infinity)
+        playbackContentSection
           .padding(.horizontal, 16)
           .padding(.top, 0)
           .padding(.bottom, floatingControlsReservedHeight)
-        }
 
         expandedPlayerControls
           .padding(.horizontal, 16)
@@ -72,16 +65,9 @@ struct LocalPlaybackView: View {
       .background(expandedPlayerBackground)
     #else
       VStack(spacing: 0) {
-        ScrollView(showsIndicators: false) {
-          VStack(spacing: 0) {
-            heroSection
-            playbackContentSection
-              .padding(.top, 28)
-          }
-          .frame(maxWidth: .infinity)
+        playbackContentSection
           .padding(.horizontal, 24)
           .padding(.top, 28)
-        }
 
         expandedPlayerControls
           .padding(.horizontal, 24)
@@ -266,100 +252,102 @@ struct LocalPlaybackView: View {
     .buttonStyle(.plain)
   }
 
-  private var chapterListSection: some View {
-    ScrollView(showsIndicators: false) {
-      LazyVStack(spacing: 6) {
-        ForEach(player.chapters) { chapter in
-          Button {
-            player.seek(to: chapter.startTime)
-          } label: {
-            HStack(spacing: 12) {
-              VStack(alignment: .leading, spacing: 0) {
-                Text(chapter.title)
-                  .font(.body.weight(currentChapterID == chapter.id ? .semibold : .regular))
-                  .foregroundStyle(.primary)
-                  .multilineTextAlignment(.leading)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-              }
-
-              Text(formatChapterDuration(chapter))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-
-              if currentChapterID == chapter.id {
-                Image(systemName: "speaker.wave.2.fill")
-                  .font(.footnote.weight(.semibold))
-                  .foregroundStyle(.secondary)
-              }
+  private var chapterListContent: some View {
+    LazyVStack(spacing: 6) {
+      ForEach(player.chapters) { chapter in
+        Button {
+          player.seek(to: chapter.startTime)
+        } label: {
+          HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+              Text(chapter.title)
+                .font(.body.weight(currentChapterID == chapter.id ? .semibold : .regular))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(chapterRowBackground(isCurrent: currentChapterID == chapter.id))
+
+            Text(formatChapterDuration(chapter))
+              .font(.caption.monospacedDigit())
+              .foregroundStyle(.secondary)
+
+            if currentChapterID == chapter.id {
+              Image(systemName: "speaker.wave.2.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            }
           }
-          .buttonStyle(.plain)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 9)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(chapterRowBackground(isCurrent: currentChapterID == chapter.id))
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+
+  private var aboutAndChaptersSection: some View {
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 22) {
+        Group {
+          if player.bookDescription.isEmpty {
+            Text("No description available.")
+          } else {
+            Text(player.bookDescription)
+          }
+        }
+        .font(.body)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Chapters")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+
+          if player.chapters.isEmpty {
+            Text("No chapters available yet.")
+              .font(.body)
+              .foregroundStyle(.secondary)
+          } else {
+            chapterListContent
+          }
         }
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 8)
+      .padding(.bottom, 16)
+    }
+  }
+
+  private var artworkSection: some View {
+    ScrollView(showsIndicators: false) {
+      heroSection
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
   }
 
   @ViewBuilder
   private var playbackContentSection: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      HStack(spacing: 18) {
-        ForEach(ContentTab.allCases) { tab in
-          let isSelected = selectedContentTab == tab
-          Button {
-            selectedContentTab = tab
-          } label: {
-            VStack(spacing: 6) {
-              Text(tab.rawValue)
-                .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .accent : .secondary)
+    TabView(selection: selectedContentTabBinding) {
+      aboutAndChaptersSection
+        .tag(ContentTab.about)
 
-              Rectangle()
-                .fill(isSelected ? Color.accentColor : .clear)
-                .frame(height: 2)
-            }
-            .frame(width: 84, alignment: .center)
-          }
-          .buttonStyle(.plain)
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .center)
+      artworkSection
+        .tag(ContentTab.artwork)
 
-      TabView(selection: selectedContentTabBinding) {
-        descriptionSection
-          .tag(ContentTab.description)
-
-        chapterListSection
-          .tag(ContentTab.chapters)
-
-        transcriptSection
-          .tag(ContentTab.transcript)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: playbackContentHeight, alignment: .top)
-      #if os(iOS)
-        .tabViewStyle(.page(indexDisplayMode: .never))
-      #endif
+      transcriptSection
+        .tag(ContentTab.transcript)
     }
-  }
-
-  private var descriptionSection: some View {
-    ScrollView(showsIndicators: false) {
-      Group {
-        if player.bookDescription.isEmpty {
-          Text("No description available.")
-        } else {
-          Text(player.bookDescription)
-        }
-      }
-      .font(.body)
-      .foregroundStyle(.secondary)
-      .multilineTextAlignment(.leading)
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
+    .frame(maxWidth: .infinity)
+    .frame(height: playbackContentHeight, alignment: .top)
+    #if os(iOS)
+      .tabViewStyle(.page(indexDisplayMode: .never))
+    #endif
   }
 
   private var transcriptSection: some View {
@@ -606,9 +594,9 @@ struct LocalPlaybackView: View {
 
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
-      228
+      min(UIScreen.main.bounds.height * 0.56, 520)
     #else
-      260
+      520
     #endif
   }
 
