@@ -14,7 +14,7 @@ final class AudioPlayerController: ObservableObject {
 
   private struct PersistedSession: Codable {
     let resumeID: String
-    let filePath: String
+    let fileRelativePath: String
     let title: String
     let author: String
     let description: String
@@ -235,7 +235,11 @@ final class AudioPlayerController: ObservableObject {
   @discardableResult
   func restoreLastSession() -> Bool {
     guard let session = persistedSession() else { return false }
-    let url = URL(fileURLWithPath: session.filePath)
+    guard let url = try? LibraryStorage().url(forRelativePath: session.fileRelativePath) else {
+      clearPersistedSession()
+      clearPersistedPosition(for: session.resumeID)
+      return false
+    }
     guard FileManager.default.fileExists(atPath: url.path) else {
       clearPersistedSession()
       clearPersistedPosition(for: session.resumeID)
@@ -359,10 +363,13 @@ final class AudioPlayerController: ObservableObject {
 
   private func persistSession() {
     guard let currentResumeID, let currentFileURL else { return }
+    guard let relativePath = try? LibraryStorage().relativePath(forFileURL: currentFileURL) else {
+      return
+    }
 
     let session = PersistedSession(
       resumeID: currentResumeID,
-      filePath: currentFileURL.path,
+      fileRelativePath: relativePath,
       title: title,
       author: author,
       description: bookDescription,

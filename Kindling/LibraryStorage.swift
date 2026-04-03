@@ -37,6 +37,11 @@ struct LibraryStorage {
     return baseURL.appendingPathComponent(relativePath, isDirectory: false)
   }
 
+  func relativePath(forFileURL fileURL: URL) throws -> String {
+    let baseURL = try ensureBaseDirectory()
+    return makeRelativePath(fileURL, baseURL: baseURL)
+  }
+
   private func ensureBaseDirectory() throws -> URL {
     let base = try fileManager.url(
       for: .applicationSupportDirectory,
