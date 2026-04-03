@@ -795,13 +795,15 @@ struct LocalPlaybackView: View {
   }
 
   private var bookProgressPercent: Int {
-    let totalDuration = max(player.duration, 1)
+    let totalDuration = player.duration
+    guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
     let percent = (currentPlaybackTime / totalDuration) * 100
-    return Int(percent.rounded())
+    return Int(min(max(percent, 0), 100).rounded())
   }
 
   private var bookProgress: Double {
-    let totalDuration = max(player.duration, 1)
+    let totalDuration = player.duration
+    guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
     return min(max(currentPlaybackTime / totalDuration, 0), 1)
   }
 
