@@ -359,7 +359,7 @@ struct LocalPlaybackView: View {
 
       VStack(alignment: .leading, spacing: 8) {
         if let currentChapter {
-          Text("\(player.title) • \(bookProgressPercent)% • \(currentChapter.title)")
+          Text("\(bookProgressPercent)% • \(currentChapter.title)")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .lineLimit(1)
