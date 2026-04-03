@@ -448,7 +448,7 @@ struct LocalPlaybackView: View {
       let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
       let availableWidth = max(proxy.size.width - totalSpacing, 0)
       let totalDuration = max(chapterTimelineDuration, 1)
-      let minimumSegmentWidth: CGFloat = 2
+      let minimumSegmentWidth: CGFloat = 1
       let minimumRequiredWidth =
         CGFloat(chapters.count) * minimumSegmentWidth
         + CGFloat(max(chapters.count - 1, 0)) * spacing
