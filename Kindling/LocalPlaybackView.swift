@@ -618,16 +618,17 @@ struct LocalPlaybackView: View {
       if isCurrent {
         GeometryReader { proxy in
           let progressWidth = max(proxy.size.width * currentChapterProgress, 0)
+          let rowShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
           ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            rowShape
               .fill(Color.primary.opacity(0.08))
 
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            Rectangle()
               .fill(Color.accentColor.opacity(0.14))
               .frame(width: progressWidth)
-              .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
           }
+          .clipShape(rowShape)
         }
       } else {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -683,7 +684,9 @@ struct LocalPlaybackView: View {
 
             Spacer(minLength: 0)
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .buttonStyle(.plain)
         .contentShape(Rectangle())
 
