@@ -520,6 +520,15 @@ struct LocalPlaybackView: View {
 
   private var chapterPlaybackProgressSection: some View {
     VStack(alignment: .leading, spacing: 8) {
+      if let currentChapter {
+        Text(currentChapter.title)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .center)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+      }
+
       HStack(spacing: 8) {
         chapterScrubBar
 
@@ -761,7 +770,7 @@ struct LocalPlaybackView: View {
   }
 
   private func bookProgressLabel(for chapter: AudioPlayerController.Chapter) -> String {
-    "\(chapter.title) • \(chapterPositionLabel(for: chapter)) • \(bookProgressPercent)% through book"
+    "\(player.title) • \(chapterPositionLabel(for: chapter)) • \(bookProgressPercent)% through book"
   }
 
   private func effectiveDuration(
