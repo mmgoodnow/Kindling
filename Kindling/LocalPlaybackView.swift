@@ -798,9 +798,10 @@ struct LocalPlaybackView: View {
 
             Spacer(minLength: 0)
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+          .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
         .buttonStyle(.plain)
         .contentShape(Rectangle())
 
