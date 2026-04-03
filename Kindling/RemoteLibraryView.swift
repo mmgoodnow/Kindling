@@ -1218,8 +1218,37 @@ struct PodibleLibraryView: View {
       description: book.summary,
       artworkURL: book.coverURLString.flatMap(URL.init(string:))
     )
+    if let client = configuredClient {
+      Task {
+        await loadPlaybackMetadata(for: book, client: client)
+      }
+    }
     player.play()
     isShowingPlayer = true
+  }
+
+  @MainActor
+  private func loadPlaybackMetadata(for book: LibraryBook, client: RemoteLibraryServing) async {
+    do {
+      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.llId) else {
+        await MainActor.run {
+          player.applyRemoteTranscript(nil, for: book.llId)
+        }
+        return
+      }
+
+      async let transcript = client.fetchTranscript(assetID: assetID)
+      async let chapters = client.fetchChapters(assetID: assetID)
+      let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
+      await MainActor.run {
+        player.applyRemoteTranscript(resolvedTranscript, for: book.llId)
+        player.applyRemoteChapters(resolvedChapters, for: book.llId)
+      }
+    } catch {
+      await MainActor.run {
+        player.applyRemoteTranscript(nil, for: book.llId)
+      }
+    }
   }
 
   @MainActor

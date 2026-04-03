@@ -28,6 +28,7 @@ final class AudioPlayerController: ObservableObject {
   @Published var bookDescription: String = ""
   @Published var artworkURL: URL?
   @Published var chapters: [Chapter] = []
+  @Published var transcript: PodibleTranscript?
   @Published var playbackRate: Double = 1.0
   @Published private(set) var seekHistory: [Double] = []
 
@@ -84,6 +85,7 @@ final class AudioPlayerController: ObservableObject {
     self.duration = 0
     self.isPlaying = false
     self.chapters = []
+    self.transcript = nil
     self.seekHistory = []
 
     #if os(iOS)
@@ -205,6 +207,7 @@ final class AudioPlayerController: ObservableObject {
     bookDescription = ""
     artworkURL = nil
     chapters = []
+    transcript = nil
     seekHistory = []
     #if os(iOS)
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -217,6 +220,34 @@ final class AudioPlayerController: ObservableObject {
 
   var canRestorePreviousSeek: Bool {
     seekHistory.isEmpty == false
+  }
+
+  @MainActor
+  func applyRemoteTranscript(_ transcript: PodibleTranscript?, for bookID: String) {
+    guard currentBookID == bookID else { return }
+    self.transcript = transcript
+  }
+
+  @MainActor
+  func applyRemoteChapters(_ markers: [PodibleChapterMarker], for bookID: String) {
+    guard currentBookID == bookID else { return }
+    guard markers.isEmpty == false else { return }
+
+    let sorted = markers.sorted { $0.startTime < $1.startTime }
+    let nextChapters = sorted.enumerated().map { index, marker in
+      let nextStart =
+        sorted.indices.contains(index + 1)
+        ? sorted[index + 1].startTime
+        : duration
+      let duration = max(nextStart - marker.startTime, 0)
+      return Chapter(
+        id: index,
+        title: Self.normalizedChapterTitle(marker.title, fallbackIndex: index),
+        startTime: marker.startTime,
+        duration: duration
+      )
+    }
+    chapters = nextChapters
   }
 
   private func attachTimeObserver(to player: AVPlayer) {

@@ -298,6 +298,9 @@ protocol PodibleLibraryServing {
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
+  func resolveAudiobookAssetID(bookID: String) async throws -> Int?
+  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript?
+  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
 }
@@ -336,6 +339,21 @@ extension PodibleLibraryServing {
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
     _ = bookIDs
+    return []
+  }
+
+  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
+    _ = bookID
+    return nil
+  }
+
+  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+    _ = assetID
+    return nil
+  }
+
+  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
+    _ = assetID
     return []
   }
 }
@@ -744,6 +762,30 @@ final actor PodibleMockClient: PodibleLibraryServing {
     progress(1.0)
     return destination
   }
+
+  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
+    Int(bookID)
+  }
+
+  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+    PodibleTranscript(
+      version: "mock",
+      text: "This is a mock transcript for asset \(assetID).",
+      words: [
+        .init(startMs: 0, endMs: 400, text: "This", token: "this"),
+        .init(startMs: 400, endMs: 700, text: "is", token: "is"),
+        .init(startMs: 700, endMs: 900, text: "a", token: "a"),
+        .init(startMs: 900, endMs: 1400, text: "mock", token: "mock"),
+      ]
+    )
+  }
+
+  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
+    [
+      .init(startTime: 0, title: "Chapter 1"),
+      .init(startTime: 600, title: "Chapter 2"),
+    ]
+  }
 }
 
 private struct PodibleRPCEnvelope<Result: Decodable>: Decodable {
@@ -839,6 +881,31 @@ private struct PodibleDownload: Decodable {
 
 private struct PodibleAssetsResult: Decodable {
   let assets: [PodibleAsset]
+}
+
+struct PodibleTranscript: Decodable, Equatable {
+  struct Word: Decodable, Equatable, Identifiable {
+    let startMs: Int
+    let endMs: Int
+    let text: String
+    let token: String
+
+    var id: String { "\(startMs)-\(endMs)-\(token)" }
+  }
+
+  let version: String
+  let text: String
+  let words: [Word]
+}
+
+private struct PodibleChaptersResponse: Decodable {
+  let version: String
+  let chapters: [PodibleChapterMarker]
+}
+
+struct PodibleChapterMarker: Decodable, Equatable {
+  let startTime: Double
+  let title: String
 }
 
 private struct PodibleAsset: Decodable {
@@ -1016,6 +1083,36 @@ struct PodibleClient: PodibleLibraryServing {
       url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
 
+  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
+    let numericBookID = try parseBookID(bookID)
+    let assets = try await fetchAssets(bookID: numericBookID)
+    return preferredAudioAsset(from: assets)?.id
+  }
+
+  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+    do {
+      return try await fetchJSON(
+        path: "/transcripts/\(assetID).json",
+        acceptEncoding: "br",
+        as: PodibleTranscript.self
+      )
+    } catch let error as PodibleHTTPError where error.statusCode == 404 {
+      return nil
+    }
+  }
+
+  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
+    do {
+      let response: PodibleChaptersResponse = try await fetchJSON(
+        path: "/chapters/\(assetID).json",
+        as: PodibleChaptersResponse.self
+      )
+      return response.chapters
+    } catch let error as PodibleHTTPError where error.statusCode == 404 {
+      return []
+    }
+  }
+
   func downloadAudiobook(
     bookID: String,
     progress: @escaping (Double) -> Void
@@ -1062,19 +1159,12 @@ struct PodibleClient: PodibleLibraryServing {
   }
 
   private func fetchAssets(bookID: Int) async throws -> [PodibleAsset] {
-    let url = try authorizedWebURL(
+    let response: PodibleAssetsResult = try await fetchJSON(
       path: "/assets",
-      queryItems: [URLQueryItem(name: "bookId", value: String(bookID))]
+      queryItems: [URLQueryItem(name: "bookId", value: String(bookID))],
+      as: PodibleAssetsResult.self
     )
-    var request = URLRequest(url: url)
-    request.httpMethod = "GET"
-    let (data, response) = try await session.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-      throw PodibleError.server("Failed to fetch backend assets.")
-    }
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    return try decoder.decode(PodibleAssetsResult.self, from: data).assets
+    return response.assets
   }
 
   private func parseBookID(_ raw: String) throws -> Int {
@@ -1238,6 +1328,32 @@ struct PodibleClient: PodibleLibraryServing {
     return result
   }
 
+  private func fetchJSON<Result: Decodable>(
+    path: String,
+    queryItems: [URLQueryItem] = [],
+    acceptEncoding: String? = nil,
+    as type: Result.Type
+  ) async throws -> Result {
+    let url = try authorizedWebURL(path: path, queryItems: queryItems)
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    if let acceptEncoding {
+      request.setValue(acceptEncoding, forHTTPHeaderField: "Accept-Encoding")
+    }
+
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else {
+      throw PodibleError.server("Failed to fetch backend data.")
+    }
+    guard (200..<300).contains(http.statusCode) else {
+      throw PodibleHTTPError(statusCode: http.statusCode)
+    }
+
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(Result.self, from: data)
+  }
+
   private func contentDispositionFilename(from response: HTTPURLResponse) -> String? {
     let raw =
       response.allHeaderFields.first { key, _ in
@@ -1361,4 +1477,8 @@ struct PodibleClient: PodibleLibraryServing {
       task.resume()
     }
   }
+}
+
+private struct PodibleHTTPError: Error {
+  let statusCode: Int
 }

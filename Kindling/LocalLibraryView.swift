@@ -317,8 +317,35 @@ struct LocalLibraryView: View {
       description: book.summary,
       artworkURL: book.coverURLString.flatMap(URL.init(string:))
     )
+    Task {
+      await loadPlaybackMetadata(for: book)
+    }
     player.play()
     isShowingPlayer = true
+  }
+
+  @MainActor
+  private func loadPlaybackMetadata(for book: LibraryBook) async {
+    do {
+      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.llId) else {
+        await MainActor.run {
+          player.applyRemoteTranscript(nil, for: book.llId)
+        }
+        return
+      }
+
+      async let transcript = client.fetchTranscript(assetID: assetID)
+      async let chapters = client.fetchChapters(assetID: assetID)
+      let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
+      await MainActor.run {
+        player.applyRemoteTranscript(resolvedTranscript, for: book.llId)
+        player.applyRemoteChapters(resolvedChapters, for: book.llId)
+      }
+    } catch {
+      await MainActor.run {
+        player.applyRemoteTranscript(nil, for: book.llId)
+      }
+    }
   }
 
   private func playbackURL(for book: LibraryBook) -> URL? {
@@ -455,6 +482,18 @@ struct LocalLibraryView: View {
       -> URL
     {
       throw PodibleError.notConfigured
+    }
+
+    func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
+      nil
+    }
+
+    func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+      nil
+    }
+
+    func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
+      []
     }
   }
 #endif

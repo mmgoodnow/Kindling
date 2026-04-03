@@ -338,9 +338,11 @@ struct LocalPlaybackView: View {
         transcriptSection
           .tag(ContentTab.transcript)
       }
-      .tabViewStyle(.page(indexDisplayMode: .never))
       .frame(maxWidth: .infinity)
       .frame(height: playbackContentHeight, alignment: .top)
+      #if os(iOS)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+      #endif
     }
   }
 
@@ -362,11 +364,27 @@ struct LocalPlaybackView: View {
 
   private var transcriptSection: some View {
     ScrollView(showsIndicators: false) {
-      Text("No transcript available yet.")
-        .font(.body)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+      VStack(alignment: .leading, spacing: 12) {
+        if let transcript = player.transcript, transcript.text.isEmpty == false {
+          Text("\(transcript.words.count) timestamped words")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+
+          Text(transcript.text)
+            .textSelection(.enabled)
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          Text("No transcript available yet.")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
 
