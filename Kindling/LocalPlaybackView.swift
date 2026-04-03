@@ -100,7 +100,7 @@ private struct MarqueeText: View {
 
 struct LocalPlaybackView: View {
   private static let playbackTabBarHeight: CGFloat = 34
-  private static let playbackProgressSectionHeight: CGFloat = 72
+  private static let playbackBookProgressSectionHeight: CGFloat = 38
   private static let playbackTabSectionSpacing: CGFloat = 18
 
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
@@ -209,7 +209,7 @@ struct LocalPlaybackView: View {
   }
 
   private var floatingControlsReservedHeight: CGFloat {
-    92
+    82
   }
 
   @ViewBuilder
@@ -419,17 +419,21 @@ struct LocalPlaybackView: View {
 
   private var artworkSection: some View {
     ScrollView(showsIndicators: false) {
-      heroSection
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+      VStack(spacing: 18) {
+        heroSection
+          .frame(maxWidth: .infinity)
+
+        chapterPlaybackProgressSection
+      }
+      .padding(.top, 4)
+      .padding(.bottom, 8)
     }
   }
 
   @ViewBuilder
   private var playbackContentSection: some View {
-    VStack(spacing: 18) {
-      playbackProgressSection
+    VStack(spacing: 12) {
+      playbackBookProgressSection
 
       HStack(spacing: 18) {
         ForEach([ContentTab.about, .artwork, .transcript]) { tab in
@@ -499,42 +503,48 @@ struct LocalPlaybackView: View {
   }
 
   private var playbackProgressSection: some View {
-    VStack(spacing: 14) {
+    playbackBookProgressSection
+  }
+
+  private var playbackBookProgressSection: some View {
+    VStack(spacing: 8) {
       chapterTimelineBar
 
-      VStack(alignment: .leading, spacing: 8) {
-        if let currentChapter {
-          MarqueeText(
-            text: bookProgressLabel(for: currentChapter),
-            font: .subheadline.weight(.semibold),
-            textColor: .secondary
-          )
-        }
-
-        HStack(spacing: 8) {
-          chapterScrubBar
-
-          if player.canRestorePreviousSeek {
-            Button(action: player.restorePreviousSeek) {
-              Image(systemName: "arrow.counterclockwise")
-                .font(.subheadline.weight(.semibold))
-                .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.accent)
-          }
-        }
-
-        HStack {
-          Text(formatTime(currentChapterElapsed))
-          Spacer()
-          Text("\(currentChapterProgressPercent)%")
-          Spacer()
-          Text("-\(formatTime(currentChapterRemaining))")
-        }
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(.secondary)
+      if let currentChapter {
+        MarqueeText(
+          text: bookProgressLabel(for: currentChapter),
+          font: .subheadline.weight(.semibold),
+          textColor: .secondary
+        )
       }
+    }
+  }
+
+  private var chapterPlaybackProgressSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 8) {
+        chapterScrubBar
+
+        if player.canRestorePreviousSeek {
+          Button(action: player.restorePreviousSeek) {
+            Image(systemName: "arrow.counterclockwise")
+              .font(.subheadline.weight(.semibold))
+              .frame(width: 28, height: 28)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(.accent)
+        }
+      }
+
+      HStack {
+        Text(formatTime(currentChapterElapsed))
+        Spacer()
+        Text("\(currentChapterProgressPercent)%")
+        Spacer()
+        Text("-\(formatTime(currentChapterRemaining))")
+      }
+      .font(.caption.monospacedDigit())
+      .foregroundStyle(.secondary)
     }
   }
 
@@ -724,7 +734,7 @@ struct LocalPlaybackView: View {
 
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
-      min(UIScreen.main.bounds.height * 0.56, 520)
+      min(UIScreen.main.bounds.height * 0.62, 568)
     #else
       520
     #endif
@@ -733,7 +743,7 @@ struct LocalPlaybackView: View {
   private var playbackPageBodyHeight: CGFloat {
     max(
       playbackContentHeight
-        - Self.playbackProgressSectionHeight
+        - Self.playbackBookProgressSectionHeight
         - Self.playbackTabBarHeight
         - (Self.playbackTabSectionSpacing * 2),
       120
