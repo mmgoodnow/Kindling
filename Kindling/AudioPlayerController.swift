@@ -36,7 +36,7 @@ final class AudioPlayerController: ObservableObject {
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
-  private var currentBookID: String?
+  private var currentResumeID: String?
   #if os(iOS)
     private var artworkLoadTask: Task<Void, Never>?
     private var interruptionObserver: NSObjectProtocol?
@@ -64,7 +64,7 @@ final class AudioPlayerController: ObservableObject {
 
   func load(
     url: URL,
-    bookID: String,
+    resumeID: String,
     title: String,
     author: String? = nil,
     description: String? = nil,
@@ -75,12 +75,12 @@ final class AudioPlayerController: ObservableObject {
     #if os(iOS)
       artworkLoadTask?.cancel()
     #endif
-    currentBookID = bookID
+    currentResumeID = resumeID
     self.title = title
     self.author = author ?? ""
     self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
-    let savedPosition = persistedPosition(for: bookID)
+    let savedPosition = persistedPosition(for: resumeID)
     self.currentTime = savedPosition
     self.duration = 0
     self.isPlaying = false
@@ -223,14 +223,14 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @MainActor
-  func applyRemoteTranscript(_ transcript: PodibleTranscript?, for bookID: String) {
-    guard currentBookID == bookID else { return }
+  func applyRemoteTranscript(_ transcript: PodibleTranscript?, for resumeID: String) {
+    guard currentResumeID == resumeID else { return }
     self.transcript = transcript
   }
 
   @MainActor
-  func applyRemoteChapters(_ markers: [PodibleChapterMarker], for bookID: String) {
-    guard currentBookID == bookID else { return }
+  func applyRemoteChapters(_ markers: [PodibleChapterMarker], for resumeID: String) {
+    guard currentResumeID == resumeID else { return }
     guard markers.isEmpty == false else { return }
 
     let sorted = markers.sorted { $0.startTime < $1.startTime }
@@ -304,18 +304,18 @@ final class AudioPlayerController: ObservableObject {
     seekHistory.append(normalized)
   }
 
-  private func persistedPosition(for bookID: String) -> Double {
-    UserDefaults.standard.double(forKey: ResumeStore.keyPrefix + bookID)
+  private func persistedPosition(for resumeID: String) -> Double {
+    UserDefaults.standard.double(forKey: ResumeStore.keyPrefix + resumeID)
   }
 
   private func persistCurrentPosition() {
-    guard let currentBookID else { return }
-    UserDefaults.standard.set(currentTime, forKey: ResumeStore.keyPrefix + currentBookID)
+    guard let currentResumeID else { return }
+    UserDefaults.standard.set(currentTime, forKey: ResumeStore.keyPrefix + currentResumeID)
   }
 
   private func clearPersistedPosition() {
-    guard let currentBookID else { return }
-    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + currentBookID)
+    guard let currentResumeID else { return }
+    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + currentResumeID)
   }
 
   private var shouldRewindOnResume: Bool {

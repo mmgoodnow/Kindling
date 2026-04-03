@@ -309,9 +309,10 @@ struct LocalLibraryView: View {
     let localState = ensureLocalState(for: book)
     localState.lastPlayedAt = Date()
     try? modelContext.save()
+    let resumeID = playbackResumeID(for: book)
     player.load(
       url: url,
-      bookID: book.podibleId,
+      resumeID: resumeID,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
@@ -326,10 +327,11 @@ struct LocalLibraryView: View {
 
   @MainActor
   private func loadPlaybackMetadata(for book: LibraryBook) async {
+    let resumeID = playbackResumeID(for: book)
     do {
       guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.podibleId) else {
         await MainActor.run {
-          player.applyRemoteTranscript(nil, for: book.podibleId)
+          player.applyRemoteTranscript(nil, for: resumeID)
         }
         return
       }
@@ -338,14 +340,21 @@ struct LocalLibraryView: View {
       async let chapters = client.fetchChapters(assetID: assetID)
       let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
       await MainActor.run {
-        player.applyRemoteTranscript(resolvedTranscript, for: book.podibleId)
-        player.applyRemoteChapters(resolvedChapters, for: book.podibleId)
+        player.applyRemoteTranscript(resolvedTranscript, for: resumeID)
+        player.applyRemoteChapters(resolvedChapters, for: resumeID)
       }
     } catch {
       await MainActor.run {
-        player.applyRemoteTranscript(nil, for: book.podibleId)
+        player.applyRemoteTranscript(nil, for: resumeID)
       }
     }
+  }
+
+  private func playbackResumeID(for book: LibraryBook) -> String {
+    if let workID = book.openLibraryWorkID, workID.isEmpty == false {
+      return workID
+    }
+    return book.podibleId
   }
 
   private func playbackURL(for book: LibraryBook) -> URL? {
