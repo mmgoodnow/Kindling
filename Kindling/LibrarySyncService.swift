@@ -19,8 +19,8 @@ struct LibrarySyncService {
     let remoteIDs = Set(items.map(\.id))
 
     var authorsById = Dictionary(
-      uniqueKeysWithValues: existingAuthors.map { ($0.llId, $0) })
-    var booksById = Dictionary(uniqueKeysWithValues: existingBooks.map { ($0.llId, $0) })
+      uniqueKeysWithValues: existingAuthors.map { ($0.podibleId, $0) })
+    var booksById = Dictionary(uniqueKeysWithValues: existingBooks.map { ($0.podibleId, $0) })
     var booksByOpenLibraryWorkID: [String: LibraryBook] = [:]
     var booksByIdentity: [String: LibraryBook] = [:]
     for book in existingBooks {
@@ -48,7 +48,7 @@ struct LibrarySyncService {
           updatedAuthors += 1
         }
       } else {
-        let created = Author(llId: authorKey, name: item.author)
+        let created = Author(podibleId: authorKey, name: item.author)
         modelContext.insert(created)
         authorsById[authorKey] = created
         author = created
@@ -62,22 +62,22 @@ struct LibrarySyncService {
       } else if let workID = item.openLibraryWorkID,
         let existing = booksByOpenLibraryWorkID[workID]
       {
-        booksById[existing.llId] = nil
-        existing.llId = item.id
+        booksById[existing.podibleId] = nil
+        existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
         updatedBooks += updateBook(book, with: item, author: author)
       } else if let identityKey = bookIdentityKey(title: item.title, author: item.author),
         let existing = booksByIdentity[identityKey]
       {
-        booksById[existing.llId] = nil
-        existing.llId = item.id
+        booksById[existing.podibleId] = nil
+        existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
         updatedBooks += updateBook(book, with: item, author: author)
       } else {
         let created = LibraryBook(
-          llId: item.id,
+          podibleId: item.id,
           openLibraryWorkID: item.openLibraryWorkID,
           title: item.title,
           summary: item.summary,
@@ -105,10 +105,10 @@ struct LibrarySyncService {
 
     }
 
-    for book in existingBooks where remoteIDs.contains(book.llId) == false {
+    for book in existingBooks where remoteIDs.contains(book.podibleId) == false {
       guard shouldDeleteLocalMirror(book) else { continue }
       deleteLocalMirror(book, modelContext: modelContext)
-      booksById[book.llId] = nil
+      booksById[book.podibleId] = nil
     }
 
     for author in existingAuthors where author.books.isEmpty {

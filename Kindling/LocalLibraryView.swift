@@ -160,7 +160,7 @@ struct LocalLibraryView: View {
   private func libraryRow(_ book: LibraryBook) -> some View {
     let file = book.files.first
     let status = file?.downloadStatus ?? .notStarted
-    let progress = downloadProgressByBookID[book.llId]
+    let progress = downloadProgressByBookID[book.podibleId]
     let audioStatus = parseAudioStatus(from: book)
     let playbackURL = playbackURL(for: book)
     HStack(alignment: .firstTextBaseline) {
@@ -219,7 +219,7 @@ struct LocalLibraryView: View {
     status: DownloadStatus,
     audioStatus: PodibleLibraryItemStatus
   ) -> some View {
-    let isDownloading = downloadingBookIDs.contains(book.llId)
+    let isDownloading = downloadingBookIDs.contains(book.podibleId)
     let canDownload = audioStatus.isComplete
     Button(action: { startDownload(for: book) }) {
       switch status {
@@ -247,16 +247,16 @@ struct LocalLibraryView: View {
   }
 
   private func startDownload(for book: LibraryBook) {
-    guard downloadingBookIDs.contains(book.llId) == false else { return }
-    downloadingBookIDs.insert(book.llId)
-    downloadProgressByBookID[book.llId] = 0
+    guard downloadingBookIDs.contains(book.podibleId) == false else { return }
+    downloadingBookIDs.insert(book.podibleId)
+    downloadProgressByBookID[book.podibleId] = 0
     errorMessage = nil
 
     let audioStatus = parseAudioStatus(from: book)
     guard audioStatus.isComplete else {
       errorMessage = "Audiobook not ready (AudioStatus: \(audioStatus.rawValue))."
-      downloadingBookIDs.remove(book.llId)
-      downloadProgressByBookID[book.llId] = nil
+      downloadingBookIDs.remove(book.podibleId)
+      downloadProgressByBookID[book.podibleId] = nil
       return
     }
 
@@ -267,9 +267,9 @@ struct LocalLibraryView: View {
       fileRecord.bytesDownloaded = 0
 
       do {
-        let tempURL = try await client.downloadAudiobook(bookID: book.llId) { value in
+        let tempURL = try await client.downloadAudiobook(bookID: book.podibleId) { value in
           Task { @MainActor in
-            downloadProgressByBookID[book.llId] = value
+            downloadProgressByBookID[book.podibleId] = value
           }
         }
         let stored = try LibraryStorage().storeDownloadedFile(
@@ -290,7 +290,7 @@ struct LocalLibraryView: View {
         localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
 
         try modelContext.save()
-        try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.llId)
+        try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.podibleId)
       } catch {
         fileRecord.downloadStatus = .failed
         fileRecord.lastError = error.localizedDescription
@@ -299,8 +299,8 @@ struct LocalLibraryView: View {
           "Download failed (AudioStatus: \(audioStatus.rawValue)): \(error.localizedDescription)"
       }
 
-      downloadingBookIDs.remove(book.llId)
-      downloadProgressByBookID[book.llId] = nil
+      downloadingBookIDs.remove(book.podibleId)
+      downloadProgressByBookID[book.podibleId] = nil
     }
   }
 
@@ -311,7 +311,7 @@ struct LocalLibraryView: View {
     try? modelContext.save()
     player.load(
       url: url,
-      bookID: book.llId,
+      bookID: book.podibleId,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
@@ -327,9 +327,9 @@ struct LocalLibraryView: View {
   @MainActor
   private func loadPlaybackMetadata(for book: LibraryBook) async {
     do {
-      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.llId) else {
+      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.podibleId) else {
         await MainActor.run {
-          player.applyRemoteTranscript(nil, for: book.llId)
+          player.applyRemoteTranscript(nil, for: book.podibleId)
         }
         return
       }
@@ -338,12 +338,12 @@ struct LocalLibraryView: View {
       async let chapters = client.fetchChapters(assetID: assetID)
       let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
       await MainActor.run {
-        player.applyRemoteTranscript(resolvedTranscript, for: book.llId)
-        player.applyRemoteChapters(resolvedChapters, for: book.llId)
+        player.applyRemoteTranscript(resolvedTranscript, for: book.podibleId)
+        player.applyRemoteChapters(resolvedChapters, for: book.podibleId)
       }
     } catch {
       await MainActor.run {
-        player.applyRemoteTranscript(nil, for: book.llId)
+        player.applyRemoteTranscript(nil, for: book.podibleId)
       }
     }
   }
@@ -380,7 +380,7 @@ struct LocalLibraryView: View {
       return existing
     }
     let record = LibraryBookFile(
-      llId: "\(book.llId):audio",
+      podibleId: "\(book.podibleId):audio",
       filename: book.title,
       format: .unknown,
       sizeBytes: 0,
@@ -402,7 +402,7 @@ struct LocalLibraryView: View {
     if let existing = book.localState {
       return existing
     }
-    let state = LocalBookState(bookLlId: book.llId, book: book)
+    let state = LocalBookState(bookPodibleId: book.podibleId, book: book)
     modelContext.insert(state)
     book.localState = state
     return state

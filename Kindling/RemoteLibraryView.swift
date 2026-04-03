@@ -292,7 +292,7 @@ struct PodibleLibraryView: View {
   }
 
   private var localBooksById: [String: LibraryBook] {
-    Dictionary(uniqueKeysWithValues: localBooks.map { ($0.llId, $0) })
+    Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
   }
 
   private var syncState: LibrarySyncState? {
@@ -359,7 +359,7 @@ struct PodibleLibraryView: View {
   private func libraryListing(client: RemoteLibraryServing?) -> some View {
     let remoteItems = viewModel.libraryItems
     let remoteIds = Set(remoteItems.map(\.id))
-    let localOnly = localBooks.filter { remoteIds.contains($0.llId) == false }
+    let localOnly = localBooks.filter { remoteIds.contains($0.podibleId) == false }
 
     if remoteItems.isEmpty && localBooks.isEmpty {
       centeredListEmptyState {
@@ -394,7 +394,7 @@ struct PodibleLibraryView: View {
   @ViewBuilder
   private func searchListing(query: String, client: RemoteLibraryServing?) -> some View {
     let localMatches = filteredLocalBooks(query: query)
-    let localIds = Set(localMatches.map(\.llId))
+    let localIds = Set(localMatches.map(\.podibleId))
     let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
 
     if localMatches.isEmpty && remoteResults.isEmpty {
@@ -976,7 +976,7 @@ struct PodibleLibraryView: View {
     let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
     let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
     let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
-    let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.llId ?? item.id)
+    let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.podibleId ?? item.id)
     let canStartLocalAudioDownload =
       localPlaybackURL == nil
       && isImportedMediaStatus(effectiveAudioStatus)
@@ -1108,7 +1108,7 @@ struct PodibleLibraryView: View {
     let audioStatus = parseAudioStatus(from: book)
     let overallStatus = ebookStatus ?? audioStatus
     return PodibleLibraryItem(
-      id: book.llId,
+      id: book.podibleId,
       title: book.title,
       author: book.author?.name ?? "Unknown Author",
       status: overallStatus,
@@ -1145,7 +1145,7 @@ struct PodibleLibraryView: View {
     audioStatus: PodibleLibraryItemStatus,
     client: RemoteLibraryServing?
   ) -> some View {
-    let isDownloading = localDownloadingBookIDs.contains(book.llId)
+    let isDownloading = localDownloadingBookIDs.contains(book.podibleId)
     let canDownload = isImportedMediaStatus(audioStatus) && client != nil
     Button(action: {
       guard let client else { return }
@@ -1212,7 +1212,7 @@ struct PodibleLibraryView: View {
     try? modelContext.save()
     player.load(
       url: url,
-      bookID: book.llId,
+      bookID: book.podibleId,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
@@ -1230,9 +1230,9 @@ struct PodibleLibraryView: View {
   @MainActor
   private func loadPlaybackMetadata(for book: LibraryBook, client: RemoteLibraryServing) async {
     do {
-      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.llId) else {
+      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.podibleId) else {
         await MainActor.run {
-          player.applyRemoteTranscript(nil, for: book.llId)
+          player.applyRemoteTranscript(nil, for: book.podibleId)
         }
         return
       }
@@ -1241,28 +1241,28 @@ struct PodibleLibraryView: View {
       async let chapters = client.fetchChapters(assetID: assetID)
       let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
       await MainActor.run {
-        player.applyRemoteTranscript(resolvedTranscript, for: book.llId)
-        player.applyRemoteChapters(resolvedChapters, for: book.llId)
+        player.applyRemoteTranscript(resolvedTranscript, for: book.podibleId)
+        player.applyRemoteChapters(resolvedChapters, for: book.podibleId)
       }
     } catch {
       await MainActor.run {
-        player.applyRemoteTranscript(nil, for: book.llId)
+        player.applyRemoteTranscript(nil, for: book.podibleId)
       }
     }
   }
 
   @MainActor
   private func startLocalDownload(for book: LibraryBook, client: RemoteLibraryServing) {
-    guard localDownloadingBookIDs.contains(book.llId) == false else { return }
-    localDownloadingBookIDs.insert(book.llId)
-    localDownloadProgressByBookID[book.llId] = 0
+    guard localDownloadingBookIDs.contains(book.podibleId) == false else { return }
+    localDownloadingBookIDs.insert(book.podibleId)
+    localDownloadProgressByBookID[book.podibleId] = 0
     downloadErrorMessage = nil
 
     let audioStatus = parseAudioStatus(from: book)
     guard isImportedMediaStatus(audioStatus) else {
       downloadErrorMessage = "Audiobook not ready (AudioStatus: \(audioStatus.rawValue))."
-      localDownloadingBookIDs.remove(book.llId)
-      localDownloadProgressByBookID[book.llId] = nil
+      localDownloadingBookIDs.remove(book.podibleId)
+      localDownloadProgressByBookID[book.podibleId] = nil
       return
     }
 
@@ -1273,9 +1273,9 @@ struct PodibleLibraryView: View {
       fileRecord.bytesDownloaded = 0
 
       do {
-        let tempURL = try await client.downloadAudiobook(bookID: book.llId) { value in
+        let tempURL = try await client.downloadAudiobook(bookID: book.podibleId) { value in
           Task { @MainActor in
-            localDownloadProgressByBookID[book.llId] = value
+            localDownloadProgressByBookID[book.podibleId] = value
           }
         }
         let stored = try LibraryStorage().storeDownloadedFile(
@@ -1296,7 +1296,7 @@ struct PodibleLibraryView: View {
         localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
 
         try modelContext.save()
-        try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.llId)
+        try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.podibleId)
       } catch {
         fileRecord.downloadStatus = .failed
         fileRecord.lastError = error.localizedDescription
@@ -1305,8 +1305,8 @@ struct PodibleLibraryView: View {
           "Download failed (AudioStatus: \(audioStatus.rawValue)): \(error.localizedDescription)"
       }
 
-      localDownloadingBookIDs.remove(book.llId)
-      localDownloadProgressByBookID[book.llId] = nil
+      localDownloadingBookIDs.remove(book.podibleId)
+      localDownloadProgressByBookID[book.podibleId] = nil
     }
   }
 
@@ -1375,7 +1375,7 @@ struct PodibleLibraryView: View {
       return existing
     }
     let record = LibraryBookFile(
-      llId: "\(book.llId):audio",
+      podibleId: "\(book.podibleId):audio",
       filename: book.title,
       format: .unknown,
       sizeBytes: 0,
@@ -1397,7 +1397,7 @@ struct PodibleLibraryView: View {
     if let existing = book.localState {
       return existing
     }
-    let state = LocalBookState(bookLlId: book.llId, book: book)
+    let state = LocalBookState(bookPodibleId: book.podibleId, book: book)
     modelContext.insert(state)
     book.localState = state
     return state
@@ -1413,7 +1413,7 @@ struct PodibleLibraryView: View {
 
     let author = fetchOrCreateAuthor(name: item.author)
     let book = LibraryBook(
-      llId: item.id,
+      podibleId: item.id,
       title: item.title,
       summary: nil,
       coverURLString: item.bookImagePath,
@@ -1437,7 +1437,7 @@ struct PodibleLibraryView: View {
   private func fetchOrCreateAuthor(name: String) -> Author {
     let key = normalizeAuthorKey(name)
     let descriptor = FetchDescriptor<Author>(
-      predicate: #Predicate { $0.llId == key }
+      predicate: #Predicate { $0.podibleId == key }
     )
     if let existing = (try? modelContext.fetch(descriptor))?.first {
       if existing.name != name {
@@ -1445,7 +1445,7 @@ struct PodibleLibraryView: View {
       }
       return existing
     }
-    let author = Author(llId: key, name: name)
+    let author = Author(podibleId: key, name: name)
     modelContext.insert(author)
     return author
   }

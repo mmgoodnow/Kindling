@@ -73,7 +73,7 @@ struct LibraryStorage {
     if let openLibraryWorkID = book.openLibraryWorkID, openLibraryWorkID.isEmpty == false {
       return openLibraryWorkID
     }
-    return book.llId
+    return book.podibleId
   }
 
   private func removeExistingFiles(in folder: URL) throws {
@@ -114,7 +114,7 @@ struct LocalAudiobookCache {
     let overflowCount = cachedBooks.count - Self.maxDownloadedBooks
     guard overflowCount > 0 else { return }
 
-    let evictionCandidates = cachedBooks.filter { $0.llId != protectedBookID }
+    let evictionCandidates = cachedBooks.filter { $0.podibleId != protectedBookID }
     guard evictionCandidates.isEmpty == false else { return }
 
     for book in evictionCandidates.prefix(overflowCount) {

@@ -40,13 +40,13 @@ extension BookFileFormat {
 
 @Model
 final class Author {
-  @Attribute(.unique) var llId: String
+  @Attribute(.unique) var podibleId: String
   var name: String
   var sortName: String?
   @Relationship(deleteRule: .nullify, inverse: \LibraryBook.author) var books: [LibraryBook] = []
 
-  init(llId: String, name: String, sortName: String? = nil) {
-    self.llId = llId
+  init(podibleId: String, name: String, sortName: String? = nil) {
+    self.podibleId = podibleId
     self.name = name
     self.sortName = sortName
   }
@@ -54,13 +54,13 @@ final class Author {
 
 @Model
 final class Series {
-  @Attribute(.unique) var llId: String
+  @Attribute(.unique) var podibleId: String
   var title: String
   var sortTitle: String?
   @Relationship(deleteRule: .nullify, inverse: \LibraryBook.series) var books: [LibraryBook] = []
 
-  init(llId: String, title: String, sortTitle: String? = nil) {
-    self.llId = llId
+  init(podibleId: String, title: String, sortTitle: String? = nil) {
+    self.podibleId = podibleId
     self.title = title
     self.sortTitle = sortTitle
   }
@@ -68,7 +68,7 @@ final class Series {
 
 @Model
 final class LibraryBook {
-  @Attribute(.unique) var llId: String
+  @Attribute(.unique) var podibleId: String
   var openLibraryWorkID: String?
   var title: String
   var sortTitle: String?
@@ -88,7 +88,7 @@ final class LibraryBook {
   @Relationship(deleteRule: .cascade, inverse: \LocalBookState.book) var localState: LocalBookState?
 
   init(
-    llId: String,
+    podibleId: String,
     openLibraryWorkID: String? = nil,
     title: String,
     sortTitle: String? = nil,
@@ -103,7 +103,7 @@ final class LibraryBook {
     author: Author? = nil,
     series: Series? = nil
   ) {
-    self.llId = llId
+    self.podibleId = podibleId
     self.openLibraryWorkID = openLibraryWorkID
     self.title = title
     self.sortTitle = sortTitle
@@ -122,7 +122,7 @@ final class LibraryBook {
 
 @Model
 final class LibraryBookFile {
-  @Attribute(.unique) var llId: String
+  @Attribute(.unique) var podibleId: String
   var filename: String
   var format: BookFileFormat
   var sizeBytes: Int64
@@ -137,7 +137,7 @@ final class LibraryBookFile {
   var book: LibraryBook?
 
   init(
-    llId: String,
+    podibleId: String,
     filename: String,
     format: BookFileFormat = .unknown,
     sizeBytes: Int64 = 0,
@@ -150,7 +150,7 @@ final class LibraryBookFile {
     localRelativePath: String? = nil,
     book: LibraryBook? = nil
   ) {
-    self.llId = llId
+    self.podibleId = podibleId
     self.filename = filename
     self.format = format
     self.sizeBytes = sizeBytes
@@ -167,7 +167,7 @@ final class LibraryBookFile {
 
 @Model
 final class LocalBookState {
-  @Attribute(.unique) var bookLlId: String
+  @Attribute(.unique) var bookPodibleId: String
   var isDownloaded: Bool
   var progressSeconds: Double
   var lastPlayedAt: Date?
@@ -176,14 +176,14 @@ final class LocalBookState {
   var book: LibraryBook?
 
   init(
-    bookLlId: String,
+    bookPodibleId: String,
     isDownloaded: Bool = false,
     progressSeconds: Double = 0,
     lastPlayedAt: Date? = nil,
     playbackRate: Double = 1.0,
     book: LibraryBook? = nil
   ) {
-    self.bookLlId = bookLlId
+    self.bookPodibleId = bookPodibleId
     self.isDownloaded = isDownloaded
     self.progressSeconds = progressSeconds
     self.lastPlayedAt = lastPlayedAt
