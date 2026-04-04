@@ -372,19 +372,16 @@ private struct PlaybackBookProgressSectionView: View {
           } else {
             HStack(spacing: spacing) {
               ForEach(Array(chapters.enumerated()), id: \.element.id) { index, _ in
-                chapterSegmentShape(
-                  for: index,
-                  count: chapters.count,
-                  currentChapterIndex: currentChapterIndex
-                )
-                .frame(
-                  width: chapterSegmentWidth(
-                    for: index,
-                    segmentWidths: segmentWidths,
-                    minimumSegmentWidth: minimumSegmentWidth
-                  ),
-                  height: 10
-                )
+                chapterSegmentShape(for: index, count: chapters.count)
+                  .fill(chapterSegmentFill(for: index, currentChapterIndex: currentChapterIndex))
+                  .frame(
+                    width: chapterSegmentWidth(
+                      for: index,
+                      segmentWidths: segmentWidths,
+                      minimumSegmentWidth: minimumSegmentWidth
+                    ),
+                    height: 10
+                  )
               }
             }
           }
@@ -404,42 +401,35 @@ private struct PlaybackBookProgressSectionView: View {
     }
   }
 
-  @ViewBuilder
-  private func chapterSegmentShape(
-    for index: Int,
-    count: Int,
-    currentChapterIndex: Int?
-  ) -> some View {
+  private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
     let radius: CGFloat = 4
-    let fill: Color
-    if let currentChapterIndex {
-      fill =
-        index == currentChapterIndex
-        ? .accentColor
-        : Color.accentColor.opacity(index < currentChapterIndex ? 0.34 : 0.10)
-    } else {
-      fill = Color.accentColor.opacity(0.14)
-    }
-
     if count == 1 {
-      RoundedRectangle(cornerRadius: radius, style: .continuous)
-        .fill(fill)
+      return AnyShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     } else if index == 0 {
-      UnevenRoundedRectangle(
-        cornerRadii: .init(topLeading: radius, bottomLeading: radius),
-        style: .continuous
+      return AnyShape(
+        UnevenRoundedRectangle(
+          cornerRadii: .init(topLeading: radius, bottomLeading: radius),
+          style: .continuous
+        )
       )
-      .fill(fill)
     } else if index == count - 1 {
-      UnevenRoundedRectangle(
-        cornerRadii: .init(bottomTrailing: radius, topTrailing: radius),
-        style: .continuous
+      return AnyShape(
+        UnevenRoundedRectangle(
+          cornerRadii: .init(bottomTrailing: radius, topTrailing: radius),
+          style: .continuous
+        )
       )
-      .fill(fill)
     } else {
-      Rectangle()
-        .fill(fill)
+      return AnyShape(Rectangle())
     }
+  }
+
+  private func chapterSegmentFill(for index: Int, currentChapterIndex: Int?) -> Color {
+    guard let currentChapterIndex else { return Color.accentColor.opacity(0.14) }
+    if index == currentChapterIndex {
+      return .accentColor
+    }
+    return Color.accentColor.opacity(index < currentChapterIndex ? 0.34 : 0.10)
   }
 
   private func chapterSegmentWidth(
@@ -506,13 +496,17 @@ private struct ChapterPlaybackProgressSectionView: View {
     let currentChapter = currentChapterIndex.flatMap {
       chapters.indices.contains($0) ? chapters[$0] : nil
     }
-    let currentChapterDuration =
-      currentChapter.flatMap {
-        currentChapterIndex.map {
-          playbackEffectiveDuration(
-            for: $0, at: $1, chapters: chapters, totalDuration: totalDuration)
-        }
-      } ?? max(totalDuration, 1)
+    let currentChapterDuration = {
+      if let currentChapter, let currentChapterIndex {
+        return playbackEffectiveDuration(
+          for: currentChapter,
+          at: currentChapterIndex,
+          chapters: chapters,
+          totalDuration: totalDuration
+        )
+      }
+      return max(totalDuration, 1)
+    }()
     let currentChapterElapsed =
       currentChapter.map { max(0, currentTime - $0.startTime) }
       ?? min(currentTime, max(totalDuration, 0))
@@ -977,248 +971,6 @@ struct LocalPlaybackView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
-
-  private var playbackProgressSection: some View {
-    playbackBookProgressSection
-  }
-
-  private var playbackBookProgressSection: some View {
-    VStack(spacing: 8) {
-      chapterTimelineBar
-
-      if let currentChapter {
-        MarqueeText(
-          text: bookProgressLabel(for: currentChapter),
-          font: .subheadline.weight(.semibold),
-          textColor: .secondary
-        )
-      }
-    }
-  }
-
-  private var chapterPlaybackProgressSection: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      if let currentChapter {
-        Text(currentChapter.title)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
-      }
-
-      HStack(spacing: 8) {
-        chapterScrubBar
-
-        if player.canRestorePreviousSeek {
-          Button(action: player.restorePreviousSeek) {
-            Image(systemName: "arrow.counterclockwise")
-              .font(.subheadline.weight(.semibold))
-              .frame(width: 28, height: 28)
-          }
-          .buttonStyle(.plain)
-          .foregroundStyle(.accent)
-        }
-      }
-
-      HStack {
-        Text(formatTime(currentChapterElapsed))
-        Spacer()
-        Text("\(currentChapterProgressPercent)%")
-        Spacer()
-        Text("-\(formatTime(currentChapterRemaining))")
-      }
-      .font(.caption.monospacedDigit())
-      .foregroundStyle(.secondary)
-    }
-  }
-
-  private var chapterTimelineBar: some View {
-    GeometryReader { proxy in
-      let chapters = player.chapters
-      let spacing: CGFloat = 1
-      let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
-      let availableWidth = max(proxy.size.width - totalSpacing, 0)
-      let minimumSegmentWidth: CGFloat = 1
-      let minimumRequiredWidth =
-        CGFloat(chapters.count) * minimumSegmentWidth
-        + CGFloat(max(chapters.count - 1, 0)) * spacing
-      let extraSegmentWidth = max(availableWidth - CGFloat(chapters.count) * minimumSegmentWidth, 0)
-      let durations = chapters.enumerated().map { index, chapter in
-        effectiveDuration(for: chapter, at: index)
-      }
-      let totalDuration = max(durations.reduce(0, +), 1)
-      let segmentWidths = chapterSegmentWidths(
-        durations: durations,
-        totalDuration: totalDuration,
-        extraSegmentWidth: extraSegmentWidth,
-        minimumSegmentWidth: minimumSegmentWidth
-      )
-      let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
-
-      Group {
-        if shouldUsePlainProgressBar {
-          ZStack(alignment: .leading) {
-            Capsule(style: .continuous)
-              .fill(Color.accentColor.opacity(0.14))
-
-            Capsule(style: .continuous)
-              .fill(Color.accentColor)
-              .frame(width: max(proxy.size.width * bookProgress, 10))
-          }
-        } else {
-          HStack(spacing: spacing) {
-            ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
-              chapterSegmentShape(for: index, count: chapters.count)
-                .fill(chapterSegmentColor(for: index))
-                .frame(
-                  width: chapterSegmentWidth(
-                    for: index,
-                    segmentWidths: segmentWidths,
-                    minimumSegmentWidth: minimumSegmentWidth
-                  ),
-                  height: 10
-                )
-            }
-          }
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .frame(height: 10)
-  }
-
-  private var chapterScrubBar: some View {
-    GeometryReader { proxy in
-      let progress = currentChapterProgress
-
-      ZStack(alignment: .leading) {
-        Capsule(style: .continuous)
-          .fill(Color.accentColor.opacity(0.14))
-
-        Capsule(style: .continuous)
-          .fill(Color.accentColor)
-          .frame(width: max(proxy.size.width * progress, 10))
-      }
-      .frame(height: 8)
-      .contentShape(Rectangle())
-      .gesture(
-        DragGesture(minimumDistance: 0)
-          .onChanged { value in
-            if chapterScrubOriginTime == nil {
-              chapterScrubOriginTime = currentPlaybackTime
-              chapterScrubOriginDuration = max(currentChapterDuration, 1)
-              player.rememberCurrentPositionForSeek()
-            }
-
-            let width = max(proxy.size.width, 1)
-            let deltaFraction = value.translation.width / width
-            let deltaSeconds =
-              Double(deltaFraction) * (chapterScrubOriginDuration ?? currentChapterDuration)
-            let candidateTime = clampToPlaybackBounds(
-              (chapterScrubOriginTime ?? currentPlaybackTime) + deltaSeconds
-            )
-            chapterScrubPreviewTime = candidateTime
-
-            let now = Date().timeIntervalSinceReferenceDate
-            if now - chapterScrubLastSeekTimestamp >= (1.0 / 30.0) {
-              chapterScrubLastSeekTimestamp = now
-              player.seek(to: candidateTime, recordHistory: false)
-            }
-          }
-          .onEnded { _ in
-            if let chapterScrubPreviewTime {
-              player.seek(to: chapterScrubPreviewTime, recordHistory: false)
-            }
-            chapterScrubOriginTime = nil
-            chapterScrubOriginDuration = nil
-            chapterScrubPreviewTime = nil
-            chapterScrubLastSeekTimestamp = 0
-          }
-      )
-    }
-    .frame(height: 8)
-  }
-
-  private var currentPlaybackTime: Double {
-    chapterScrubPreviewTime ?? player.currentTime
-  }
-
-  private var currentChapterID: Int? {
-    guard player.chapters.isEmpty == false else { return nil }
-
-    let currentTime = max(currentPlaybackTime, 0)
-    for (index, chapter) in player.chapters.enumerated() {
-      let nextStart =
-        player.chapters.indices.contains(index + 1)
-        ? player.chapters[index + 1].startTime
-        : player.duration
-      if currentTime >= chapter.startTime, currentTime < max(nextStart, chapter.startTime + 0.01) {
-        return chapter.id
-      }
-    }
-
-    return player.chapters.last?.id
-  }
-
-  private var currentChapterIndex: Int? {
-    guard let currentChapterID else { return nil }
-    return player.chapters.firstIndex { $0.id == currentChapterID }
-  }
-
-  private var currentChapter: AudioPlayerController.Chapter? {
-    guard let currentChapterIndex else { return nil }
-    guard player.chapters.indices.contains(currentChapterIndex) else { return nil }
-    return player.chapters[currentChapterIndex]
-  }
-
-  private var chapterTimelineDuration: Double {
-    let chapterDurationSum = player.chapters.reduce(0.0) { partialResult, chapter in
-      partialResult + effectiveDuration(for: chapter, at: nil)
-    }
-    return max(chapterDurationSum, player.duration)
-  }
-
-  private var currentChapterElapsed: Double {
-    guard let currentChapter else { return min(currentPlaybackTime, max(player.duration, 0)) }
-    return max(0, currentPlaybackTime - currentChapter.startTime)
-  }
-
-  private var currentChapterDuration: Double {
-    guard let currentChapter, let currentChapterIndex else { return max(player.duration, 1) }
-    return effectiveDuration(for: currentChapter, at: currentChapterIndex)
-  }
-
-  private var currentChapterRemaining: Double {
-    max(currentChapterDuration - currentChapterElapsed, 0)
-  }
-
-  private var currentChapterProgress: Double {
-    let duration = max(currentChapterDuration, 1)
-    return min(max(currentChapterElapsed / duration, 0), 1)
-  }
-
-  private var currentChapterProgressPercent: Int {
-    Int((currentChapterProgress * 100).rounded())
-  }
-
-  private var bookProgressPercent: Int {
-    let totalDuration = player.duration
-    guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
-    let percent = (currentPlaybackTime / totalDuration) * 100
-    return Int(min(max(percent, 0), 100).rounded())
-  }
-
-  private var bookProgress: Double {
-    let totalDuration = player.duration
-    guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
-    return min(max(currentPlaybackTime / totalDuration, 0), 1)
-  }
-
-  private func clampToPlaybackBounds(_ time: Double) -> Double {
-    min(max(time, 0), max(player.duration, 0))
-  }
-
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
       min(UIScreen.main.bounds.height * 0.7, 620)
@@ -1235,112 +987,6 @@ struct LocalPlaybackView: View {
         - (Self.playbackTabSectionSpacing * 2),
       120
     )
-  }
-
-  private func formatChapterDuration(_ chapter: AudioPlayerController.Chapter) -> String {
-    let duration = effectiveDuration(for: chapter, at: nil)
-    return formatTime(duration)
-  }
-
-  private func chapterPositionLabel(for chapter: AudioPlayerController.Chapter) -> String {
-    guard let index = player.chapters.firstIndex(where: { $0.id == chapter.id }) else {
-      return chapter.title
-    }
-    return "\(index + 1)/\(player.chapters.count) chapters"
-  }
-
-  private func bookProgressLabel(for chapter: AudioPlayerController.Chapter) -> String {
-    "\(player.title) • \(chapterPositionLabel(for: chapter)) • \(bookProgressPercent)% through book"
-  }
-
-  private func effectiveDuration(
-    for chapter: AudioPlayerController.Chapter,
-    at index: Int?
-  ) -> Double {
-    if chapter.duration > 0 {
-      return chapter.duration
-    }
-
-    let resolvedIndex =
-      index ?? player.chapters.firstIndex(where: { $0.id == chapter.id }) ?? player.chapters.count
-
-    if player.chapters.indices.contains(resolvedIndex + 1) {
-      return max(player.chapters[resolvedIndex + 1].startTime - chapter.startTime, 0)
-    }
-
-    return max(player.duration - chapter.startTime, 0)
-  }
-
-  private func chapterSegmentColor(for index: Int) -> Color {
-    guard let currentChapterIndex else { return Color.accentColor.opacity(0.14) }
-    if index == currentChapterIndex {
-      return .accentColor
-    }
-    return Color.accentColor.opacity(index < currentChapterIndex ? 0.34 : 0.10)
-  }
-
-  private func chapterSegmentWidth(
-    for index: Int,
-    segmentWidths: [CGFloat],
-    minimumSegmentWidth: CGFloat
-  ) -> CGFloat {
-    guard segmentWidths.indices.contains(index) else { return minimumSegmentWidth }
-    return segmentWidths[index]
-  }
-
-  private func chapterSegmentWidths(
-    durations: [Double],
-    totalDuration: Double,
-    extraSegmentWidth: CGFloat,
-    minimumSegmentWidth: CGFloat
-  ) -> [CGFloat] {
-    guard durations.isEmpty == false else { return [] }
-
-    var widths: [CGFloat] = []
-    widths.reserveCapacity(durations.count)
-
-    var accumulatedExtraWidth: CGFloat = 0
-    var allocatedExtraWidth: CGFloat = 0
-
-    for (index, duration) in durations.enumerated() {
-      let fraction = CGFloat(duration / max(totalDuration, 1))
-      accumulatedExtraWidth += fraction * extraSegmentWidth
-
-      let roundedAccumulatedWidth: CGFloat
-      if index == durations.count - 1 {
-        roundedAccumulatedWidth = extraSegmentWidth
-      } else {
-        roundedAccumulatedWidth = accumulatedExtraWidth.rounded(.toNearestOrAwayFromZero)
-      }
-
-      let roundedExtraWidth = max(roundedAccumulatedWidth - allocatedExtraWidth, 0)
-      allocatedExtraWidth += roundedExtraWidth
-      widths.append(minimumSegmentWidth + roundedExtraWidth)
-    }
-
-    return widths
-  }
-
-  private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
-    let radius: CGFloat = 4
-    if count == 1 {
-      return AnyShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-    } else if index == 0 {
-      return AnyShape(
-        UnevenRoundedRectangle(
-          cornerRadii: .init(topLeading: radius, bottomLeading: radius),
-          style: .continuous
-        )
-      )
-    } else if index == count - 1 {
-      return AnyShape(
-        UnevenRoundedRectangle(
-          cornerRadii: .init(bottomTrailing: radius, topTrailing: radius),
-          style: .continuous
-        )
-      )
-    }
-    return AnyShape(Rectangle())
   }
 
 }
