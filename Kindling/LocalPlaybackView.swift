@@ -636,6 +636,11 @@ struct LocalPlaybackView: View {
         .overlay(alignment: .top) {
           stickyPlaybackHeader
         }
+        .onChange(of: selectedContentTab) { _, newValue in
+          if newValue != .artwork {
+            isHeroVisible = true
+          }
+        }
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
@@ -768,7 +773,7 @@ struct LocalPlaybackView: View {
   }
 
   private var stickyPlaybackHeader: some View {
-    let isVisible = !isHeroVisible
+    let isVisible = selectedContentTab == .artwork && !isHeroVisible
 
     return ZStack(alignment: .top) {
       Rectangle()
