@@ -616,7 +616,6 @@ struct LocalPlaybackView: View {
   }
 
   @ObservedObject var player: AudioPlayerController
-  @State private var isHeroVisible = true
 
   private var selectedContentTab: ContentTab {
     get { ContentTab(rawValue: selectedContentTabRawValue) ?? .artwork }
@@ -633,14 +632,6 @@ struct LocalPlaybackView: View {
   var body: some View {
     #if os(iOS)
       expandedPlayerView()
-        .overlay(alignment: .top) {
-          stickyPlaybackHeader
-        }
-        .onChange(of: selectedContentTab) { _, newValue in
-          if newValue != .artwork {
-            isHeroVisible = true
-          }
-        }
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
@@ -726,7 +717,7 @@ struct LocalPlaybackView: View {
       let artworkSize: CGFloat = 296
     #endif
 
-    let hero = VStack(spacing: 0) {
+    VStack(spacing: 0) {
       sharedPlaybackArtwork(size: artworkSize, cornerRadius: 24, player: player)
         #if os(iOS)
           .padding(.horizontal, -16)
@@ -749,14 +740,6 @@ struct LocalPlaybackView: View {
       .padding(.top, 28)
 
     }
-
-    if #available(iOS 18.0, macOS 15.0, *) {
-      hero.onScrollVisibilityChange(threshold: 0.35) { isVisible in
-        isHeroVisible = isVisible
-      }
-    } else {
-      hero
-    }
   }
 
   private var expandedPlayerBackground: some View {
@@ -770,49 +753,6 @@ struct LocalPlaybackView: View {
   private var macPlayerBackground: some View {
     RoundedRectangle(cornerRadius: 24, style: .continuous)
       .fill(.ultraThinMaterial)
-  }
-
-  private var stickyPlaybackHeader: some View {
-    let isVisible = selectedContentTab == .artwork && !isHeroVisible
-
-    return ZStack(alignment: .top) {
-      Rectangle()
-        .fill(.ultraThinMaterial)
-        .mask {
-          LinearGradient(
-            stops: [
-              .init(color: .black.opacity(0.98), location: 0.0),
-              .init(color: .black.opacity(0.72), location: 0.42),
-              .init(color: .black.opacity(0.22), location: 0.82),
-              .init(color: .clear, location: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-          )
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 88)
-
-      VStack(spacing: 2) {
-        Text(player.title)
-          .font(.headline.weight(.semibold))
-          .lineLimit(1)
-
-        if player.author.isEmpty == false {
-          Text(player.author)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-      }
-      .padding(.top, 20)
-      .padding(.horizontal, 48)
-      .padding(.bottom, 18)
-    }
-    .frame(maxWidth: .infinity)
-    .opacity(isVisible ? 1 : 0)
-    .animation(.easeInOut(duration: 0.2), value: isVisible)
-    .allowsHitTesting(false)
   }
 
   private func transportButton(
