@@ -608,8 +608,8 @@ struct LocalPlaybackView: View {
     ContentTab.artwork.rawValue
 
   private enum ContentTab: String, CaseIterable, Identifiable {
-    case about = "About"
     case artwork = "Artwork"
+    case chapters = "Chapters"
     case transcript = "Transcript"
 
     var id: String { rawValue }
@@ -856,9 +856,33 @@ struct LocalPlaybackView: View {
     }
   }
 
-  private var aboutAndChaptersSection: some View {
+  private var chaptersSection: some View {
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Chapters")
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.secondary)
+
+        if player.chapters.isEmpty {
+          Text("No chapters available yet.")
+            .font(.body)
+            .foregroundStyle(.secondary)
+        } else {
+          chapterListContent
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 8)
+      .padding(.bottom, 16)
+    }
+  }
+
+  private var artworkSection: some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 22) {
+        heroSection
+          .frame(maxWidth: .infinity)
+
         Group {
           if player.bookDescription.isEmpty {
             Text("No description available.")
@@ -870,33 +894,9 @@ struct LocalPlaybackView: View {
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)
-
-        VStack(alignment: .leading, spacing: 12) {
-          Text("Chapters")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-
-          if player.chapters.isEmpty {
-            Text("No chapters available yet.")
-              .font(.body)
-              .foregroundStyle(.secondary)
-          } else {
-            chapterListContent
-          }
-        }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.top, 8)
-      .padding(.bottom, 16)
-    }
-  }
-
-  private var artworkSection: some View {
-    ScrollView(showsIndicators: false) {
-      heroSection
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
+      .padding(.top, 4)
+      .padding(.bottom, 8)
     }
   }
 
@@ -906,7 +906,7 @@ struct LocalPlaybackView: View {
       PlaybackBookProgressSectionView(player: player, progress: player.progress)
 
       HStack(spacing: 18) {
-        ForEach([ContentTab.about, .artwork, .transcript]) { tab in
+        ForEach([ContentTab.artwork, .chapters, .transcript]) { tab in
           let isSelected = selectedContentTab == tab
           Button {
             selectedContentTab = tab
@@ -928,11 +928,11 @@ struct LocalPlaybackView: View {
       .frame(maxWidth: .infinity, alignment: .center)
 
       TabView(selection: selectedContentTabBinding) {
-        aboutAndChaptersSection
-          .tag(ContentTab.about)
-
         artworkSection
           .tag(ContentTab.artwork)
+
+        chaptersSection
+          .tag(ContentTab.chapters)
 
         transcriptSection
           .tag(ContentTab.transcript)
