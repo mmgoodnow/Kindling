@@ -552,19 +552,26 @@ final class AudioPlayerController: ObservableObject {
         availableLocales: locales
       )
 
-      return metadataGroups.enumerated().compactMap { index, group in
+      var chapters: [Chapter] = []
+      chapters.reserveCapacity(metadataGroups.count)
+
+      for (index, group) in metadataGroups.enumerated() {
         let startTime = group.timeRange.start.seconds
-        guard startTime.isFinite else { return nil }
+        guard startTime.isFinite else { continue }
 
         let duration = group.timeRange.duration.seconds
-        let title = chapterTitle(for: group, index: index)
-        return Chapter(
-          id: index,
-          title: title,
-          startTime: startTime,
-          duration: duration.isFinite ? duration : 0
+        let title = await chapterTitle(for: group, index: index)
+        chapters.append(
+          Chapter(
+            id: index,
+            title: title,
+            startTime: startTime,
+            duration: duration.isFinite ? duration : 0
+          )
         )
       }
+
+      return chapters
     } catch {
       return []
     }
@@ -599,12 +606,12 @@ final class AudioPlayerController: ObservableObject {
     )
   }
 
-  private static func chapterTitle(for group: AVTimedMetadataGroup, index: Int) -> String {
+  private static func chapterTitle(for group: AVTimedMetadataGroup, index: Int) async -> String {
     if let titleItem = AVMetadataItem.metadataItems(
       from: group.items,
       filteredByIdentifier: .commonIdentifierTitle
     ).first,
-      let title = titleItem.stringValue,
+      let title = try? await titleItem.load(.stringValue),
       title.isEmpty == false
     {
       return normalizedChapterTitle(title, fallbackIndex: index)
