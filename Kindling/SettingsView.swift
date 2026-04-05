@@ -60,31 +60,8 @@ struct SettingsView: View {
           text: userSettings.$kindleEmailAddress
         )
       }
-
-      Section("IRC") {
-        TextField("Server", text: userSettings.$ircServer)
-        TextField(
-          "Port",
-          value: userSettings.$ircPort,
-          formatter: portNumberFormatter
-        )
-        TextField("Channel", text: userSettings.$ircChannel)
-        TextField("Nickname", text: userSettings.$ircNick)
-        Picker("Search Bot", selection: userSettings.$searchBot) {
-          Text("Search").tag("Search")
-          Text("SearchOok").tag("SearchOok")
-        }.pickerStyle(.menu)
-      }
     }.formStyle(.grouped)
       .navigationTitle("Settings")
-  }
-
-  private var portNumberFormatter: NumberFormatter {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .none
-    formatter.minimum = 1
-    formatter.maximum = 65535
-    return formatter
   }
 }
 
