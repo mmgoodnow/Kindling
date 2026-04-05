@@ -616,6 +616,8 @@ struct LocalPlaybackView: View {
   }
 
   @ObservedObject var player: AudioPlayerController
+  @EnvironmentObject private var userSettings: UserSettings
+  @EnvironmentObject private var podibleAuth: PodibleAuthController
 
   private var selectedContentTab: ContentTab {
     get { ContentTab(rawValue: selectedContentTabRawValue) ?? .artwork }
@@ -718,11 +720,17 @@ struct LocalPlaybackView: View {
     #endif
 
     VStack(spacing: 0) {
-      sharedPlaybackArtwork(size: artworkSize, cornerRadius: 24, player: player)
-        #if os(iOS)
-          .padding(.horizontal, -16)
-        #endif
-        .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
+      sharedPlaybackArtwork(
+        size: artworkSize,
+        cornerRadius: 24,
+        player: player,
+        rpcURLString: userSettings.podibleRPCURL,
+        accessToken: podibleAuth.accessToken
+      )
+      #if os(iOS)
+        .padding(.horizontal, -16)
+      #endif
+      .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
       VStack(spacing: 8) {
         Text(player.title)
@@ -957,13 +965,21 @@ struct LocalPlaybackView: View {
 #if os(iOS)
   struct MiniPlaybackBar: View {
     @ObservedObject var player: AudioPlayerController
+    @EnvironmentObject private var userSettings: UserSettings
+    @EnvironmentObject private var podibleAuth: PodibleAuthController
     let onExpand: () -> Void
 
     var body: some View {
       HStack(spacing: 10) {
         Button(action: onExpand) {
           HStack(spacing: 10) {
-            sharedPlaybackArtwork(size: 38, cornerRadius: 8, player: player)
+            sharedPlaybackArtwork(
+              size: 38,
+              cornerRadius: 8,
+              player: player,
+              rpcURLString: userSettings.podibleRPCURL,
+              accessToken: podibleAuth.accessToken
+            )
 
             VStack(alignment: .leading, spacing: 3) {
               Text(player.title)
@@ -1050,18 +1066,22 @@ private struct MiniPlaybackGlassBarStyle: ViewModifier {
 private func sharedPlaybackArtwork(
   size: CGFloat,
   cornerRadius: CGFloat,
-  player: AudioPlayerController
+  player: AudioPlayerController,
+  rpcURLString: String,
+  accessToken: String?
 )
   -> some View
 {
   Group {
     if let artworkURL = player.artworkURL {
-      KFImage(artworkURL)
-        .placeholder {
-          sharedPlaybackArtworkPlaceholder(size: size, cornerRadius: cornerRadius)
-        }
-        .resizable()
-        .scaledToFill()
+      AuthenticatedRemoteImage(
+        url: artworkURL,
+        rpcURLString: rpcURLString,
+        accessToken: accessToken
+      ) {
+        sharedPlaybackArtworkPlaceholder(size: size, cornerRadius: cornerRadius)
+      }
+      .scaledToFill()
     } else {
       sharedPlaybackArtworkPlaceholder(size: size, cornerRadius: cornerRadius)
     }

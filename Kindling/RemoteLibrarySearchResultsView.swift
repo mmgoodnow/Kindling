@@ -3,6 +3,7 @@ import SwiftUI
 struct PodibleSearchResultsView: View {
   @ObservedObject var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
+  @EnvironmentObject var podibleAuth: PodibleAuthController
   let client: RemoteLibraryServing
   @State private var pendingItemIDs: Set<String> = []
 
@@ -37,6 +38,7 @@ struct PodibleSearchResultsView: View {
 struct PodibleSearchResultRow: View {
   @ObservedObject var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
+  @EnvironmentObject var podibleAuth: PodibleAuthController
   let book: PodibleBook
   let client: RemoteLibraryServing
   @Binding var pendingItemIDs: Set<String>
@@ -72,7 +74,9 @@ struct PodibleSearchResultRow: View {
         bookCoverView(
           title: book.title,
           author: book.author,
-          url: coverURL
+          url: coverURL,
+          rpcURLString: userSettings.podibleRPCURL,
+          accessToken: podibleAuth.accessToken
         )
         VStack(alignment: .leading, spacing: 6) {
           Text(book.title)
@@ -187,5 +191,6 @@ struct PodibleSearchResultRow: View {
       client: PodibleMockClient()
     )
     .environmentObject(UserSettings())
+    .environmentObject(PodibleAuthController())
   }
 }

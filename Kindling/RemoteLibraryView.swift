@@ -904,7 +904,9 @@ struct PodibleLibraryView: View {
           url: remoteLibraryAssetURL(
             baseURLString: remoteAssetBaseURLString,
             path: item.bookImagePath
-          )
+          ),
+          rpcURLString: userSettings.podibleRPCURL,
+          accessToken: podibleAuth.accessToken
         )
         VStack(alignment: .leading, spacing: 6) {
           Text(item.title)
@@ -1731,16 +1733,24 @@ func remoteLibraryProgressCircle(
 
 @MainActor
 @ViewBuilder
-func bookCoverView(title: String, author: String, url: URL?) -> some View {
+func bookCoverView(
+  title: String,
+  author: String,
+  url: URL?,
+  rpcURLString: String,
+  accessToken: String?
+) -> some View {
   if let url {
-    KFImage(url)
-      .placeholder {
-        bookCoverPlaceholder(title: title, author: author)
-      }
-      .resizable()
-      .scaledToFill()
-      .frame(width: 88, height: 128)
-      .clipShape(RoundedRectangle(cornerRadius: 6))
+    AuthenticatedRemoteImage(
+      url: url,
+      rpcURLString: rpcURLString,
+      accessToken: accessToken
+    ) {
+      bookCoverPlaceholder(title: title, author: author)
+    }
+    .scaledToFill()
+    .frame(width: 88, height: 128)
+    .clipShape(RoundedRectangle(cornerRadius: 6))
   } else {
     bookCoverPlaceholder(title: title, author: author)
   }
