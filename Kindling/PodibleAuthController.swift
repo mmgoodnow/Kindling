@@ -76,6 +76,10 @@ final class PodibleAuthController: ObservableObject {
       errorMessage = PodibleError.badURL.localizedDescription
       return
     }
+    if let validationError = validateRPCURLForCurrentDevice(rpcURL) {
+      errorMessage = validationError
+      return
+    }
 
     isAuthenticating = true
     errorMessage = nil
@@ -140,6 +144,17 @@ final class PodibleAuthController: ObservableObject {
       throw PodibleError.badResponse
     }
     return code
+  }
+
+  private func validateRPCURLForCurrentDevice(_ rpcURL: URL) -> String? {
+    #if os(iOS)
+      let localHosts = ["localhost", "127.0.0.1", "::1"]
+      if let host = rpcURL.host?.lowercased(), localHosts.contains(host) {
+        return
+          "This iPhone cannot reach Podible at \(host). Use your Mac's LAN IP or .local hostname instead of localhost."
+      }
+    #endif
+    return nil
   }
 }
 
