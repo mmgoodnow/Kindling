@@ -88,6 +88,10 @@ struct SettingsView: View {
           "Kindle Email Address",
           text: userSettings.$kindleEmailAddress
         )
+      } footer: {
+        Text(
+          "Use your Send-to-Kindle email address if you want Kindling to deliver ebooks to your Kindle."
+        )
       }
     }.formStyle(.grouped)
       .navigationTitle("Settings")
