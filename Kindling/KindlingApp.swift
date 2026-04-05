@@ -11,6 +11,7 @@ import SwiftUI
 @main
 struct KindlingApp: App {
   @StateObject private var userSettings = UserSettings()
+  @StateObject private var podibleAuth = PodibleAuthController()
   @StateObject private var audioPlayer = AudioPlayerController()
   var sharedModelContainer: ModelContainer = {
     let schema = Schema([
@@ -35,9 +36,13 @@ struct KindlingApp: App {
     WindowGroup {
       ContentView()
         .environmentObject(userSettings)
+        .environmentObject(podibleAuth)
         .environmentObject(audioPlayer)
         .task {
           _ = audioPlayer.restoreLastSession()
+        }
+        .task(id: userSettings.podibleRPCURL) {
+          await podibleAuth.refreshStoredSession(rpcURLString: userSettings.podibleRPCURL)
         }
     }
     .modelContainer(sharedModelContainer)
@@ -47,6 +52,7 @@ struct KindlingApp: App {
           .scenePadding()
           .frame(minWidth: 400, minHeight: 400)
           .environmentObject(userSettings)
+          .environmentObject(podibleAuth)
       }
     #endif
   }

@@ -5,6 +5,7 @@ import SwiftUI
 
 struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
+  @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
@@ -62,11 +63,12 @@ struct PodibleLibraryView: View {
     }
     if let url = URL(string: userSettings.podibleRPCURL),
       userSettings.podibleRPCURL.isEmpty == false,
-      userSettings.podibleAPIKey.isEmpty == false
+      let accessToken = podibleAuth.accessToken,
+      accessToken.isEmpty == false
     {
       return PodibleClient(
         rpcURL: url,
-        apiKey: userSettings.podibleAPIKey
+        accessToken: accessToken
       )
     }
     return nil
@@ -100,7 +102,7 @@ struct PodibleLibraryView: View {
     List {
       if client == nil {
         Text(
-          "Remote library backend not configured. Sync is disabled, but you can still play downloaded audiobooks."
+          "Sign in to Podible in Settings to access your remote library. Downloaded local audiobooks still work."
         )
         .foregroundStyle(.secondary)
         .font(.caption)
@@ -224,14 +226,16 @@ struct PodibleLibraryView: View {
         Text("What kind of issue is wrong for “\(pendingReportIssueBook.title)”?")
       }
     }
-    .onAppear {
-      guard let client, isWipingLocalLibrary == false else { return }
-      Task {
-        if localBooks.isEmpty || lastSync == nil {
-          await syncFromRemote(using: client)
-        }
-        await viewModel.loadLibraryItems(using: client)
+    .task(id: podibleAuth.accessToken ?? "") {
+      guard isWipingLocalLibrary == false else { return }
+      guard let client else {
+        viewModel.reset()
+        return
       }
+      if localBooks.isEmpty || lastSync == nil {
+        await syncFromRemote(using: client)
+      }
+      await viewModel.loadLibraryItems(using: client)
     }
     .refreshable {
       guard let client, isWipingLocalLibrary == false else { return }

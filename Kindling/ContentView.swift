@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject var userSettings: UserSettings
+  @EnvironmentObject var podibleAuth: PodibleAuthController
   @State private var downloader: EBookDownloader?
   @State private var stateReporter = StateReporter()
   @State private var downloaderID = UUID()
@@ -60,8 +61,7 @@ struct ContentView: View {
 
   private var hasPodibleBackendConfig: Bool {
     let url = userSettings.podibleRPCURL.trimmingCharacters(in: .whitespacesAndNewlines)
-    let key = userSettings.podibleAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-    return url.isEmpty == false && key.isEmpty == false
+    return url.isEmpty == false
   }
 
   private var registrationStatusDotColor: Color {
@@ -113,4 +113,5 @@ struct ContentView: View {
 #Preview {
   ContentView()
     .environmentObject(UserSettings())
+    .environmentObject(PodibleAuthController())
 }

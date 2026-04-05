@@ -4,6 +4,7 @@ enum PodibleError: LocalizedError {
   case notConfigured
   case badURL
   case badResponse
+  case unauthorized
   case server(String)
   case api(String)
   case unsupported(String)
@@ -16,6 +17,8 @@ enum PodibleError: LocalizedError {
       return "The backend URL looks invalid."
     case .badResponse:
       return "Could not parse the backend response."
+    case .unauthorized:
+      return "Sign in to Podible to continue."
     case .server(let message):
       return message
     case .api(let message):
@@ -883,6 +886,36 @@ private struct PodibleAssetsResult: Decodable {
   let assets: [PodibleAsset]
 }
 
+private struct PodibleAuthBeginResult: Decodable {
+  let authorizeUrl: URL
+}
+
+struct PodibleAuthExchangeResult: Decodable {
+  let accessToken: String
+  let expiresAt: Date?
+  let expiresIn: Int?
+  let user: PodibleAuthUser
+
+  private enum CodingKeys: String, CodingKey {
+    case accessToken
+    case expiresAt
+    case expiresIn
+    case user
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    accessToken = try container.decode(String.self, forKey: .accessToken)
+    expiresIn = try container.decodeIfPresent(Int.self, forKey: .expiresIn)
+    user = try container.decode(PodibleAuthUser.self, forKey: .user)
+    if let raw = try container.decodeIfPresent(String.self, forKey: .expiresAt) {
+      expiresAt = PodibleDateParser.parse(raw)
+    } else {
+      expiresAt = nil
+    }
+  }
+}
+
 struct PodibleTranscript: Decodable, Equatable {
   struct Word: Decodable, Equatable, Identifiable {
     let startMs: Int
@@ -922,7 +955,7 @@ private struct PodibleAssetFile: Decodable {
 
 struct PodibleClient: PodibleLibraryServing {
   let rpcURL: URL
-  let apiKey: String
+  let accessToken: String?
   var session: URLSession = .shared
 
   var supportsLibraryDelete: Bool { true }
@@ -943,6 +976,35 @@ struct PodibleClient: PodibleLibraryServing {
         published: candidate.publishedAt
       )
     }
+  }
+
+  func beginAppLogin(redirectURI: String) async throws -> URL {
+    let response: PodibleAuthBeginResult = try await rpcCall(
+      method: "auth.beginAppLogin",
+      params: ["redirectUri": redirectURI],
+      requiresAuthorization: false
+    )
+    return response.authorizeUrl
+  }
+
+  func exchangeLoginCode(_ code: String) async throws -> PodibleAuthExchangeResult {
+    try await rpcCall(
+      method: "auth.exchange",
+      params: ["code": code],
+      requiresAuthorization: false
+    )
+  }
+
+  func fetchCurrentUser() async throws -> PodibleAuthUser {
+    try await rpcCall(method: "auth.me", params: [:])
+  }
+
+  func logout() async throws {
+    _ =
+      try await rpcCall(
+        method: "auth.logout",
+        params: [:]
+      ) as PodibleEmptyResult
   }
 
   func addLibraryBook(
@@ -1078,7 +1140,7 @@ struct PodibleClient: PodibleLibraryServing {
       }
       return "\(bookID)-ebook-\(asset.id).\(fileExtensionForEbookMime(asset.mime) ?? "epub")"
     }()
-    let url = try authorizedWebURL(path: "/ebook/\(asset.id)")
+    let url = try webURL(path: "/ebook/\(asset.id)")
     return try await downloadHTTPFile(
       url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
@@ -1124,7 +1186,7 @@ struct PodibleClient: PodibleLibraryServing {
     }
     let ext = asset.streamExt.isEmpty ? "mp3" : asset.streamExt
     let fallbackFilename = "\(bookID)-audio-\(asset.id).\(ext)"
-    let url = try authorizedWebURL(path: "/stream/\(asset.id).\(ext)")
+    let url = try webURL(path: "/stream/\(asset.id).\(ext)")
     return try await downloadHTTPFile(
       url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
@@ -1230,7 +1292,7 @@ struct PodibleClient: PodibleLibraryServing {
     if let absolute = URL(string: path), absolute.scheme != nil {
       return absolute.absoluteString
     }
-    return (try? authorizedWebURL(path: path))?.absoluteString
+    return (try? webURL(path: path))?.absoluteString
   }
 
   private func fileExtensionForEbookMime(_ mime: String) -> String? {
@@ -1241,7 +1303,7 @@ struct PodibleClient: PodibleLibraryServing {
     return nil
   }
 
-  private func normalizedRPCURL() -> URL {
+  static func normalizedRPCURL(from rpcURL: URL) -> URL {
     let trimmed = rpcURL.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
     guard var url = URL(string: trimmed), trimmed.isEmpty == false else { return rpcURL }
     if url.path.isEmpty || url.path == "/" {
@@ -1255,6 +1317,14 @@ struct PodibleClient: PodibleLibraryServing {
     return url
   }
 
+  static func sessionKey(for rpcURL: URL) -> String {
+    normalizedRPCURL(from: rpcURL).absoluteString
+  }
+
+  private func normalizedRPCURL() -> URL {
+    Self.normalizedRPCURL(from: rpcURL)
+  }
+
   private func baseWebURL() -> URL {
     var url = normalizedRPCURL()
     if url.path.hasSuffix("/rpc") {
@@ -1263,21 +1333,11 @@ struct PodibleClient: PodibleLibraryServing {
     return url
   }
 
-  private func authorizedRPCURL() throws -> URL {
-    guard var components = URLComponents(url: normalizedRPCURL(), resolvingAgainstBaseURL: false)
-    else {
-      throw PodibleError.badURL
-    }
-    var items = components.queryItems ?? []
-    items.append(URLQueryItem(name: "api_key", value: apiKey))
-    components.queryItems = items
-    guard let url = components.url else {
-      throw PodibleError.badURL
-    }
-    return url
+  private func rpcEndpointURL() -> URL {
+    normalizedRPCURL()
   }
 
-  private func authorizedWebURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+  private func webURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
     guard let base = URL(string: "/", relativeTo: baseWebURL())?.absoluteURL else {
       throw PodibleError.badURL
     }
@@ -1287,22 +1347,24 @@ struct PodibleClient: PodibleLibraryServing {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       throw PodibleError.badURL
     }
-    var items = components.queryItems ?? []
-    items.append(URLQueryItem(name: "api_key", value: apiKey))
-    items.append(contentsOf: queryItems)
-    components.queryItems = items
+    components.queryItems = queryItems.isEmpty ? nil : queryItems
     guard let final = components.url else {
       throw PodibleError.badURL
     }
     return final
   }
 
-  private func rpcCall<Result: Decodable>(method: String, params: [String: Any]) async throws
+  private func rpcCall<Result: Decodable>(
+    method: String,
+    params: [String: Any],
+    requiresAuthorization: Bool = true
+  ) async throws
     -> Result
   {
-    var request = URLRequest(url: try authorizedRPCURL())
+    var request = URLRequest(url: rpcEndpointURL())
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    try applyAuthorization(to: &request, requiresAuthorization: requiresAuthorization)
     let payload: [String: Any] = [
       "jsonrpc": "2.0",
       "id": 1,
@@ -1312,7 +1374,13 @@ struct PodibleClient: PodibleLibraryServing {
     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
     let (data, response) = try await session.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+    guard let http = response as? HTTPURLResponse else {
+      throw PodibleError.server("Backend returned an error for \(method).")
+    }
+    if http.statusCode == 401 || http.statusCode == 403 {
+      throw PodibleError.unauthorized
+    }
+    guard (200..<300).contains(http.statusCode) else {
       throw PodibleError.server("Backend returned an error for \(method).")
     }
 
@@ -1334,9 +1402,10 @@ struct PodibleClient: PodibleLibraryServing {
     acceptEncoding: String? = nil,
     as type: Result.Type
   ) async throws -> Result {
-    let url = try authorizedWebURL(path: path, queryItems: queryItems)
+    let url = try webURL(path: path, queryItems: queryItems)
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
+    try applyAuthorization(to: &request)
     if let acceptEncoding {
       request.setValue(acceptEncoding, forHTTPHeaderField: "Accept-Encoding")
     }
@@ -1344,6 +1413,9 @@ struct PodibleClient: PodibleLibraryServing {
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
       throw PodibleError.server("Failed to fetch backend data.")
+    }
+    if http.statusCode == 401 || http.statusCode == 403 {
+      throw PodibleError.unauthorized
     }
     guard (200..<300).contains(http.statusCode) else {
       throw PodibleHTTPError(statusCode: http.statusCode)
@@ -1473,9 +1545,28 @@ struct PodibleClient: PodibleLibraryServing {
       delegate.continuation = continuation
       delegate.progressHandler = progress
       let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-      let task = session.downloadTask(with: url)
+      var request = URLRequest(url: url)
+      request.httpMethod = "GET"
+      do {
+        try applyAuthorization(to: &request)
+      } catch {
+        continuation.resume(throwing: error)
+        return
+      }
+      let task = session.downloadTask(with: request)
       task.resume()
     }
+  }
+
+  private func applyAuthorization(
+    to request: inout URLRequest,
+    requiresAuthorization: Bool = true
+  ) throws {
+    guard requiresAuthorization else { return }
+    guard let accessToken, accessToken.isEmpty == false else {
+      throw PodibleError.unauthorized
+    }
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
   }
 }
 
