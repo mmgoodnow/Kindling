@@ -4,30 +4,57 @@ struct SettingsView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
 
+  private var trimmedRPCURL: String {
+    userSettings.podibleRPCURL.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var canSignIn: Bool {
+    trimmedRPCURL.isEmpty == false && podibleAuth.isAuthenticating == false
+  }
+
   var body: some View {
     Form {
-      Section("Podible Backend") {
-        TextField(
-          "RPC URL (e.g. http://localhost/rpc)",
-          text: userSettings.$podibleRPCURL
-        )
-        #if os(iOS)
-          .textInputAutocapitalization(.never)
-          .keyboardType(.URL)
-        #endif
+      Section {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Podible")
+            .font(.headline)
+          Text("Connect Kindling to your Podible server, then sign in to access your library.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+
+        LabeledContent("Server") {
+          TextField("https://podible.example.com/rpc", text: userSettings.$podibleRPCURL)
+            .multilineTextAlignment(.trailing)
+            #if os(iOS)
+              .textInputAutocapitalization(.never)
+              .keyboardType(.URL)
+              .autocorrectionDisabled()
+            #endif
+        }
+
+        LabeledContent("Account") {
+          Text(podibleAuth.currentUserDescription ?? "Not signed in")
+            .foregroundStyle(.secondary)
+        }
+
+        LabeledContent("Status") {
+          HStack(spacing: 8) {
+            Circle()
+              .fill(podibleAuth.isAuthenticated ? Color.green : Color.secondary.opacity(0.45))
+              .frame(width: 8, height: 8)
+            Text(podibleAuth.isAuthenticated ? "Connected" : "Signed out")
+              .foregroundStyle(.secondary)
+          }
+        }
+
         if let errorMessage = podibleAuth.errorMessage {
           Text(errorMessage)
             .foregroundStyle(.red)
             .font(.caption)
         }
-        if let currentUserDescription = podibleAuth.currentUserDescription {
-          Text("Signed in as \(currentUserDescription)")
-            .font(.subheadline)
-        } else {
-          Text("Sign in with your Podible account to access your library.")
-            .foregroundStyle(.secondary)
-            .font(.subheadline)
-        }
+
         if podibleAuth.isAuthenticated {
           Button("Sign Out", role: .destructive) {
             Task {
@@ -44,14 +71,16 @@ struct SettingsView: View {
               if podibleAuth.isAuthenticating {
                 ProgressView()
               }
-              Text("Sign In")
+              Text(podibleAuth.isAuthenticating ? "Signing In…" : "Sign In")
             }
+            .frame(maxWidth: .infinity)
           }
-          .disabled(
-            userSettings.podibleRPCURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              || podibleAuth.isAuthenticating
-          )
+          .disabled(canSignIn == false)
         }
+      } footer: {
+        Text(
+          "Use the full /rpc URL for your Podible server. Kindling will open Podible's web sign-in flow and store the returned session securely in Keychain."
+        )
       }
 
       Section("Email") {
