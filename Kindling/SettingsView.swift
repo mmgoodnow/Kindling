@@ -83,11 +83,13 @@ struct SettingsView: View {
         )
       }
 
-      Section("Email") {
+      Section {
         TextField(
           "Kindle Email Address",
           text: userSettings.$kindleEmailAddress
         )
+      } header: {
+        Text("Email")
       } footer: {
         Text(
           "Use your Send-to-Kindle email address if you want Kindling to deliver ebooks to your Kindle."
