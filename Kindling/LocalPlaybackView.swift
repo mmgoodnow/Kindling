@@ -900,29 +900,11 @@ struct LocalPlaybackView: View {
   }
 
   private var transcriptSection: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 12) {
-        if let transcript = player.transcript, transcript.text.isEmpty == false {
-          Text("\(transcript.words.count) timestamped words")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-
-          Text(transcript.text)
-            .textSelection(.enabled)
-            .font(.body)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-          Text("No transcript available yet.")
-            .font(.body)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
+    TranscriptView(
+      player: player,
+      progress: player.progress,
+      isTabActive: selectedContentTab == .transcript
+    )
   }
   private var playbackContentHeight: CGFloat {
     #if os(iOS)

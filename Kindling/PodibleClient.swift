@@ -779,7 +779,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
         .init(startMs: 400, endMs: 700, text: "is", token: "is"),
         .init(startMs: 700, endMs: 900, text: "a", token: "a"),
         .init(startMs: 900, endMs: 1400, text: "mock", token: "mock"),
-      ]
+      ],
+      utterances: nil
     )
   }
 
@@ -926,9 +927,18 @@ struct PodibleTranscript: Decodable, Equatable {
     var id: String { "\(startMs)-\(endMs)-\(token)" }
   }
 
+  struct Utterance: Decodable, Equatable, Identifiable {
+    let startMs: Int
+    let endMs: Int
+    let text: String
+
+    var id: Int { startMs }
+  }
+
   let version: String
   let text: String
   let words: [Word]
+  let utterances: [Utterance]?
 }
 
 private struct PodibleChaptersResponse: Decodable {
