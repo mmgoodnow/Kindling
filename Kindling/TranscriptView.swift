@@ -219,21 +219,13 @@ private struct TranscriptSegmentView: View {
 
   var body: some View {
     Button(action: onTap) {
-      ZStack(alignment: .topLeading) {
-        Text(text)
-          .font(.title3.weight(.bold))
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .hidden()
-
-        Text(text)
-          .font(.title3.weight(isActive ? .bold : .semibold))
-          .foregroundStyle(foreground)
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .animation(.easeInOut(duration: 0.25), value: isActive)
-      }
-      .padding(.vertical, 4)
+      Text(text)
+        .font(.title3.weight(.semibold))
+        .foregroundStyle(foreground)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+        .animation(.easeInOut(duration: 0.25), value: isActive)
     }
     .buttonStyle(.plain)
     .contentShape(Rectangle())
@@ -241,7 +233,7 @@ private struct TranscriptSegmentView: View {
 
   private var foreground: Color {
     if isActive { return .primary }
-    return Color.primary.opacity(isPast ? 0.32 : 0.5)
+    return Color.primary.opacity(isPast ? 0.28 : 0.42)
   }
 }
 
