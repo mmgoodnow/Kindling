@@ -143,12 +143,13 @@ struct TranscriptView: View {
   }
 
   private var touchTracker: some Gesture {
-    DragGesture(minimumDistance: 0)
+    DragGesture(minimumDistance: 8)
       .onChanged { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
         if isUserTouching == false {
           isUserTouching = true
         }
-        if abs(value.translation.height) > 6, isAutoFollowing {
+        if isAutoFollowing {
           withAnimation(.easeInOut(duration: 0.18)) {
             isAutoFollowing = false
           }
