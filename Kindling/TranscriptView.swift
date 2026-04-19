@@ -7,7 +7,7 @@ struct TranscriptView: View {
 
   @State private var isAutoFollowing: Bool = true
   @State private var lastScrolledUtteranceID: Int?
-  @State private var suppressManualUntil: Date = .distantPast
+  @State private var isUserTouching: Bool = false
 
   private struct Segment: Identifiable, Equatable {
     let id: Int
@@ -67,7 +67,6 @@ struct TranscriptView: View {
     .animation(.easeInOut(duration: 0.18), value: isAutoFollowing)
     .onChange(of: isTabActive) { _, nowActive in
       if nowActive {
-        suppressManualUntil = Date().addingTimeInterval(0.6)
         withAnimation(.easeInOut(duration: 0.2)) {
           isAutoFollowing = true
         }
@@ -106,7 +105,6 @@ struct TranscriptView: View {
                 isPast: activeID.map { segment.endMs <= startMs(of: $0, in: segments) } ?? false
               ) {
                 player.seek(to: Double(segment.startMs) / 1000.0)
-                suppressManualUntil = Date().addingTimeInterval(0.6)
                 withAnimation(.easeInOut(duration: 0.25)) {
                   isAutoFollowing = true
                 }
@@ -117,26 +115,18 @@ struct TranscriptView: View {
             Color.clear.frame(height: bottomInset)
           }
           .padding(.horizontal, 4)
-          .background(scrollOffsetReader)
         }
-        .coordinateSpace(name: "transcriptScroll")
-        .onPreferenceChange(TranscriptScrollOffsetKey.self) { _ in
-          if Date() < suppressManualUntil { return }
-          if isAutoFollowing {
-            withAnimation(.easeInOut(duration: 0.18)) {
-              isAutoFollowing = false
-            }
-          }
-        }
+        .simultaneousGesture(touchTracker)
         .onChange(of: activeID) { _, newID in
-          guard isAutoFollowing, let newID, newID != lastScrolledUtteranceID else { return }
+          guard let newID, newID != lastScrolledUtteranceID else { return }
+          guard isAutoFollowing, isUserTouching == false else { return }
           lastScrolledUtteranceID = newID
           withAnimation(.easeInOut(duration: 0.45)) {
             scroller.scrollTo(newID, anchor: .center)
           }
         }
         .onChange(of: isAutoFollowing) { _, nowFollowing in
-          guard nowFollowing, let activeID else { return }
+          guard nowFollowing, let activeID, isUserTouching == false else { return }
           lastScrolledUtteranceID = activeID
           withAnimation(.easeInOut(duration: 0.35)) {
             scroller.scrollTo(activeID, anchor: .center)
@@ -152,13 +142,21 @@ struct TranscriptView: View {
     }
   }
 
-  private var scrollOffsetReader: some View {
-    GeometryReader { geo in
-      Color.clear.preference(
-        key: TranscriptScrollOffsetKey.self,
-        value: geo.frame(in: .named("transcriptScroll")).minY
-      )
-    }
+  private var touchTracker: some Gesture {
+    DragGesture(minimumDistance: 0)
+      .onChanged { value in
+        if isUserTouching == false {
+          isUserTouching = true
+        }
+        if abs(value.translation.height) > 6, isAutoFollowing {
+          withAnimation(.easeInOut(duration: 0.18)) {
+            isAutoFollowing = false
+          }
+        }
+      }
+      .onEnded { _ in
+        isUserTouching = false
+      }
   }
 
   private var resumeButton: some View {
@@ -166,7 +164,6 @@ struct TranscriptView: View {
       withAnimation(.easeInOut(duration: 0.25)) {
         isAutoFollowing = true
       }
-      suppressManualUntil = Date().addingTimeInterval(0.6)
     } label: {
       Label("Now Playing", systemImage: "dot.radiowaves.left.and.right")
         .font(.footnote.weight(.semibold))
@@ -234,12 +231,5 @@ private struct TranscriptSegmentView: View {
   private var foreground: Color {
     if isActive { return .primary }
     return Color.primary.opacity(isPast ? 0.28 : 0.42)
-  }
-}
-
-private struct TranscriptScrollOffsetKey: PreferenceKey {
-  static var defaultValue: CGFloat = 0
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-    value = nextValue()
   }
 }
