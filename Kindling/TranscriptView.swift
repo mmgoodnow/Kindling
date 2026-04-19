@@ -219,14 +219,21 @@ private struct TranscriptSegmentView: View {
 
   var body: some View {
     Button(action: onTap) {
-      Text(text)
-        .font(.title3.weight(isActive ? .bold : .semibold))
-        .foregroundStyle(foreground)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
-        .scaleEffect(isActive ? 1.0 : 0.985, anchor: .leading)
-        .animation(.easeInOut(duration: 0.25), value: isActive)
+      ZStack(alignment: .topLeading) {
+        Text(text)
+          .font(.title3.weight(.bold))
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .hidden()
+
+        Text(text)
+          .font(.title3.weight(isActive ? .bold : .semibold))
+          .foregroundStyle(foreground)
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .animation(.easeInOut(duration: 0.25), value: isActive)
+      }
+      .padding(.vertical, 4)
     }
     .buttonStyle(.plain)
     .contentShape(Rectangle())
