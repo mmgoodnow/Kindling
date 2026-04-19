@@ -1162,12 +1162,19 @@ struct PodibleClient: PodibleLibraryServing {
   }
 
   func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+    if let cached = PodibleTranscriptCache.load(assetID: assetID) {
+      return cached
+    }
     do {
-      return try await fetchJSON(
+      let data = try await fetchJSONData(
         path: "/transcripts/\(assetID).json",
-        acceptEncoding: "br",
-        as: PodibleTranscript.self
+        acceptEncoding: "br"
       )
+      let decoder = JSONDecoder()
+      decoder.keyDecodingStrategy = .convertFromSnakeCase
+      let transcript = try decoder.decode(PodibleTranscript.self, from: data)
+      PodibleTranscriptCache.store(data, assetID: assetID)
+      return transcript
     } catch let error as PodibleHTTPError where error.statusCode == 404 {
       return nil
     }
@@ -1412,6 +1419,18 @@ struct PodibleClient: PodibleLibraryServing {
     acceptEncoding: String? = nil,
     as type: Result.Type
   ) async throws -> Result {
+    let data = try await fetchJSONData(
+      path: path, queryItems: queryItems, acceptEncoding: acceptEncoding)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(Result.self, from: data)
+  }
+
+  private func fetchJSONData(
+    path: String,
+    queryItems: [URLQueryItem] = [],
+    acceptEncoding: String? = nil
+  ) async throws -> Data {
     let url = try webURL(path: path, queryItems: queryItems)
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
@@ -1430,10 +1449,7 @@ struct PodibleClient: PodibleLibraryServing {
     guard (200..<300).contains(http.statusCode) else {
       throw PodibleHTTPError(statusCode: http.statusCode)
     }
-
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    return try decoder.decode(Result.self, from: data)
+    return data
   }
 
   private func contentDispositionFilename(from response: HTTPURLResponse) -> String? {
