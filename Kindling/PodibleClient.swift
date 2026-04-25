@@ -149,6 +149,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let updatedAt: Date?
   let fullPseudoProgress: Int?
   let bookImagePath: String?
+  let wordCount: Int?
+  let runtimeSeconds: Int?
 
   init(
     id: String,
@@ -162,7 +164,9 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     bookAdded: Date? = nil,
     updatedAt: Date? = nil,
     fullPseudoProgress: Int? = nil,
-    bookImagePath: String? = nil
+    bookImagePath: String? = nil,
+    wordCount: Int? = nil,
+    runtimeSeconds: Int? = nil
   ) {
     self.id = id
     self.openLibraryWorkID = openLibraryWorkID
@@ -176,6 +180,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.updatedAt = updatedAt
     self.fullPseudoProgress = fullPseudoProgress
     self.bookImagePath = bookImagePath
+    self.wordCount = wordCount
+    self.runtimeSeconds = runtimeSeconds
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -239,6 +245,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     } else {
       bookAdded = nil
     }
+    wordCount = nil
+    runtimeSeconds = nil
   }
 }
 
@@ -843,6 +851,8 @@ private struct PodibleLibraryBook: Decodable {
   let ebookStatus: String
   let status: String
   let fullPseudoProgress: Double?
+  let durationMs: Int?
+  let wordCount: Int?
 }
 
 private struct PodibleLibraryIdentifiers: Decodable {
@@ -1270,7 +1280,9 @@ struct PodibleClient: PodibleLibraryServing {
       bookAdded: addedAt,
       updatedAt: updatedAt,
       fullPseudoProgress: book.fullPseudoProgress.map { Int($0.rounded()) },
-      bookImagePath: absoluteAssetURLString(from: book.coverUrl)
+      bookImagePath: absoluteAssetURLString(from: book.coverUrl),
+      wordCount: book.wordCount,
+      runtimeSeconds: book.durationMs.map { Int(($0 + 500) / 1000) }
     )
   }
 

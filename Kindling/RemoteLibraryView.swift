@@ -1432,7 +1432,8 @@ struct PodibleLibraryView: View {
       title: item.title,
       summary: nil,
       coverURLString: item.bookImagePath,
-      runtimeSeconds: nil,
+      runtimeSeconds: item.runtimeSeconds,
+      wordCount: item.wordCount,
       addedAt: item.bookAdded,
       updatedAt: latestLibraryDate(for: item),
       seriesIndex: nil,
@@ -1478,6 +1479,14 @@ struct PodibleLibraryView: View {
     }
     if book.coverURLString != item.bookImagePath {
       book.coverURLString = item.bookImagePath
+      updated = true
+    }
+    if book.runtimeSeconds != item.runtimeSeconds {
+      book.runtimeSeconds = item.runtimeSeconds
+      updated = true
+    }
+    if book.wordCount != item.wordCount {
+      book.wordCount = item.wordCount
       updated = true
     }
     let nextAddedAt = item.bookAdded

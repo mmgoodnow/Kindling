@@ -169,6 +169,12 @@ struct LocalLibraryView: View {
         Text(book.author?.name ?? "Unknown Author")
           .foregroundStyle(.secondary)
           .font(.caption)
+        if let metricsText = bookMetricsText(for: book) {
+          Text(metricsText)
+            .foregroundStyle(.secondary)
+            .font(.caption2)
+            .monospacedDigit()
+        }
         statusLine(status: status, progress: progress, audioStatus: audioStatus)
       }
       Spacer()
@@ -178,6 +184,34 @@ struct LocalLibraryView: View {
         downloadButton(for: book, status: status, audioStatus: audioStatus)
       }
     }
+  }
+
+  private func bookMetricsText(for book: LibraryBook) -> String? {
+    var parts: [String] = []
+    if let runtimeSeconds = book.runtimeSeconds, runtimeSeconds > 0 {
+      parts.append(formatRuntime(seconds: runtimeSeconds))
+    }
+    if let wordCount = book.wordCount, wordCount > 0 {
+      parts.append("\(formatWordCount(wordCount)) words")
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: " • ")
+  }
+
+  private func formatRuntime(seconds: Int) -> String {
+    let hours = seconds / 3600
+    let minutes = (seconds % 3600) / 60
+    if hours > 0 {
+      return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+    }
+    return "\(minutes)m"
+  }
+
+  private func formatWordCount(_ count: Int) -> String {
+    if count >= 1000 {
+      let thousands = Double(count) / 1000.0
+      return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
+    }
+    return "\(count)"
   }
 
   @ViewBuilder

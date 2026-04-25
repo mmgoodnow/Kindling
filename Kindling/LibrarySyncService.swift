@@ -82,7 +82,8 @@ struct LibrarySyncService {
           title: item.title,
           summary: item.summary,
           coverURLString: item.bookImagePath,
-          runtimeSeconds: nil,
+          runtimeSeconds: item.runtimeSeconds,
+          wordCount: item.wordCount,
           addedAt: item.bookAdded,
           updatedAt: latestLibraryDate(for: item),
           seriesIndex: nil,
@@ -162,6 +163,14 @@ struct LibrarySyncService {
     }
     if book.coverURLString != item.bookImagePath {
       book.coverURLString = item.bookImagePath
+      updated += 1
+    }
+    if book.runtimeSeconds != item.runtimeSeconds {
+      book.runtimeSeconds = item.runtimeSeconds
+      updated += 1
+    }
+    if book.wordCount != item.wordCount {
+      book.wordCount = item.wordCount
       updated += 1
     }
     let nextAddedAt = item.bookAdded

@@ -75,6 +75,7 @@ final class LibraryBook {
   var summary: String?
   var coverURLString: String?
   var runtimeSeconds: Int?
+  var wordCount: Int?
   var addedAt: Date?
   var updatedAt: Date?
   var seriesIndex: Double?
@@ -95,6 +96,7 @@ final class LibraryBook {
     summary: String? = nil,
     coverURLString: String? = nil,
     runtimeSeconds: Int? = nil,
+    wordCount: Int? = nil,
     addedAt: Date? = nil,
     updatedAt: Date? = nil,
     seriesIndex: Double? = nil,
@@ -110,6 +112,7 @@ final class LibraryBook {
     self.summary = summary
     self.coverURLString = coverURLString
     self.runtimeSeconds = runtimeSeconds
+    self.wordCount = wordCount
     self.addedAt = addedAt
     self.updatedAt = updatedAt
     self.seriesIndex = seriesIndex
