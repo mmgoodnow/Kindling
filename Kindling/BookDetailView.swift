@@ -48,16 +48,25 @@ struct BookDetailView: View {
         }
       }
       .padding(.horizontal, 20)
-      .padding(.vertical, 16)
+      .padding(.top, 16)
+      // Reserve room for the floating action button so the last paragraph
+      // isn't hidden underneath it.
+      .padding(.bottom, 96)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .navigationTitle(item.title)
     .navigationBarTitleDisplayMode(.inline)
-    .safeAreaInset(edge: .bottom) {
-      actionBar
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
+    .toolbar {
+      if hasSecondaryActions {
+        ToolbarItem(placement: .topBarTrailing) {
+          secondaryActionsMenu
+        }
+      }
+    }
+    .overlay(alignment: .bottom) {
+      floatingPrimaryButton
+        .padding(.horizontal, 24)
+        .padding(.bottom, 16)
     }
   }
 
@@ -142,98 +151,87 @@ struct BookDetailView: View {
     return nil
   }
 
-  // MARK: - Actions
+  // MARK: - Floating primary action
 
-  private var actionBar: some View {
-    VStack(spacing: 10) {
-      primaryAudioButton
-      if hasSecondaryActions {
-        HStack(spacing: 12) {
-          if let shareEbook = actions.shareEbook {
-            secondaryButton("Share eBook", systemImage: "square.and.arrow.up", action: shareEbook)
-          }
-          if let emailToKindle = actions.emailToKindle {
-            secondaryButton("Send to Kindle", systemImage: "paperplane", action: emailToKindle)
-          }
-          if let reportIssue = actions.reportIssue {
-            secondaryButton(
-              "Report Issue", systemImage: "exclamationmark.triangle", tint: .orange,
-              action: reportIssue)
-          }
-          if let deleteRemote = actions.deleteRemote {
-            secondaryButton(
-              "Delete", systemImage: "trash", tint: .red, action: deleteRemote)
-          }
+  /// Pill-shaped floating button anchored to the bottom of the screen.
+  /// Uses Liquid Glass on iOS 26+, regular material as a fallback.
+  @ViewBuilder
+  private var floatingPrimaryButton: some View {
+    primaryActionContent
+      .padding(.horizontal, 20)
+      .padding(.vertical, 14)
+      .frame(maxWidth: .infinity)
+      .background {
+        if #available(iOS 26.0, *) {
+          Capsule().fill(.clear).glassEffect(in: Capsule())
+        } else {
+          Capsule().fill(.regularMaterial)
         }
-        .frame(maxWidth: .infinity)
       }
-    }
-    .frame(maxWidth: .infinity)
+      .overlay {
+        Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5)
+      }
+      .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
   }
 
   @ViewBuilder
-  private var primaryAudioButton: some View {
+  private var primaryActionContent: some View {
     switch actions.audioDownload {
     case .inProgress(let value):
-      downloadingButton(progress: value)
+      downloadingContent(progress: value)
     case .idle:
       if let play = actions.play {
         Button(action: play) {
           Label("Play", systemImage: "play.fill")
+            .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(.plain)
       } else if let downloadAudio = actions.downloadAudio {
         Button(action: downloadAudio) {
           Label("Download Audiobook", systemImage: "arrow.down.circle")
+            .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(.plain)
       } else {
-        Button {
-        } label: {
-          Label("Audio Unavailable", systemImage: "speaker.slash")
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .disabled(true)
+        Label("Audio Unavailable", systemImage: "speaker.slash")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity)
       }
     }
   }
 
-  private func downloadingButton(progress: Double?) -> some View {
-    Button {
-    } label: {
-      VStack(spacing: 6) {
-        HStack(spacing: 8) {
-          ProgressView()
-            .controlSize(.small)
-          Text(progressLabel(progress))
-            .font(.body.weight(.semibold))
-            .monospacedDigit()
-        }
-        if let progress {
-          ProgressView(value: progress)
-            .progressViewStyle(.linear)
-        } else {
-          ProgressView()
-            .progressViewStyle(.linear)
-        }
+  @ViewBuilder
+  private func downloadingContent(progress: Double?) -> some View {
+    VStack(spacing: 6) {
+      HStack(spacing: 8) {
+        ProgressView()
+          .controlSize(.small)
+        Text(progressLabel(progress))
+          .font(.body.weight(.semibold))
+          .monospacedDigit()
       }
-      .frame(maxWidth: .infinity)
+      if let progress {
+        ProgressView(value: progress)
+          .progressViewStyle(.linear)
+      } else {
+        ProgressView()
+          .progressViewStyle(.linear)
+      }
     }
-    .buttonStyle(.bordered)
-    .controlSize(.large)
-    .disabled(true)
+    .frame(maxWidth: .infinity)
   }
 
   private func progressLabel(_ progress: Double?) -> String {
     guard let progress else { return "Downloading…" }
     return "Downloading… \(Int((progress * 100).rounded()))%"
   }
+
+  // MARK: - Secondary actions menu
 
   private var hasSecondaryActions: Bool {
     actions.shareEbook != nil
@@ -242,25 +240,39 @@ struct BookDetailView: View {
       || actions.deleteRemote != nil
   }
 
-  private func secondaryButton(
-    _ label: String,
-    systemImage: String,
-    tint: Color? = nil,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      VStack(spacing: 4) {
-        Image(systemName: systemImage)
-          .font(.body)
-        Text(label)
-          .font(.caption2)
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
+  private var secondaryActionsMenu: some View {
+    Menu {
+      if let shareEbook = actions.shareEbook {
+        Button {
+          shareEbook()
+        } label: {
+          Label("Share eBook", systemImage: "square.and.arrow.up")
+        }
       }
-      .frame(maxWidth: .infinity, minHeight: 44)
+      if let emailToKindle = actions.emailToKindle {
+        Button {
+          emailToKindle()
+        } label: {
+          Label("Send to Kindle", systemImage: "paperplane")
+        }
+      }
+      if let reportIssue = actions.reportIssue {
+        Button {
+          reportIssue()
+        } label: {
+          Label("Report Issue", systemImage: "exclamationmark.triangle")
+        }
+      }
+      if let deleteRemote = actions.deleteRemote {
+        Button(role: .destructive) {
+          deleteRemote()
+        } label: {
+          Label("Delete", systemImage: "trash")
+        }
+      }
+    } label: {
+      Image(systemName: "ellipsis.circle")
     }
-    .buttonStyle(.bordered)
-    .tint(tint ?? .accentColor)
   }
 
   // MARK: - Formatting

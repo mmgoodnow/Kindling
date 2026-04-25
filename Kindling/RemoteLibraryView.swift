@@ -1056,6 +1056,7 @@ struct PodibleLibraryView: View {
       }
     }
     .listRowInsets(EdgeInsets())
+    .listRowSeparator(.hidden)
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       if let client, client.supportsLibraryDelete {
         Button(role: .destructive) {
