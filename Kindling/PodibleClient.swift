@@ -314,6 +314,10 @@ protocol PodibleLibraryServing {
   func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker]
   func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
   func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
+  /// Returns the streaming HTTPS URL for the preferred audio asset on
+  /// this book, or `nil` if no audiobook is available. Backends that
+  /// don't support direct streaming may return `nil`.
+  func audiobookStreamURL(bookID: String) async throws -> URL?
 }
 
 typealias RemoteLibraryServing = PodibleLibraryServing
@@ -366,6 +370,11 @@ extension PodibleLibraryServing {
   func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
     _ = assetID
     return []
+  }
+
+  func audiobookStreamURL(bookID: String) async throws -> URL? {
+    _ = bookID
+    return nil
   }
 }
 
@@ -1216,6 +1225,14 @@ struct PodibleClient: PodibleLibraryServing {
     let url = try webURL(path: "/stream/\(asset.id).\(ext)")
     return try await downloadHTTPFile(
       url: url, fallbackFilename: fallbackFilename, progress: progress)
+  }
+
+  func audiobookStreamURL(bookID: String) async throws -> URL? {
+    let numericBookID = try parseBookID(bookID)
+    let assets = try await fetchAssets(bookID: numericBookID)
+    guard let asset = preferredAudioAsset(from: assets) else { return nil }
+    let ext = asset.streamExt.isEmpty ? "mp3" : asset.streamExt
+    return try webURL(path: "/stream/\(asset.id).\(ext)")
   }
 
   private func toSearchResult(
