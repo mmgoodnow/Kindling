@@ -58,14 +58,15 @@ struct BookDetailView: View {
         }
       }
     }
-    // Bottom-up: dock first (hugs screen edge), then mini bar above it.
-    // The user wants mini bar visually above the dock.
+    // Modifier order is outermost-wins: the LAST applied `.safeAreaInset`
+    // sits closest to the screen edge. Mini bar applied first → ends up
+    // ABOVE the dock; dock applied second → hugs the screen edge.
+    .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
     .safeAreaInset(edge: .bottom, spacing: 0) {
       floatingActionDock
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
-    .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
   }
 
   // MARK: - Hero
