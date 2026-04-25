@@ -36,15 +36,16 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
-  @State private var isShowingPlayer = false
   @State private var isShowingWipeLocalLibraryConfirmation = false
   @State private var isWipingLocalLibrary = false
   @State private var pendingReportIssueBook: PendingReportIssueBook?
 
   let clientOverride: RemoteLibraryServing?
+  @Binding var isShowingPlayer: Bool
 
-  init(client: RemoteLibraryServing? = nil) {
+  init(client: RemoteLibraryServing? = nil, isShowingPlayer: Binding<Bool> = .constant(false)) {
     self.clientOverride = client
+    self._isShowingPlayer = isShowingPlayer
   }
 
   private enum DownloadKind {
@@ -80,27 +81,12 @@ struct PodibleLibraryView: View {
 
   var body: some View {
     content(client: configuredClient)
-      #if os(iOS)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-          if player.hasLoadedItem {
-            MiniPlaybackBar(player: player) {
-              isShowingPlayer = true
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-          }
-        }
-      #endif
-      .sheet(isPresented: $isShowingPlayer) {
-        LocalPlaybackView(player: player)
-      }
       .navigationDestination(for: PodibleLibraryItem.self) { item in
         BookDetailView(
           item: item,
           localBook: localBooksById[item.id],
           actions: detailActions(item: item, client: configuredClient),
-          onPresentPlayer: { isShowingPlayer = true }
+          onPresentPlayer: {}
         )
       }
   }
