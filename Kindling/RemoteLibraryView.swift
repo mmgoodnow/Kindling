@@ -1036,16 +1036,6 @@ struct PodibleLibraryView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
             }
-            rowControls(
-              item: item,
-              localBook: localBook,
-              client: client
-            )
-            localAudioControls(
-              item: item,
-              localBook: localBook,
-              client: client
-            )
           }
           Spacer(minLength: 0)
           remoteLibraryStatusCluster(
@@ -1093,144 +1083,46 @@ struct PodibleLibraryView: View {
         .tint(.orange)
       }
     }
+    .contextMenu {
+      libraryRowContextMenu(item: item, client: client)
+    }
   }
 
+  /// Long-press menu on a library row. Mirrors the action set in the
+  /// detail view so the row and `BookDetailView` stay in sync.
   @ViewBuilder
-  private func rowControls(
+  private func libraryRowContextMenu(
     item: PodibleLibraryItem,
-    localBook: LibraryBook?,
     client: RemoteLibraryServing?
   ) -> some View {
-    let hasRemoteClient = client != nil
-    let ebookStatus = item.ebookStatus ?? item.status
-    let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
-    let hasEbookAvailable =
-      isImportedMediaStatus(ebookStatus)
-      || isImportedMediaStatus(localEbookStatus)
-    let canShareEbook = hasRemoteClient && hasEbookAvailable
-    let canKindleExport =
-      canShareEbook && userSettings.kindleEmailAddress.isEmpty == false
-    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
-    let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
-    let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
-    let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.podibleId ?? item.id)
-    let canStartLocalAudioDownload =
-      localPlaybackURL == nil
-      && isImportedMediaStatus(effectiveAudioStatus)
-      && localFileStatus != .completed
-      && localFileStatus != .downloading
-      && hasRemoteClient
-      && isLocalDownloading == false
-    let controls = HStack(spacing: 8) {
-      trailingControlButton(
-        label: "Share eBook",
-        systemName: "square.and.arrow.up",
-        isEnabled: canShareEbook,
-        action: {
-          guard let client else { return }
-          Task {
-            await startEbookDownload(
-              bookID: item.id,
-              title: item.title,
-              client: client
-            )
-          }
-        }
-      )
-      trailingControlButton(
-        label: localPlaybackURL == nil ? "Download or Play Audiobook" : "Play Audiobook",
-        systemName: "play.fill",
-        isEnabled: (localPlaybackURL != nil && localBook != nil) || canStartLocalAudioDownload,
-        action: {
-          if let localBook, let localPlaybackURL {
-            startPlayback(for: localBook, url: localPlaybackURL)
-            return
-          }
-          guard let client else { return }
-          startLocalDownload(for: item, client: client)
-        }
-      )
-      trailingControlButton(
-        label: "Email to Kindle",
-        systemName: "paperplane",
-        isEnabled: canKindleExport,
-        action: {
-          guard let client else { return }
-          Task {
-            await startKindleExport(
-              bookID: item.id,
-              title: item.title,
-              client: client
-            )
-          }
-        }
-      )
+    let menuActions = detailActions(item: item, client: client)
+    if let play = menuActions.play {
+      Button(action: play) {
+        Label("Play", systemImage: "play.fill")
+      }
+    } else if let downloadAudio = menuActions.downloadAudio {
+      Button(action: downloadAudio) {
+        Label("Download Audiobook", systemImage: "arrow.down.circle")
+      }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .frame(height: 44)
-    controls
-  }
-
-  private func trailingControlButton(
-    label: String,
-    systemName: String,
-    isEnabled: Bool = true,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Image(systemName: systemName)
-        .font(.title3.weight(.medium))
-        .foregroundStyle(isEnabled ? .accent : .secondary)
-        .imageScale(.large)
-        .frame(width: 44, height: 44, alignment: .leading)
-        .contentShape(Rectangle())
-        .opacity(isEnabled ? 1 : 0.4)
+    if let shareEbook = menuActions.shareEbook {
+      Button(action: shareEbook) {
+        Label("Share eBook", systemImage: "square.and.arrow.up")
+      }
     }
-    .buttonStyle(.borderless)
-    .disabled(!isEnabled)
-    .accessibilityLabel(label)
-  }
-
-  private func trailingControlButton(
-    label: String,
-    isEnabled: Bool = true,
-    @ViewBuilder content: () -> some View,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      content()
-        .foregroundStyle(isEnabled ? .accent : .secondary)
-        .frame(width: 44, height: 44, alignment: .leading)
-        .contentShape(Rectangle())
-        .opacity(isEnabled ? 1 : 0.4)
+    if let emailToKindle = menuActions.emailToKindle {
+      Button(action: emailToKindle) {
+        Label("Send to Kindle", systemImage: "paperplane")
+      }
     }
-    .buttonStyle(.borderless)
-    .disabled(!isEnabled)
-    .accessibilityLabel(label)
-  }
-
-  private func searchActionIcon(base: String) -> some View {
-    ZStack {
-      Image(systemName: base)
-        .font(.title3.weight(.medium))
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 9, weight: .bold))
-        .offset(x: 10, y: 10)
+    if let reportIssue = menuActions.reportIssue {
+      Button(action: reportIssue) {
+        Label("Report Issue", systemImage: "exclamationmark.triangle")
+      }
     }
-  }
-
-  private func localAudioControls(
-    item: PodibleLibraryItem,
-    localBook: LibraryBook?,
-    client: RemoteLibraryServing?
-  ) -> some View {
-    _ = client
-    let progress = localDownloadProgressByBookID[item.id]
-
-    return Group {
-      if let progress {
-        ProgressView(value: progress)
-          .frame(maxWidth: 120)
+    if let deleteRemote = menuActions.deleteRemote {
+      Button(role: .destructive, action: deleteRemote) {
+        Label("Delete", systemImage: "trash")
       }
     }
   }
