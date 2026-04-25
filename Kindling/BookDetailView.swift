@@ -37,14 +37,10 @@ struct BookDetailView: View {
         hero
         metricsLine
         if let summary = displaySummary, summary.isEmpty == false {
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Summary")
-              .font(.headline)
-            Text(summary)
-              .font(.body)
-              .foregroundStyle(.primary)
-              .fixedSize(horizontal: false, vertical: true)
-          }
+          Text(summary)
+            .font(.body)
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
         }
       }
       .padding(.horizontal, 20)
