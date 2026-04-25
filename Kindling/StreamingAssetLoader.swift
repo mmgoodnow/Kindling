@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UniformTypeIdentifiers
 
 /// Bridges `AVAssetResourceLoader` to a plain HTTPS URL with a Bearer
 /// token, so `AVPlayer` can stream audio that requires `Authorization`
@@ -45,6 +46,18 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
     _ resourceLoader: AVAssetResourceLoader,
     shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
   ) -> Bool {
+    #if DEBUG
+      let kind: String
+      if loadingRequest.dataRequest == nil {
+        kind = "info-only"
+      } else if loadingRequest.dataRequest?.requestsAllDataToEndOfResource == true {
+        kind = "all"
+      } else {
+        kind =
+          "range \(loadingRequest.dataRequest!.requestedOffset)+\(loadingRequest.dataRequest!.requestedLength)"
+      }
+      NSLog("[stream] request kind=%@ url=%@", kind, httpURL.absoluteString)
+    #endif
     var request = URLRequest(url: httpURL)
     request.httpMethod = "GET"
     if let accessToken, accessToken.isEmpty == false {
@@ -107,15 +120,32 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
     }
 
     if let error {
+      #if DEBUG
+        NSLog("[stream] task error: %@", error.localizedDescription)
+      #endif
       loadingRequest.finishLoading(with: error)
       return
     }
 
     guard let httpResponse = response as? HTTPURLResponse else {
+      #if DEBUG
+        NSLog("[stream] no http response")
+      #endif
       loadingRequest.finishLoading(
         with: NSError(domain: "StreamingAssetLoader", code: -1))
       return
     }
+
+    #if DEBUG
+      NSLog(
+        "[stream] response status=%d ct=%@ cl=%@ cr=%@ ar=%@ bytes=%d",
+        httpResponse.statusCode,
+        httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil",
+        httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "nil",
+        httpResponse.value(forHTTPHeaderField: "Content-Range") ?? "nil",
+        httpResponse.value(forHTTPHeaderField: "Accept-Ranges") ?? "nil",
+        data?.count ?? 0)
+    #endif
 
     if (200..<300).contains(httpResponse.statusCode) == false {
       loadingRequest.finishLoading(
@@ -133,6 +163,14 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
       info.isByteRangeAccessSupported =
         httpResponse.statusCode == 206
         || httpResponse.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+      #if DEBUG
+        NSLog(
+          "[stream] info status=%d contentType=%@ contentLength=%lld byteRange=%@",
+          httpResponse.statusCode,
+          info.contentType ?? "nil",
+          info.contentLength,
+          info.isByteRangeAccessSupported ? "yes" : "no")
+      #endif
     }
 
     if let data, let dataRequest = loadingRequest.dataRequest {
@@ -141,13 +179,28 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
     loadingRequest.finishLoading()
   }
 
+  /// `AVAssetResourceLoadingContentInformationRequest.contentType` expects
+  /// a UTI string ("public.mp3"), not a MIME ("audio/mpeg"). Fall back to
+  /// guessing from the URL's extension if the response header is missing
+  /// or unmappable.
   private func contentType(from response: HTTPURLResponse) -> String? {
-    guard let mime = response.value(forHTTPHeaderField: "Content-Type") else { return nil }
-    // Strip "; charset=..." etc. — AVFoundation wants a UTI or bare MIME.
-    let mimeOnly = mime.split(separator: ";").first.map {
-      String($0).trimmingCharacters(in: .whitespaces)
+    let mimeHeader = response.value(forHTTPHeaderField: "Content-Type")
+    if let mimeHeader {
+      let mimeOnly =
+        mimeHeader
+        .split(separator: ";")
+        .first
+        .map { String($0).trimmingCharacters(in: .whitespaces) }
+        ?? mimeHeader
+      if let type = UTType(mimeType: mimeOnly) {
+        return type.identifier
+      }
     }
-    return mimeOnly ?? mime
+    let ext = httpURL.pathExtension.lowercased()
+    if ext.isEmpty == false, let type = UTType(filenameExtension: ext) {
+      return type.identifier
+    }
+    return mimeHeader
   }
 
   /// Parses the total resource length from `Content-Range: bytes start-end/total`
