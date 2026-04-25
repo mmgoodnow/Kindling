@@ -380,25 +380,43 @@ private struct PlaybackBookProgressSectionView: View {
                 .frame(width: max(proxy.size.width * bookProgress, 10))
             }
           } else {
-            HStack(spacing: spacing) {
-              ForEach(Array(chapters.enumerated()), id: \.element.id) { index, _ in
-                chapterSegmentShape(for: index, count: chapters.count)
-                  .fill(chapterSegmentFill(for: index, currentChapterIndex: currentChapterIndex))
-                  .frame(
-                    width: chapterSegmentWidth(
-                      for: index,
-                      segmentWidths: segmentWidths,
-                      minimumSegmentWidth: minimumSegmentWidth
-                    ),
-                    height: 10
-                  )
+            VStack(spacing: 3) {
+              HStack(spacing: spacing) {
+                ForEach(Array(chapters.enumerated()), id: \.element.id) { index, _ in
+                  chapterSegmentShape(for: index, count: chapters.count)
+                    .fill(
+                      chapterSegmentFill(for: index, currentChapterIndex: currentChapterIndex)
+                    )
+                    .frame(
+                      width: chapterSegmentWidth(
+                        for: index,
+                        segmentWidths: segmentWidths,
+                        minimumSegmentWidth: minimumSegmentWidth
+                      ),
+                      height: 10
+                    )
+                }
+              }
+              if totalDuration > 0, progress.bufferedSeconds > 0 {
+                let bufferedFraction = min(
+                  max((currentTime + progress.bufferedSeconds) / totalDuration, 0),
+                  1
+                )
+                ZStack(alignment: .leading) {
+                  Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(0.10))
+                  Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(0.45))
+                    .frame(width: max(proxy.size.width * bufferedFraction, 0))
+                }
+                .frame(height: 2)
               }
             }
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .frame(height: 10)
+      .frame(height: progress.bufferedSeconds > 0 ? 15 : 10)
 
       if let currentChapter {
         MarqueeText(
