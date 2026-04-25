@@ -222,7 +222,7 @@ struct BookDetailView: View {
       Label {
         Text(title).font(.title3.weight(.semibold))
       } icon: {
-        Image(systemName: systemImage).font(.title.weight(.semibold))
+        Image(systemName: systemImage).font(.title2.weight(.semibold))
       }
       .frame(maxWidth: .infinity)
     }
@@ -251,7 +251,7 @@ struct BookDetailView: View {
   ) -> some View {
     let button = Button(action: action) {
       Image(systemName: systemImage)
-        .font(.title.weight(.semibold))
+        .font(.title2.weight(.semibold))
     }
     .controlSize(.large)
     .accessibilityLabel(accessibilityLabel)
