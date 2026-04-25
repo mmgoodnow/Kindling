@@ -1033,20 +1033,11 @@ extension View {
     let onExpand: () -> Void
 
     var body: some View {
-      if #available(iOS 26.0, *) {
-        GlassEffectContainer(spacing: 12) {
-          HStack(spacing: 12) {
-            nowPlayingCapsule
-            playPauseButton
-          }
-        }
-      } else {
+      GlassEffectContainer(spacing: 12) {
         HStack(spacing: 12) {
           nowPlayingCapsule
           playPauseButton
         }
-        .padding(8)
-        .background(.ultraThinMaterial, in: Capsule())
       }
     }
 
@@ -1085,9 +1076,8 @@ extension View {
       .modifier(NowPlayingGlassEffect())
     }
 
-    @ViewBuilder
     private var playPauseButton: some View {
-      let button = Button {
+      Button {
         player.togglePlayback()
       } label: {
         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -1095,26 +1085,14 @@ extension View {
           .frame(width: 44, height: 44)
       }
       .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-
-      if #available(iOS 26.0, *) {
-        button
-          .buttonStyle(.glass)
-          .buttonBorderShape(.circle)
-      } else {
-        button
-          .buttonStyle(.bordered)
-          .clipShape(Circle())
-      }
+      .buttonStyle(.glass)
+      .buttonBorderShape(.circle)
     }
   }
 
   private struct NowPlayingGlassEffect: ViewModifier {
     func body(content: Content) -> some View {
-      if #available(iOS 26.0, *) {
-        content.glassEffect(.regular.interactive(), in: Capsule())
-      } else {
-        content
-      }
+      content.glassEffect(.regular.interactive(), in: Capsule())
     }
   }
 #endif

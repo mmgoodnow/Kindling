@@ -178,13 +178,8 @@ struct BookDetailView: View {
   /// it. Uses `GlassEffectContainer` on iOS 26+ so the buttons sample the
   /// background coherently and morph correctly during animations. Each
   /// button gets its own glass shape via the system button styles.
-  @ViewBuilder
   private var floatingActionDock: some View {
-    if #available(iOS 26.0, *) {
-      GlassEffectContainer(spacing: 12) {
-        dockButtons
-      }
-    } else {
+    GlassEffectContainer(spacing: 12) {
       dockButtons
     }
   }
@@ -262,15 +257,9 @@ struct BookDetailView: View {
     .controlSize(.large)
     .disabled(isEnabled == false)
 
-    if #available(iOS 26.0, *) {
-      button
-        .buttonStyle(.glass)
-        .buttonBorderShape(.capsule)
-    } else {
-      button
-        .buttonStyle(.bordered)
-        .clipShape(Capsule())
-    }
+    button
+      .buttonStyle(.glass)
+      .buttonBorderShape(.capsule)
   }
 
   // MARK: Secondary
@@ -290,20 +279,13 @@ struct BookDetailView: View {
     .accessibilityLabel(accessibilityLabel)
     .tint(tint ?? .accentColor)
 
-    if #available(iOS 26.0, *) {
-      button
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-    } else {
-      button
-        .buttonStyle(.bordered)
-        .clipShape(Circle())
-    }
+    button
+      .buttonStyle(.glass)
+      .buttonBorderShape(.circle)
   }
 
-  @ViewBuilder
   private func downloadingCapsule(progress: Double?) -> some View {
-    let content = VStack(spacing: 6) {
+    VStack(spacing: 6) {
       HStack(spacing: 8) {
         ProgressView()
           .controlSize(.small)
@@ -322,12 +304,7 @@ struct BookDetailView: View {
     .padding(.horizontal, 20)
     .padding(.vertical, 14)
     .frame(maxWidth: .infinity)
-
-    if #available(iOS 26.0, *) {
-      content.glassEffect(.regular, in: Capsule())
-    } else {
-      content.background(Capsule().fill(.regularMaterial))
-    }
+    .glassEffect(.regular, in: Capsule())
   }
 
   private func progressLabel(_ progress: Double?) -> String {
