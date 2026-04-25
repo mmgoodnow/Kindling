@@ -19,6 +19,30 @@ struct BookDetailActions {
   var deleteRemote: (() -> Void)?
 }
 
+/// Lets a pushed view publish a floating bottom dock that the root
+/// (`ContentView`) renders. Necessary so the mini playback bar can sit
+/// *above* the dock — `.safeAreaInset` on a `NavigationStack` doesn't
+/// compose with `.safeAreaInset` on a pushed view, so both end up
+/// z-stacked at the screen bottom.
+///
+/// `Equatable` conformance is required by `onPreferenceChange`. We treat
+/// every payload as distinct (non-equal) so the parent always re-renders;
+/// the dock is cheap and not worth a stable identity.
+struct FloatingDockBox: Equatable {
+  let id = UUID()
+  let view: AnyView
+  static func == (lhs: FloatingDockBox, rhs: FloatingDockBox) -> Bool {
+    lhs.id == rhs.id
+  }
+}
+
+struct FloatingDockPreferenceKey: PreferenceKey {
+  static var defaultValue: FloatingDockBox? { nil }
+  static func reduce(value: inout FloatingDockBox?, nextValue: () -> FloatingDockBox?) {
+    if let next = nextValue() { value = next }
+  }
+}
+
 /// Detail screen for a single book. Accepts a `PodibleLibraryItem` (which may be
 /// a remote-fetched item or a local proxy) and the optional locally-mirrored
 /// `LibraryBook`. Designed to push onto the parent `NavigationStack`.
@@ -56,11 +80,13 @@ struct BookDetailView: View {
         }
       }
     }
-    .safeAreaInset(edge: .bottom) {
-      floatingActionDock
-        .padding(.horizontal, 20)
-        .padding(.bottom, 8)
-    }
+    .preference(
+      key: FloatingDockPreferenceKey.self,
+      value: FloatingDockBox(
+        view: AnyView(
+          floatingActionDock
+            .padding(.horizontal, 20)
+        )))
   }
 
   // MARK: - Hero
