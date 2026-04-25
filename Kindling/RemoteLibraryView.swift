@@ -1056,7 +1056,10 @@ struct PodibleLibraryView: View {
       }
     }
     .listRowInsets(EdgeInsets())
-    .listRowSeparator(.hidden)
+    // Cover (88pt) + leading row inset (16pt) + spacing (12pt) = 116pt
+    // Keeps the divider aligned with the title text, with the chevron sitting
+    // inside the divider on the trailing edge.
+    .alignmentGuide(.listRowSeparatorLeading) { _ in 116 }
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       if let client, client.supportsLibraryDelete {
         Button(role: .destructive) {
