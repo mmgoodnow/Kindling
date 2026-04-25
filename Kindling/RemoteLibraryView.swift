@@ -1001,7 +1001,15 @@ struct PodibleLibraryView: View {
     let rowProgressPercent = item.fullPseudoProgress
     let rowIsAcquiring = rowProgressPercent.map { $0 < 100 } ?? false
 
-    return NavigationLink(value: item) {
+    return ZStack {
+      // Invisible NavigationLink provides the value-based push but no visual
+      // chevron — that lives inside the row's HStack below so the divider can
+      // extend past it.
+      NavigationLink(value: item) {
+        EmptyView()
+      }
+      .opacity(0)
+
       VStack(alignment: .leading, spacing: 8) {
         HStack(alignment: .top, spacing: 12) {
           bookCoverView(
@@ -1043,6 +1051,10 @@ struct PodibleLibraryView: View {
           remoteLibraryStatusCluster(
             item: item
           )
+          Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .padding(.trailing, 4)
         }
         .padding(.horizontal, 16)
       }
@@ -1057,8 +1069,9 @@ struct PodibleLibraryView: View {
     }
     .listRowInsets(EdgeInsets())
     // Cover (88pt) + leading row inset (16pt) + spacing (12pt) = 116pt
-    // Keeps the divider aligned with the title text, with the chevron sitting
-    // inside the divider on the trailing edge.
+    // Aligns the divider's leading edge with the title text. The trailing
+    // edge runs to the row's content edge, with the manually-drawn chevron
+    // sitting inside the row's HStack so it falls under the divider span.
     .alignmentGuide(.listRowSeparatorLeading) { _ in 116 }
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       if let client, client.supportsLibraryDelete {
