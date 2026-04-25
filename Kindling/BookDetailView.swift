@@ -227,11 +227,11 @@ struct BookDetailView: View {
 
     if #available(iOS 26.0, *) {
       button
-        .buttonStyle(.glassProminent)
+        .buttonStyle(.glass)
         .buttonBorderShape(.capsule)
     } else {
       button
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.bordered)
         .clipShape(Capsule())
     }
   }

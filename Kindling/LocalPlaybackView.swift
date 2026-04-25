@@ -952,96 +952,91 @@ struct LocalPlaybackView: View {
     let onExpand: () -> Void
 
     var body: some View {
-      HStack(spacing: 10) {
-        Button(action: onExpand) {
-          HStack(spacing: 10) {
-            sharedPlaybackArtwork(
-              size: 38,
-              cornerRadius: 8,
-              player: player,
-              rpcURLString: userSettings.podibleRPCURL,
-              accessToken: podibleAuth.accessToken
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-              Text(player.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-              if player.author.isEmpty == false {
-                Text(player.author)
-                  .font(.caption)
-                  .foregroundStyle(.secondary)
-                  .lineLimit(1)
-              }
-            }
-
-            Spacer(minLength: 0)
+      if #available(iOS 26.0, *) {
+        GlassEffectContainer(spacing: 12) {
+          HStack(spacing: 12) {
+            nowPlayingCapsule
+            playPauseButton
           }
-          .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-          .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-
-        miniPlayerControlButton(systemName: "gobackward.15") {
-          player.skip(by: -15)
+      } else {
+        HStack(spacing: 12) {
+          nowPlayingCapsule
+          playPauseButton
         }
-
-        miniPlayerControlButton(
-          systemName: player.isPlaying ? "pause.fill" : "play.fill",
-          extraTrailingHitArea: 16
-        ) {
-          player.togglePlayback()
-        }
+        .padding(8)
+        .background(.ultraThinMaterial, in: Capsule())
       }
-      .padding(.top, 5)
-      .padding(.horizontal, 16)
-      .padding(.bottom, 6)
-      .modifier(MiniPlaybackGlassBarStyle())
+    }
+
+    private var nowPlayingCapsule: some View {
+      Button(action: onExpand) {
+        HStack(spacing: 10) {
+          sharedPlaybackArtwork(
+            size: 40,
+            cornerRadius: 8,
+            player: player,
+            rpcURLString: userSettings.podibleRPCURL,
+            accessToken: podibleAuth.accessToken
+          )
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text(player.title)
+              .font(.subheadline.weight(.semibold))
+              .lineLimit(1)
+            if player.author.isEmpty == false {
+              Text(player.author)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 16)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Capsule())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Open Now Playing")
+      .modifier(NowPlayingGlassEffect())
+    }
+
+    @ViewBuilder
+    private var playPauseButton: some View {
+      let button = Button {
+        player.togglePlayback()
+      } label: {
+        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+          .font(.title3.weight(.semibold))
+          .frame(width: 44, height: 44)
+      }
+      .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+
+      if #available(iOS 26.0, *) {
+        button
+          .buttonStyle(.glass)
+          .buttonBorderShape(.circle)
+      } else {
+        button
+          .buttonStyle(.bordered)
+          .clipShape(Circle())
+      }
+    }
+  }
+
+  private struct NowPlayingGlassEffect: ViewModifier {
+    func body(content: Content) -> some View {
+      if #available(iOS 26.0, *) {
+        content.glassEffect(.regular.interactive(), in: Capsule())
+      } else {
+        content
+      }
     }
   }
 #endif
-
-@ViewBuilder
-private func miniPlayerControlButton(
-  systemName: String,
-  extraTrailingHitArea: CGFloat = 0,
-  action: @escaping () -> Void
-) -> some View {
-  Button(action: action) {
-    Image(systemName: systemName)
-      .font(.system(size: 25, weight: .semibold))
-      .frame(width: 52, height: 44)
-  }
-  .padding(.vertical, 8)
-  .padding(.horizontal, 4)
-  .padding(.trailing, extraTrailingHitArea)
-  .contentShape(Rectangle())
-  .padding(.vertical, -8)
-  .padding(.horizontal, -4)
-  .padding(.trailing, -extraTrailingHitArea)
-  .buttonStyle(.plain)
-}
-
-private struct MiniPlaybackGlassBarStyle: ViewModifier {
-  func body(content: Content) -> some View {
-    #if os(iOS)
-      if #available(iOS 26.0, *) {
-        GlassEffectContainer {
-          content
-            .glassEffect()
-        }
-      } else {
-        content
-          .background(.ultraThinMaterial)
-      }
-    #else
-      content
-        .background(.ultraThinMaterial)
-    #endif
-  }
-}
 
 @MainActor
 @ViewBuilder
