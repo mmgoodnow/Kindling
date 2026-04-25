@@ -888,6 +888,36 @@ struct PodibleLibraryView: View {
     return urls
   }
 
+  private func bookMetricsText(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
+    let runtimeSeconds = item.runtimeSeconds ?? localBook?.runtimeSeconds
+    let wordCount = item.wordCount ?? localBook?.wordCount
+    var parts: [String] = []
+    if let runtimeSeconds, runtimeSeconds > 0 {
+      parts.append(formatRuntime(seconds: runtimeSeconds))
+    }
+    if let wordCount, wordCount > 0 {
+      parts.append("\(formatWordCount(wordCount)) words")
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: " • ")
+  }
+
+  private func formatRuntime(seconds: Int) -> String {
+    let hours = seconds / 3600
+    let minutes = (seconds % 3600) / 60
+    if hours > 0 {
+      return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+    }
+    return "\(minutes)m"
+  }
+
+  private func formatWordCount(_ count: Int) -> String {
+    if count >= 1000 {
+      let thousands = Double(count) / 1000.0
+      return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
+    }
+    return "\(count)"
+  }
+
   private func libraryRow(
     _ item: PodibleLibraryItem,
     localBook: LibraryBook?,
@@ -916,6 +946,12 @@ struct PodibleLibraryView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .lineLimit(1)
+          if let metricsText = bookMetricsText(item: item, localBook: localBook) {
+            Text(metricsText)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          }
           rowControls(
             item: item,
             localBook: localBook,
