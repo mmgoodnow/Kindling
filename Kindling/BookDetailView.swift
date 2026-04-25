@@ -30,6 +30,8 @@ struct BookDetailView: View {
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
   let actions: BookDetailActions
+  /// True if the audio is available remotely but not on disk (streamed only).
+  let isStreamOnly: Bool
   @Binding var isShowingPlayer: Bool
 
   var body: some View {
@@ -118,12 +120,22 @@ struct BookDetailView: View {
 
   @ViewBuilder
   private var metricsLine: some View {
-    if let text = metricsText {
-      Text(text)
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .frame(maxWidth: .infinity, alignment: .center)
+    if metricsText != nil || isStreamOnly {
+      HStack(spacing: 8) {
+        if let text = metricsText {
+          Text(text)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+        if isStreamOnly {
+          Image(systemName: "cloud")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Not downloaded")
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .center)
     }
   }
 
@@ -180,6 +192,16 @@ struct BookDetailView: View {
           systemImage: "paperplane",
           accessibilityLabel: "Send to Kindle",
           action: emailToKindle)
+      }
+      // Standalone "save offline" affordance — only when the user could
+      // also play (= is currently streaming). When there's no play action
+      // (audio not available), don't surface a lone download here — the
+      // primaryButton already collapses to the download state.
+      if actions.play != nil, let downloadAudio = actions.downloadAudio {
+        secondaryGlassButton(
+          systemImage: "arrow.down.circle",
+          accessibilityLabel: "Download for Offline",
+          action: downloadAudio)
       }
       primaryButton
     }

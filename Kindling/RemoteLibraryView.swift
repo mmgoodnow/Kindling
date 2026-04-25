@@ -87,6 +87,7 @@ struct PodibleLibraryView: View {
           item: item,
           localBook: localBooksById[item.id],
           actions: detailActions(item: item, client: configuredClient),
+          isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
           isShowingPlayer: $isShowingPlayer
         )
       }
@@ -1032,11 +1033,19 @@ struct PodibleLibraryView: View {
               .font(.subheadline)
               .foregroundStyle(.secondary)
               .lineLimit(1)
-            if let metricsText = bookMetricsText(item: item, localBook: localBook) {
-              Text(metricsText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            HStack(spacing: 6) {
+              if let metricsText = bookMetricsText(item: item, localBook: localBook) {
+                Text(metricsText)
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                  .monospacedDigit()
+              }
+              if isStreamOnly(item: item, localBook: localBook) {
+                Image(systemName: "cloud")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                  .accessibilityLabel("Not downloaded")
+              }
             }
             if let summary = rowSummary(item: item, localBook: localBook) {
               Text(summary)
@@ -1437,6 +1446,15 @@ struct PodibleLibraryView: View {
 
   private func isImportedMediaStatus(_ status: PodibleLibraryItemStatus?) -> Bool {
     status == .have
+  }
+
+  /// True if the book is available on the server (audio importable) but
+  /// not yet present locally. Used to surface a cloud indicator on rows
+  /// and the detail page so users can tell stream-only from downloaded.
+  private func isStreamOnly(item: PodibleLibraryItem, localBook: LibraryBook?) -> Bool {
+    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
+    guard isImportedMediaStatus(effectiveAudioStatus) else { return false }
+    return localBook.flatMap { playbackURL(for: $0) } == nil
   }
 
   private func playbackURL(for book: LibraryBook) -> URL? {
