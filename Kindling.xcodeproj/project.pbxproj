@@ -41,6 +41,7 @@
 		51F36E2D2EF733F2004A31B1 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 51F36E2E2EF733F2004A31B1 /* Kingfisher */; };
 		51A0C1002F00000000123456 /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1012F00000000123456 /* TranscriptView.swift */; };
 		51A0C1022F00000000123456 /* PodibleTranscriptCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1032F00000000123456 /* PodibleTranscriptCache.swift */; };
+		51A0C1042F01000000123456 /* BookDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1052F01000000123456 /* BookDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +96,7 @@
 		29254AEE04BE82BE845D3C8F /* LocalPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPlaybackView.swift; sourceTree = "<group>"; };
 		51A0C1012F00000000123456 /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		51A0C1032F00000000123456 /* PodibleTranscriptCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodibleTranscriptCache.swift; sourceTree = "<group>"; };
+		51A0C1052F01000000123456 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
 		514A16C22CB124E500B6F94E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewModifier.swift; sourceTree = "<group>"; };
 		51792F8D2C900EEA004B6E71 /* Kindling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kindling.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -200,6 +202,7 @@
 				29254AEE04BE82BE845D3C8F /* LocalPlaybackView.swift */,
 				51A0C1012F00000000123456 /* TranscriptView.swift */,
 				51A0C1032F00000000123456 /* PodibleTranscriptCache.swift */,
+				51A0C1052F01000000123456 /* BookDetailView.swift */,
 				51792FC42C93CF90004B6E71 /* EBookDownloader.swift */,
 				51929E222C9A5F3A00D77429 /* SearchResult.swift */,
 				51792F962C900EEB004B6E71 /* Assets.xcassets */,
@@ -429,6 +432,7 @@
 				A60704A8F6F2A9549AD58A68 /* LocalPlaybackView.swift in Sources */,
 				51A0C1002F00000000123456 /* TranscriptView.swift in Sources */,
 				51A0C1022F00000000123456 /* PodibleTranscriptCache.swift in Sources */,
+				51A0C1042F01000000123456 /* BookDetailView.swift in Sources */,
 				51929E2A2CA0072600D77429 /* MailComposerView.swift in Sources */,
 				51792F912C900EEA004B6E71 /* KindlingApp.swift in Sources */,
 				514A16BF2CB1017200B6F94E /* UserSettings.swift in Sources */,

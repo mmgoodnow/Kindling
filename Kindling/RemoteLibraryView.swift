@@ -95,6 +95,28 @@ struct PodibleLibraryView: View {
       .sheet(isPresented: $isShowingPlayer) {
         LocalPlaybackView(player: player)
       }
+      .navigationDestination(for: PodibleLibraryItem.self) { item in
+        BookDetailView(
+          item: item,
+          localBook: localBooksById[item.id],
+          onPlay: detailPlayAction(item: item, client: configuredClient),
+          onPresentPlayer: { isShowingPlayer = true }
+        )
+      }
+  }
+
+  private func detailPlayAction(
+    item: PodibleLibraryItem,
+    client: RemoteLibraryServing?
+  ) -> (() -> Void)? {
+    guard let localBook = localBooksById[item.id],
+      let url = playbackURL(for: localBook)
+    else {
+      return nil
+    }
+    return {
+      startPlayback(for: localBook, url: url)
+    }
   }
 
   @ViewBuilder
@@ -926,57 +948,59 @@ struct PodibleLibraryView: View {
     let rowProgressPercent = item.fullPseudoProgress
     let rowIsAcquiring = rowProgressPercent.map { $0 < 100 } ?? false
 
-    return VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .top, spacing: 12) {
-        bookCoverView(
-          title: item.title,
-          author: item.author,
-          url: remoteLibraryAssetURL(
-            baseURLString: remoteAssetBaseURLString,
-            path: item.bookImagePath
-          ),
-          rpcURLString: userSettings.podibleRPCURL,
-          accessToken: podibleAuth.accessToken
-        )
-        VStack(alignment: .leading, spacing: 6) {
-          Text(item.title)
-            .font(.headline)
-            .lineLimit(2)
-          Text(item.author)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-          if let metricsText = bookMetricsText(item: item, localBook: localBook) {
-            Text(metricsText)
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          }
-          rowControls(
-            item: item,
-            localBook: localBook,
-            client: client
+    return NavigationLink(value: item) {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
+          bookCoverView(
+            title: item.title,
+            author: item.author,
+            url: remoteLibraryAssetURL(
+              baseURLString: remoteAssetBaseURLString,
+              path: item.bookImagePath
+            ),
+            rpcURLString: userSettings.podibleRPCURL,
+            accessToken: podibleAuth.accessToken
           )
-          localAudioControls(
-            item: item,
-            localBook: localBook,
-            client: client
+          VStack(alignment: .leading, spacing: 6) {
+            Text(item.title)
+              .font(.headline)
+              .lineLimit(2)
+            Text(item.author)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+            if let metricsText = bookMetricsText(item: item, localBook: localBook) {
+              Text(metricsText)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            }
+            rowControls(
+              item: item,
+              localBook: localBook,
+              client: client
+            )
+            localAudioControls(
+              item: item,
+              localBook: localBook,
+              client: client
+            )
+          }
+          Spacer(minLength: 0)
+          remoteLibraryStatusCluster(
+            item: item
           )
         }
-        Spacer(minLength: 0)
-        remoteLibraryStatusCluster(
-          item: item
+        .padding(.horizontal, 16)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.vertical, 4)
+      .background {
+        remoteLibraryRowProgressBackground(
+          percent: rowProgressPercent,
+          isAcquiring: rowIsAcquiring
         )
       }
-      .padding(.horizontal, 16)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.vertical, 4)
-    .background {
-      remoteLibraryRowProgressBackground(
-        percent: rowProgressPercent,
-        isAcquiring: rowIsAcquiring
-      )
     }
     .listRowInsets(EdgeInsets())
     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
