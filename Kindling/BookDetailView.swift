@@ -146,61 +146,64 @@ struct BookDetailView: View {
 
   // MARK: - Floating action dock
 
-  /// Floating action dock anchored to the bottom of the screen. Hosts the
-  /// primary play / download button plus a row of icon-only secondary
-  /// actions. Uses Liquid Glass on iOS 26+, regular material as a fallback.
+  /// Floating bottom dock: a wide primary glass capsule, optionally followed
+  /// by a row of standalone glass-circle secondary actions. Each control
+  /// gets its own bubble.
   @ViewBuilder
   private var floatingActionDock: some View {
-    let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
     VStack(spacing: 12) {
-      primaryActionContent
+      primaryGlassCapsule
       if hasSecondaryActions {
         secondaryActionsRow
       }
     }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 14)
     .frame(maxWidth: .infinity)
-    .background {
-      if #available(iOS 26.0, *) {
-        shape.fill(.clear).glassEffect(in: shape)
-      } else {
-        shape.fill(.regularMaterial)
-      }
-    }
-    .overlay {
-      shape.stroke(.white.opacity(0.08), lineWidth: 0.5)
-    }
-    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
   }
 
+  // MARK: Primary
+
+  private var primaryGlassCapsule: some View {
+    primaryActionContent
+      .padding(.horizontal, 20)
+      .padding(.vertical, 14)
+      .frame(maxWidth: .infinity)
+      .glassBubble(shape: Capsule())
+  }
+
+  // MARK: Secondary
+
   private var secondaryActionsRow: some View {
-    HStack(spacing: 0) {
+    HStack(spacing: 12) {
       if let shareEbook = actions.shareEbook {
-        dockIconButton(
-          systemImage: "square.and.arrow.up", accessibilityLabel: "Share eBook",
+        secondaryGlassButton(
+          systemImage: "square.and.arrow.up",
+          accessibilityLabel: "Share eBook",
           action: shareEbook)
       }
       if let emailToKindle = actions.emailToKindle {
-        dockIconButton(
-          systemImage: "paperplane", accessibilityLabel: "Send to Kindle",
+        secondaryGlassButton(
+          systemImage: "paperplane",
+          accessibilityLabel: "Send to Kindle",
           action: emailToKindle)
       }
       if let reportIssue = actions.reportIssue {
-        dockIconButton(
-          systemImage: "exclamationmark.triangle", accessibilityLabel: "Report Issue",
-          tint: .orange, action: reportIssue)
+        secondaryGlassButton(
+          systemImage: "exclamationmark.triangle",
+          accessibilityLabel: "Report Issue",
+          tint: .orange,
+          action: reportIssue)
       }
       if let deleteRemote = actions.deleteRemote {
-        dockIconButton(
-          systemImage: "trash", accessibilityLabel: "Delete",
-          tint: .red, action: deleteRemote)
+        secondaryGlassButton(
+          systemImage: "trash",
+          accessibilityLabel: "Delete",
+          tint: .red,
+          action: deleteRemote)
       }
     }
-    .frame(maxWidth: .infinity)
   }
 
-  private func dockIconButton(
+  private func secondaryGlassButton(
     systemImage: String,
     accessibilityLabel: String,
     tint: Color? = nil,
@@ -208,12 +211,13 @@ struct BookDetailView: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.title3)
-        .frame(maxWidth: .infinity, minHeight: 36)
-        .contentShape(Rectangle())
+        .font(.title3.weight(.semibold))
+        .foregroundStyle(tint ?? .accentColor)
+        .frame(width: 52, height: 52)
+        .contentShape(Circle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(tint ?? .accentColor)
+    .glassBubble(shape: Circle())
     .accessibilityLabel(accessibilityLabel)
   }
 
@@ -300,5 +304,27 @@ struct BookDetailView: View {
       return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
     }
     return "\(count)"
+  }
+}
+
+// MARK: - Glass bubble modifier
+
+extension View {
+  /// Wraps content in a Liquid Glass background (iOS 26+) with `.regularMaterial`
+  /// fallback, plus a subtle stroke and drop shadow. Each control gets its
+  /// own bubble so they feel like discrete glass elements.
+  fileprivate func glassBubble(shape: some InsettableShape) -> some View {
+    self
+      .background {
+        if #available(iOS 26.0, *) {
+          shape.fill(.clear).glassEffect(in: shape)
+        } else {
+          shape.fill(.regularMaterial)
+        }
+      }
+      .overlay {
+        shape.stroke(.white.opacity(0.08), lineWidth: 0.5)
+      }
+      .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
   }
 }
