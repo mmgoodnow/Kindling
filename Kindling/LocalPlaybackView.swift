@@ -993,9 +993,9 @@ struct LocalPlaybackView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 18)
-        .padding(.vertical, 10)
+        .padding(.leading, 14)
+        .padding(.trailing, 20)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Capsule())
       }
