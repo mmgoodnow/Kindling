@@ -219,8 +219,12 @@ struct BookDetailView: View {
     action: @escaping () -> Void
   ) -> some View {
     let button = Button(action: action) {
-      Label(title, systemImage: systemImage)
-        .frame(maxWidth: .infinity)
+      Label {
+        Text(title).font(.body.weight(.semibold))
+      } icon: {
+        Image(systemName: systemImage).font(.title3.weight(.semibold))
+      }
+      .frame(maxWidth: .infinity)
     }
     .controlSize(.large)
     .disabled(isEnabled == false)
@@ -246,8 +250,8 @@ struct BookDetailView: View {
     action: @escaping () -> Void
   ) -> some View {
     let button = Button(action: action) {
-      Label(accessibilityLabel, systemImage: systemImage)
-        .labelStyle(.iconOnly)
+      Image(systemName: systemImage)
+        .font(.title3.weight(.semibold))
     }
     .controlSize(.large)
     .accessibilityLabel(accessibilityLabel)
