@@ -11,23 +11,24 @@ import UniformTypeIdentifiers
 /// `Self.proxyURL(for:)` to convert your real HTTPS URL into a custom-scheme
 /// URL that triggers the delegate; the loader translates back to HTTPS for
 /// every range request.
+///
+/// Important: each loading request is served by a dedicated `URLSession`
+/// with a `URLSessionDataDelegate`, NOT a one-shot `dataTask(with:
+/// completionHandler:)`. The completion-handler form buffers the entire
+/// response in memory before returning — fine for a 2-byte probe, fatal for
+/// `bytes=0-` against a multi-hundred-MB audio file. The delegate form
+/// streams chunks as they arrive, which is what AVFoundation expects.
 final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
   static let customScheme = "kindling-stream"
 
   private let httpURL: URL
   private let accessToken: String?
-  private let urlSession: URLSession
   private let workQueue = DispatchQueue(label: "kindling.stream-loader", qos: .userInitiated)
-  private var pendingTasks: [ObjectIdentifier: URLSessionDataTask] = [:]
+  private var contexts: [ObjectIdentifier: RequestContext] = [:]
 
-  init(
-    httpURL: URL,
-    accessToken: String?,
-    urlSession: URLSession = .shared
-  ) {
+  init(httpURL: URL, accessToken: String?) {
     self.httpURL = httpURL
     self.accessToken = accessToken
-    self.urlSession = urlSession
     super.init()
   }
 
@@ -46,6 +47,86 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
     _ resourceLoader: AVAssetResourceLoader,
     shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
   ) -> Bool {
+    let context = RequestContext(
+      httpURL: httpURL,
+      accessToken: accessToken,
+      loadingRequest: loadingRequest,
+      onFinish: { [weak self] key in
+        self?.workQueue.sync { _ = self?.contexts.removeValue(forKey: key) }
+      }
+    )
+    workQueue.sync {
+      contexts[ObjectIdentifier(loadingRequest)] = context
+    }
+    context.start()
+    return true
+  }
+
+  func resourceLoader(
+    _ resourceLoader: AVAssetResourceLoader,
+    didCancel loadingRequest: AVAssetResourceLoadingRequest
+  ) {
+    workQueue.sync {
+      let key = ObjectIdentifier(loadingRequest)
+      contexts[key]?.cancel()
+      contexts[key] = nil
+    }
+  }
+}
+
+// MARK: - Per-request context
+
+/// Owns a single `AVAssetResourceLoadingRequest`, the matching
+/// `URLSession`, and incrementally streams response bytes back to the
+/// loading request.
+private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+  private let httpURL: URL
+  private let accessToken: String?
+  private let loadingRequest: AVAssetResourceLoadingRequest
+  private let onFinish: (ObjectIdentifier) -> Void
+  private let session: URLSession
+  private let queue: OperationQueue
+  private var task: URLSessionDataTask?
+  private var fulfilledContentInformation = false
+
+  init(
+    httpURL: URL,
+    accessToken: String?,
+    loadingRequest: AVAssetResourceLoadingRequest,
+    onFinish: @escaping (ObjectIdentifier) -> Void
+  ) {
+    self.httpURL = httpURL
+    self.accessToken = accessToken
+    self.loadingRequest = loadingRequest
+    self.onFinish = onFinish
+    self.queue = OperationQueue()
+    self.queue.maxConcurrentOperationCount = 1
+    self.session = URLSession(
+      configuration: .default,
+      delegate: nil,
+      delegateQueue: queue
+    )
+    super.init()
+  }
+
+  func start() {
+    var request = URLRequest(url: httpURL)
+    request.httpMethod = "GET"
+    if let accessToken, accessToken.isEmpty == false {
+      request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    }
+    if let dataRequest = loadingRequest.dataRequest {
+      let lower = dataRequest.requestedOffset
+      let rangeHeader: String
+      if dataRequest.requestsAllDataToEndOfResource {
+        rangeHeader = "bytes=\(lower)-"
+      } else {
+        let upper = lower + Int64(dataRequest.requestedLength) - 1
+        rangeHeader = "bytes=\(lower)-\(upper)"
+      }
+      request.setValue(rangeHeader, forHTTPHeaderField: "Range")
+    }
+
     #if DEBUG
       let kind: String
       if loadingRequest.dataRequest == nil {
@@ -58,125 +139,124 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
       }
       NSLog("[stream] request kind=%@ url=%@", kind, httpURL.absoluteString)
     #endif
-    var request = URLRequest(url: httpURL)
-    request.httpMethod = "GET"
-    if let accessToken, accessToken.isEmpty == false {
-      request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-    }
-    if let dataRequest = loadingRequest.dataRequest {
-      let lower = dataRequest.requestedOffset
-      // requestsAllDataToEndOfResource: AVFoundation wants everything from `lower` onward.
-      let upper: Int64? =
-        dataRequest.requestsAllDataToEndOfResource
-        ? nil
-        : lower + Int64(dataRequest.requestedLength) - 1
-      let rangeValue: String
-      if let upper {
-        rangeValue = "bytes=\(lower)-\(upper)"
-      } else {
-        rangeValue = "bytes=\(lower)-"
-      }
-      request.setValue(rangeValue, forHTTPHeaderField: "Range")
-    }
 
-    let task = urlSession.dataTask(with: request) { [weak self] data, response, error in
-      guard let self else { return }
-      self.handleResponse(
-        loadingRequest: loadingRequest,
-        data: data,
-        response: response,
-        error: error
-      )
-    }
-
-    workQueue.sync {
-      pendingTasks[ObjectIdentifier(loadingRequest)] = task
-    }
+    // Use a delegate-based data task so we receive bytes incrementally
+    // instead of waiting for the whole response.
+    let task = session.dataTask(with: request)
+    task.delegate = self
+    self.task = task
     task.resume()
-    return true
   }
 
-  func resourceLoader(
-    _ resourceLoader: AVAssetResourceLoader,
-    didCancel loadingRequest: AVAssetResourceLoadingRequest
-  ) {
-    workQueue.sync {
-      let key = ObjectIdentifier(loadingRequest)
-      pendingTasks[key]?.cancel()
-      pendingTasks[key] = nil
-    }
+  func cancel() {
+    task?.cancel()
+    session.invalidateAndCancel()
   }
 
-  // MARK: - Response handling
+  // MARK: URLSessionDataDelegate
 
-  private func handleResponse(
-    loadingRequest: AVAssetResourceLoadingRequest,
-    data: Data?,
-    response: URLResponse?,
-    error: Error?
+  func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
   ) {
-    workQueue.sync {
-      pendingTasks[ObjectIdentifier(loadingRequest)] = nil
-    }
-
-    if let error {
-      #if DEBUG
-        NSLog("[stream] task error: %@", error.localizedDescription)
-      #endif
-      loadingRequest.finishLoading(with: error)
-      return
-    }
-
     guard let httpResponse = response as? HTTPURLResponse else {
-      #if DEBUG
-        NSLog("[stream] no http response")
-      #endif
-      loadingRequest.finishLoading(
-        with: NSError(domain: "StreamingAssetLoader", code: -1))
+      finish(with: NSError(domain: "StreamingAssetLoader", code: -1))
+      completionHandler(.cancel)
       return
     }
 
     #if DEBUG
       NSLog(
-        "[stream] response status=%d ct=%@ cl=%@ cr=%@ ar=%@ bytes=%d",
+        "[stream] response status=%d ct=%@ cl=%@ cr=%@ ar=%@",
         httpResponse.statusCode,
         httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil",
         httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "nil",
         httpResponse.value(forHTTPHeaderField: "Content-Range") ?? "nil",
-        httpResponse.value(forHTTPHeaderField: "Accept-Ranges") ?? "nil",
-        data?.count ?? 0)
+        httpResponse.value(forHTTPHeaderField: "Accept-Ranges") ?? "nil")
     #endif
 
     if (200..<300).contains(httpResponse.statusCode) == false {
-      loadingRequest.finishLoading(
+      finish(
         with: NSError(
           domain: "StreamingAssetLoader",
           code: httpResponse.statusCode,
           userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"]
         ))
+      completionHandler(.cancel)
       return
     }
 
-    if let info = loadingRequest.contentInformationRequest {
-      info.contentType = contentType(from: httpResponse)
-      info.contentLength = totalLength(from: httpResponse) ?? Int64(data?.count ?? 0)
-      info.isByteRangeAccessSupported =
-        httpResponse.statusCode == 206
-        || httpResponse.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
-      #if DEBUG
-        NSLog(
-          "[stream] info status=%d contentType=%@ contentLength=%lld byteRange=%@",
-          httpResponse.statusCode,
-          info.contentType ?? "nil",
-          info.contentLength,
-          info.isByteRangeAccessSupported ? "yes" : "no")
-      #endif
-    }
+    fulfillContentInformation(from: httpResponse)
+    completionHandler(.allow)
+  }
 
-    if let data, let dataRequest = loadingRequest.dataRequest {
-      dataRequest.respond(with: data)
+  func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive data: Data
+  ) {
+    loadingRequest.dataRequest?.respond(with: data)
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: Error?
+  ) {
+    if let error {
+      // URLSession reports cancellation via NSURLErrorCancelled; that's
+      // expected when AVFoundation tells us to drop a request, so don't
+      // treat it as a real error.
+      let nsError = error as NSError
+      let isCancelled =
+        nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+      if isCancelled {
+        finishCleanup()
+      } else {
+        finish(with: error)
+      }
+      return
     }
-    loadingRequest.finishLoading()
+    finish(with: nil)
+  }
+
+  // MARK: Helpers
+
+  private func fulfillContentInformation(from response: HTTPURLResponse) {
+    guard let info = loadingRequest.contentInformationRequest, fulfilledContentInformation == false
+    else { return }
+    info.contentType = contentType(from: response)
+    info.contentLength = totalLength(from: response) ?? 0
+    info.isByteRangeAccessSupported =
+      response.statusCode == 206
+      || response.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+    fulfilledContentInformation = true
+    #if DEBUG
+      NSLog(
+        "[stream] info contentType=%@ contentLength=%lld byteRange=%@",
+        info.contentType ?? "nil",
+        info.contentLength,
+        info.isByteRangeAccessSupported ? "yes" : "no")
+    #endif
+  }
+
+  private func finish(with error: Error?) {
+    if let error {
+      #if DEBUG
+        NSLog("[stream] task error: %@", error.localizedDescription)
+      #endif
+      loadingRequest.finishLoading(with: error)
+    } else {
+      loadingRequest.finishLoading()
+    }
+    finishCleanup()
+  }
+
+  private func finishCleanup() {
+    onFinish(ObjectIdentifier(loadingRequest))
+    session.finishTasksAndInvalidate()
   }
 
   /// `AVAssetResourceLoadingContentInformationRequest.contentType` expects
@@ -207,7 +287,6 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
   /// (a 206 response) or `Content-Length` (a 200 response).
   private func totalLength(from response: HTTPURLResponse) -> Int64? {
     if let contentRange = response.value(forHTTPHeaderField: "Content-Range") {
-      // e.g. "bytes 0-1023/12345"
       if let slash = contentRange.lastIndex(of: "/") {
         let totalSubstring = contentRange[contentRange.index(after: slash)...]
         if totalSubstring != "*", let total = Int64(totalSubstring) {
