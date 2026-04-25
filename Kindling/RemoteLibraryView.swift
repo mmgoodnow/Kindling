@@ -136,7 +136,13 @@ struct PodibleLibraryView: View {
 
     if let localBook, let url = localPlaybackURL {
       actions.play = { startPlayback(for: localBook, url: url) }
-    } else if canStartLocalAudioDownload, let client {
+    } else if isImportedMediaStatus(effectiveAudioStatus), let client {
+      // No local file yet — stream over HTTP. The detail-view "Play"
+      // button doesn't distinguish between local + streamed; this is an
+      // implementation detail.
+      actions.play = { startStreamingPlayback(for: item, client: client) }
+    }
+    if canStartLocalAudioDownload, let client {
       actions.downloadAudio = { startLocalDownload(for: item, client: client) }
     }
 
@@ -1271,6 +1277,50 @@ struct PodibleLibraryView: View {
     }
     player.play()
     isShowingPlayer = true
+  }
+
+  @MainActor
+  private func startStreamingPlayback(
+    for item: PodibleLibraryItem,
+    client: RemoteLibraryServing
+  ) {
+    isShowingPlayer = true
+    let resumeID = streamingResumeID(for: item)
+    Task {
+      do {
+        guard let httpURL = try await client.audiobookStreamURL(bookID: item.id) else {
+          downloadErrorMessage = "Audiobook not available for streaming."
+          return
+        }
+        await MainActor.run {
+          player.loadStreaming(
+            httpURL: httpURL,
+            accessToken: podibleAuth.accessToken,
+            resumeID: resumeID,
+            title: item.title,
+            author: item.author,
+            description: item.summary,
+            artworkURL: remoteLibraryAssetURL(
+              baseURLString: remoteAssetBaseURLString,
+              path: item.bookImagePath)
+          )
+          player.play()
+          // Server-side chapters/transcript still available — fire and forget.
+          if let localBook = localBooksById[item.id] {
+            Task { await loadPlaybackMetadata(for: localBook, client: client) }
+          }
+        }
+      } catch {
+        downloadErrorMessage = "Streaming failed: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  private func streamingResumeID(for item: PodibleLibraryItem) -> String {
+    if let workID = item.openLibraryWorkID, workID.isEmpty == false {
+      return workID
+    }
+    return item.id
   }
 
   @MainActor
