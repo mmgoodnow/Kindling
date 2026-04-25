@@ -4,9 +4,15 @@ import SwiftUI
 /// Bag of optional callbacks the detail view dispatches into the parent.
 /// `nil` means the action isn't applicable (e.g. no remote client, or no
 /// downloaded audio yet).
+enum AudioDownloadState {
+  case idle
+  case inProgress(Double?)  // nil = indeterminate, otherwise 0...1
+}
+
 struct BookDetailActions {
   var play: (() -> Void)?
   var downloadAudio: (() -> Void)?
+  var audioDownload: AudioDownloadState = .idle
   var shareEbook: (() -> Void)?
   var emailToKindle: (() -> Void)?
   var reportIssue: (() -> Void)?
@@ -167,30 +173,66 @@ struct BookDetailView: View {
 
   @ViewBuilder
   private var primaryAudioButton: some View {
-    if let play = actions.play {
-      Button(action: play) {
-        Label("Play", systemImage: "play.fill")
-          .frame(maxWidth: .infinity)
+    switch actions.audioDownload {
+    case .inProgress(let value):
+      downloadingButton(progress: value)
+    case .idle:
+      if let play = actions.play {
+        Button(action: play) {
+          Label("Play", systemImage: "play.fill")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+      } else if let downloadAudio = actions.downloadAudio {
+        Button(action: downloadAudio) {
+          Label("Download Audiobook", systemImage: "arrow.down.circle")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+      } else {
+        Button {
+        } label: {
+          Label("Audio Unavailable", systemImage: "speaker.slash")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+        .disabled(true)
       }
-      .buttonStyle(.borderedProminent)
-      .controlSize(.large)
-    } else if let downloadAudio = actions.downloadAudio {
-      Button(action: downloadAudio) {
-        Label("Download Audiobook", systemImage: "arrow.down.circle")
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.borderedProminent)
-      .controlSize(.large)
-    } else {
-      Button {
-      } label: {
-        Label("Audio Unavailable", systemImage: "speaker.slash")
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.bordered)
-      .controlSize(.large)
-      .disabled(true)
     }
+  }
+
+  private func downloadingButton(progress: Double?) -> some View {
+    Button {
+    } label: {
+      VStack(spacing: 6) {
+        HStack(spacing: 8) {
+          ProgressView()
+            .controlSize(.small)
+          Text(progressLabel(progress))
+            .font(.body.weight(.semibold))
+            .monospacedDigit()
+        }
+        if let progress {
+          ProgressView(value: progress)
+            .progressViewStyle(.linear)
+        } else {
+          ProgressView()
+            .progressViewStyle(.linear)
+        }
+      }
+      .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.bordered)
+    .controlSize(.large)
+    .disabled(true)
+  }
+
+  private func progressLabel(_ progress: Double?) -> String {
+    guard let progress else { return "Downloading…" }
+    return "Downloading… \(Int((progress * 100).rounded()))%"
   }
 
   private var hasSecondaryActions: Bool {

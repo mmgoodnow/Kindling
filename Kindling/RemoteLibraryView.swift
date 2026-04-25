@@ -128,6 +128,12 @@ struct PodibleLibraryView: View {
 
     var actions = BookDetailActions()
 
+    if isLocalDownloading {
+      let key = localBook?.podibleId ?? item.id
+      let value = localDownloadProgressByBookID[key]
+      actions.audioDownload = .inProgress(value)
+    }
+
     if let localBook, let url = localPlaybackURL {
       actions.play = { startPlayback(for: localBook, url: url) }
     } else if canStartLocalAudioDownload, let client {
