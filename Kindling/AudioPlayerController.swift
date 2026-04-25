@@ -61,6 +61,8 @@ final class AudioPlayerController: ObservableObject {
   private var currentFileURL: URL?
   private var loadedRangesObservation: NSKeyValueObservation?
   private var timeControlObservation: NSKeyValueObservation?
+  private var lastBufferRefreshAt: CFTimeInterval = 0
+  private var pendingBufferRefresh: Bool = false
   /// Retained because `AVURLAsset.resourceLoader.setDelegate(_:queue:)`
   /// holds the delegate weakly. Releasing this kills streaming mid-playback.
   private var streamingLoader: StreamingAssetLoader?
@@ -113,7 +115,8 @@ final class AudioPlayerController: ObservableObject {
       player: player,
       savedPosition: savedPosition,
       chapterURL: url,
-      artworkURL: artworkURL
+      artworkURL: artworkURL,
+      observesBuffering: false
     )
   }
 
@@ -162,7 +165,8 @@ final class AudioPlayerController: ObservableObject {
       player: player,
       savedPosition: savedPosition,
       chapterURL: nil,
-      artworkURL: artworkURL
+      artworkURL: artworkURL,
+      observesBuffering: true
     )
   }
 
@@ -203,7 +207,8 @@ final class AudioPlayerController: ObservableObject {
     player: AVPlayer,
     savedPosition: Double,
     chapterURL: URL?,
-    artworkURL: URL?
+    artworkURL: URL?,
+    observesBuffering: Bool
   ) {
     persistSession()
     if savedPosition > 0 {
@@ -211,7 +216,9 @@ final class AudioPlayerController: ObservableObject {
       player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
     attachTimeObserver(to: player)
-    attachStreamingObservers(to: player)
+    if observesBuffering {
+      attachStreamingObservers(to: player)
+    }
     observeEndOfPlayback(for: player)
     if let chapterURL {
       loadChapters(from: chapterURL)
@@ -416,7 +423,10 @@ final class AudioPlayerController: ObservableObject {
           self.updateNowPlayingInfo()
         #endif
       }
-      self.refreshBufferedSeconds()
+      // Only worth tracking buffered ahead while streaming.
+      if self.loadedRangesObservation != nil {
+        self.refreshBufferedSeconds()
+      }
     }
   }
 
@@ -434,10 +444,33 @@ final class AudioPlayerController: ObservableObject {
       }
     }
     if let item = player.currentItem {
-      loadedRangesObservation = item.observe(\.loadedTimeRanges, options: [.new, .initial]) {
+      loadedRangesObservation = item.observe(\.loadedTimeRanges, options: [.new]) {
         [weak self] _, _ in
-        DispatchQueue.main.async {
-          self?.refreshBufferedSeconds()
+        self?.scheduleBufferRefresh()
+      }
+    }
+  }
+
+  /// Throttles `refreshBufferedSeconds` to at most ~4Hz. The KVO callback
+  /// can fire many times per second during initial buffering of a streamed
+  /// asset; without throttling we'd flood the main queue with state writes.
+  private func scheduleBufferRefresh() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      if self.pendingBufferRefresh { return }
+      let now = CACurrentMediaTime()
+      let elapsed = now - self.lastBufferRefreshAt
+      let interval: CFTimeInterval = 0.25
+      if elapsed >= interval {
+        self.lastBufferRefreshAt = now
+        self.refreshBufferedSeconds()
+      } else {
+        self.pendingBufferRefresh = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + (interval - elapsed)) { [weak self] in
+          guard let self else { return }
+          self.pendingBufferRefresh = false
+          self.lastBufferRefreshAt = CACurrentMediaTime()
+          self.refreshBufferedSeconds()
         }
       }
     }
