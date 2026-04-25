@@ -1051,7 +1051,7 @@ struct PodibleLibraryView: View {
           remoteLibraryStatusCluster(
             item: item
           )
-          Image(systemName: "chevron.right")
+          Image(systemName: "chevron.forward")
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.tertiary)
             .padding(.trailing, 4)

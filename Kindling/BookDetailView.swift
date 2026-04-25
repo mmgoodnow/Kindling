@@ -54,6 +54,13 @@ struct BookDetailView: View {
     }
     .navigationTitle(item.title)
     .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      if hasMenuActions {
+        ToolbarItem(placement: .topBarTrailing) {
+          overflowMenu
+        }
+      }
+    }
     .safeAreaInset(edge: .bottom) {
       floatingActionDock
         .padding(.horizontal, 20)
@@ -160,11 +167,20 @@ struct BookDetailView: View {
   }
 
   private var dockButtons: some View {
-    VStack(spacing: 12) {
-      primaryButton
-      if hasSecondaryActions {
-        secondaryButtonsRow
+    HStack(spacing: 12) {
+      if let shareEbook = actions.shareEbook {
+        secondaryGlassButton(
+          systemImage: "square.and.arrow.up",
+          accessibilityLabel: "Share eBook",
+          action: shareEbook)
       }
+      if let emailToKindle = actions.emailToKindle {
+        secondaryGlassButton(
+          systemImage: "paperplane",
+          accessibilityLabel: "Send to Kindle",
+          action: emailToKindle)
+      }
+      primaryButton
     }
     .frame(maxWidth: .infinity)
   }
@@ -221,37 +237,6 @@ struct BookDetailView: View {
   }
 
   // MARK: Secondary
-
-  private var secondaryButtonsRow: some View {
-    HStack(spacing: 12) {
-      if let shareEbook = actions.shareEbook {
-        secondaryGlassButton(
-          systemImage: "square.and.arrow.up",
-          accessibilityLabel: "Share eBook",
-          action: shareEbook)
-      }
-      if let emailToKindle = actions.emailToKindle {
-        secondaryGlassButton(
-          systemImage: "paperplane",
-          accessibilityLabel: "Send to Kindle",
-          action: emailToKindle)
-      }
-      if let reportIssue = actions.reportIssue {
-        secondaryGlassButton(
-          systemImage: "exclamationmark.triangle",
-          accessibilityLabel: "Report Issue",
-          tint: .orange,
-          action: reportIssue)
-      }
-      if let deleteRemote = actions.deleteRemote {
-        secondaryGlassButton(
-          systemImage: "trash",
-          accessibilityLabel: "Delete",
-          tint: .red,
-          action: deleteRemote)
-      }
-    }
-  }
 
   @ViewBuilder
   private func secondaryGlassButton(
@@ -313,13 +298,44 @@ struct BookDetailView: View {
     return "Downloading… \(Int((progress * 100).rounded()))%"
   }
 
-  // MARK: - Secondary actions
+  // MARK: - Overflow menu
 
-  private var hasSecondaryActions: Bool {
+  /// True if at least one of the menu-eligible actions is present.
+  /// Share + Kindle are duplicated in the overflow menu (they also live in
+  /// the dock as icons) so users have text-labelled access to them. Report
+  /// and Delete only live here.
+  private var hasMenuActions: Bool {
     actions.shareEbook != nil
       || actions.emailToKindle != nil
       || actions.reportIssue != nil
       || actions.deleteRemote != nil
+  }
+
+  private var overflowMenu: some View {
+    Menu {
+      if let shareEbook = actions.shareEbook {
+        Button(action: shareEbook) {
+          Label("Share eBook", systemImage: "square.and.arrow.up")
+        }
+      }
+      if let emailToKindle = actions.emailToKindle {
+        Button(action: emailToKindle) {
+          Label("Send to Kindle", systemImage: "paperplane")
+        }
+      }
+      if let reportIssue = actions.reportIssue {
+        Button(action: reportIssue) {
+          Label("Report Issue", systemImage: "exclamationmark.triangle")
+        }
+      }
+      if let deleteRemote = actions.deleteRemote {
+        Button(role: .destructive, action: deleteRemote) {
+          Label("Delete", systemImage: "trash")
+        }
+      }
+    } label: {
+      Image(systemName: "ellipsis")
+    }
   }
 
   // MARK: - Formatting
