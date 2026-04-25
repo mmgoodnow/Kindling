@@ -1,20 +1,28 @@
 import SwiftData
 import SwiftUI
 
+/// Bag of optional callbacks the detail view dispatches into the parent.
+/// `nil` means the action isn't applicable (e.g. no remote client, or no
+/// downloaded audio yet).
+struct BookDetailActions {
+  var play: (() -> Void)?
+  var downloadAudio: (() -> Void)?
+  var shareEbook: (() -> Void)?
+  var emailToKindle: (() -> Void)?
+  var reportIssue: (() -> Void)?
+  var deleteRemote: (() -> Void)?
+}
+
 /// Detail screen for a single book. Accepts a `PodibleLibraryItem` (which may be
 /// a remote-fetched item or a local proxy) and the optional locally-mirrored
 /// `LibraryBook`. Designed to push onto the parent `NavigationStack`.
-///
-/// First slice: hero, metadata, summary, Play action. Download/share/Kindle/etc
-/// land in subsequent commits. Chapters land once `ChapterListView` is extracted
-/// from `LocalPlaybackView`.
 struct BookDetailView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
 
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
-  let onPlay: (() -> Void)?
+  let actions: BookDetailActions
   let onPresentPlayer: () -> Void
 
   var body: some View {
@@ -119,6 +127,9 @@ struct BookDetailView: View {
   }
 
   private var displaySummary: String? {
+    if let summary = item.summary, summary.isEmpty == false {
+      return summary
+    }
     if let summary = localBook?.summary, summary.isEmpty == false {
       return summary
     }
@@ -128,18 +139,86 @@ struct BookDetailView: View {
   // MARK: - Actions
 
   private var actionBar: some View {
-    HStack {
-      Button {
-        onPlay?()
-      } label: {
+    VStack(spacing: 10) {
+      primaryAudioButton
+      if hasSecondaryActions {
+        HStack(spacing: 12) {
+          if let shareEbook = actions.shareEbook {
+            secondaryButton("Share eBook", systemImage: "square.and.arrow.up", action: shareEbook)
+          }
+          if let emailToKindle = actions.emailToKindle {
+            secondaryButton("Send to Kindle", systemImage: "paperplane", action: emailToKindle)
+          }
+          if let reportIssue = actions.reportIssue {
+            secondaryButton(
+              "Report Issue", systemImage: "exclamationmark.triangle", tint: .orange,
+              action: reportIssue)
+          }
+          if let deleteRemote = actions.deleteRemote {
+            secondaryButton(
+              "Delete", systemImage: "trash", tint: .red, action: deleteRemote)
+          }
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  @ViewBuilder
+  private var primaryAudioButton: some View {
+    if let play = actions.play {
+      Button(action: play) {
         Label("Play", systemImage: "play.fill")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
       .controlSize(.large)
-      .disabled(onPlay == nil)
+    } else if let downloadAudio = actions.downloadAudio {
+      Button(action: downloadAudio) {
+        Label("Download Audiobook", systemImage: "arrow.down.circle")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+    } else {
+      Button {
+      } label: {
+        Label("Audio Unavailable", systemImage: "speaker.slash")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.large)
+      .disabled(true)
     }
-    .frame(maxWidth: .infinity)
+  }
+
+  private var hasSecondaryActions: Bool {
+    actions.shareEbook != nil
+      || actions.emailToKindle != nil
+      || actions.reportIssue != nil
+      || actions.deleteRemote != nil
+  }
+
+  private func secondaryButton(
+    _ label: String,
+    systemImage: String,
+    tint: Color? = nil,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      VStack(spacing: 4) {
+        Image(systemName: systemImage)
+          .font(.body)
+        Text(label)
+          .font(.caption2)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+      }
+      .frame(maxWidth: .infinity, minHeight: 44)
+    }
+    .buttonStyle(.bordered)
+    .tint(tint ?? .accentColor)
   }
 
   // MARK: - Formatting

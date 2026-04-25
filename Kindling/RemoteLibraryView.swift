@@ -99,24 +99,71 @@ struct PodibleLibraryView: View {
         BookDetailView(
           item: item,
           localBook: localBooksById[item.id],
-          onPlay: detailPlayAction(item: item, client: configuredClient),
+          actions: detailActions(item: item, client: configuredClient),
           onPresentPlayer: { isShowingPlayer = true }
         )
       }
   }
 
-  private func detailPlayAction(
+  private func detailActions(
     item: PodibleLibraryItem,
     client: RemoteLibraryServing?
-  ) -> (() -> Void)? {
-    guard let localBook = localBooksById[item.id],
-      let url = playbackURL(for: localBook)
-    else {
-      return nil
+  ) -> BookDetailActions {
+    let localBook = localBooksById[item.id]
+    let ebookStatus = item.ebookStatus ?? item.status
+    let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
+    let hasEbookAvailable =
+      isImportedMediaStatus(ebookStatus) || isImportedMediaStatus(localEbookStatus)
+    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
+    let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
+    let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
+    let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.podibleId ?? item.id)
+    let canStartLocalAudioDownload =
+      localPlaybackURL == nil
+      && isImportedMediaStatus(effectiveAudioStatus)
+      && localFileStatus != .completed
+      && localFileStatus != .downloading
+      && client != nil
+      && isLocalDownloading == false
+
+    var actions = BookDetailActions()
+
+    if let localBook, let url = localPlaybackURL {
+      actions.play = { startPlayback(for: localBook, url: url) }
+    } else if canStartLocalAudioDownload, let client {
+      actions.downloadAudio = { startLocalDownload(for: item, client: client) }
     }
-    return {
-      startPlayback(for: localBook, url: url)
+
+    if hasEbookAvailable, let client {
+      actions.shareEbook = {
+        Task {
+          await startEbookDownload(bookID: item.id, title: item.title, client: client)
+        }
+      }
+      if userSettings.kindleEmailAddress.isEmpty == false {
+        actions.emailToKindle = {
+          Task {
+            await startKindleExport(bookID: item.id, title: item.title, client: client)
+          }
+        }
+      }
     }
+
+    if let client, client.supportsImportIssueReporting {
+      actions.reportIssue = {
+        pendingReportIssueBook = PendingReportIssueBook(id: item.id, title: item.title)
+      }
+    }
+
+    if let client, client.supportsLibraryDelete {
+      actions.deleteRemote = {
+        Task {
+          await deleteRemoteBook(item, using: client)
+        }
+      }
+    }
+
+    return actions
   }
 
   @ViewBuilder
