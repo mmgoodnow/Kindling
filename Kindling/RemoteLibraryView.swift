@@ -1055,6 +1055,7 @@ struct PodibleLibraryView: View {
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.tertiary)
             .padding(.trailing, 4)
+            .frame(maxHeight: .infinity)
         }
         .padding(.horizontal, 16)
       }
