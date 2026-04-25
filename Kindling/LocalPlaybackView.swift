@@ -973,8 +973,8 @@ struct LocalPlaybackView: View {
       Button(action: onExpand) {
         HStack(spacing: 10) {
           sharedPlaybackArtwork(
-            size: 40,
-            cornerRadius: 8,
+            size: 32,
+            cornerRadius: 6,
             player: player,
             rpcURLString: userSettings.podibleRPCURL,
             accessToken: podibleAuth.accessToken
@@ -993,9 +993,9 @@ struct LocalPlaybackView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 20)
-        .padding(.vertical, 14)
+        .padding(.leading, 12)
+        .padding(.trailing, 18)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Capsule())
       }
