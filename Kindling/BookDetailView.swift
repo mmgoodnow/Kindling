@@ -49,17 +49,15 @@ struct BookDetailView: View {
       }
       .padding(.horizontal, 20)
       .padding(.top, 16)
-      // Reserve room for the floating action button so the last paragraph
-      // isn't hidden underneath it.
-      .padding(.bottom, 96)
+      .padding(.bottom, 16)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .navigationTitle(item.title)
     .navigationBarTitleDisplayMode(.inline)
-    .overlay(alignment: .bottom) {
+    .safeAreaInset(edge: .bottom) {
       floatingActionDock
-        .padding(.horizontal, 24)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
   }
 
@@ -146,15 +144,26 @@ struct BookDetailView: View {
 
   // MARK: - Floating action dock
 
-  /// Floating bottom dock: a wide primary glass capsule, optionally followed
-  /// by a row of standalone glass-circle secondary actions. Each control
-  /// gets its own bubble.
+  /// Bottom dock pinned via `.safeAreaInset` so scroll content insets behind
+  /// it. Uses `GlassEffectContainer` on iOS 26+ so the buttons sample the
+  /// background coherently and morph correctly during animations. Each
+  /// button gets its own glass shape via the system button styles.
   @ViewBuilder
   private var floatingActionDock: some View {
+    if #available(iOS 26.0, *) {
+      GlassEffectContainer(spacing: 12) {
+        dockButtons
+      }
+    } else {
+      dockButtons
+    }
+  }
+
+  private var dockButtons: some View {
     VStack(spacing: 12) {
-      primaryGlassCapsule
+      primaryButton
       if hasSecondaryActions {
-        secondaryActionsRow
+        secondaryButtonsRow
       }
     }
     .frame(maxWidth: .infinity)
@@ -162,17 +171,58 @@ struct BookDetailView: View {
 
   // MARK: Primary
 
-  private var primaryGlassCapsule: some View {
-    primaryActionContent
-      .padding(.horizontal, 20)
-      .padding(.vertical, 14)
-      .frame(maxWidth: .infinity)
-      .glassBubble(shape: Capsule())
+  @ViewBuilder
+  private var primaryButton: some View {
+    switch actions.audioDownload {
+    case .inProgress(let progress):
+      downloadingCapsule(progress: progress)
+    case .idle:
+      if let play = actions.play {
+        primaryGlassButton(
+          title: "Play", systemImage: "play.fill", action: play)
+      } else if let downloadAudio = actions.downloadAudio {
+        primaryGlassButton(
+          title: "Download Audiobook",
+          systemImage: "arrow.down.circle",
+          action: downloadAudio)
+      } else {
+        primaryGlassButton(
+          title: "Audio Unavailable",
+          systemImage: "speaker.slash",
+          isEnabled: false,
+          action: {})
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func primaryGlassButton(
+    title: String,
+    systemImage: String,
+    isEnabled: Bool = true,
+    action: @escaping () -> Void
+  ) -> some View {
+    let button = Button(action: action) {
+      Label(title, systemImage: systemImage)
+        .frame(maxWidth: .infinity)
+    }
+    .controlSize(.large)
+    .disabled(isEnabled == false)
+
+    if #available(iOS 26.0, *) {
+      button
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+    } else {
+      button
+        .buttonStyle(.borderedProminent)
+        .clipShape(Capsule())
+    }
   }
 
   // MARK: Secondary
 
-  private var secondaryActionsRow: some View {
+  private var secondaryButtonsRow: some View {
     HStack(spacing: 12) {
       if let shareEbook = actions.shareEbook {
         secondaryGlassButton(
@@ -203,58 +253,35 @@ struct BookDetailView: View {
     }
   }
 
+  @ViewBuilder
   private func secondaryGlassButton(
     systemImage: String,
     accessibilityLabel: String,
     tint: Color? = nil,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
-      Image(systemName: systemImage)
-        .font(.title3.weight(.semibold))
-        .foregroundStyle(tint ?? .accentColor)
-        .frame(width: 52, height: 52)
-        .contentShape(Circle())
+    let button = Button(action: action) {
+      Label(accessibilityLabel, systemImage: systemImage)
+        .labelStyle(.iconOnly)
     }
-    .buttonStyle(.plain)
-    .glassBubble(shape: Circle())
+    .controlSize(.large)
     .accessibilityLabel(accessibilityLabel)
-  }
+    .tint(tint ?? .accentColor)
 
-  @ViewBuilder
-  private var primaryActionContent: some View {
-    switch actions.audioDownload {
-    case .inProgress(let value):
-      downloadingContent(progress: value)
-    case .idle:
-      if let play = actions.play {
-        Button(action: play) {
-          Label("Play", systemImage: "play.fill")
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-      } else if let downloadAudio = actions.downloadAudio {
-        Button(action: downloadAudio) {
-          Label("Download Audiobook", systemImage: "arrow.down.circle")
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-      } else {
-        Label("Audio Unavailable", systemImage: "speaker.slash")
-          .font(.body.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity)
-      }
+    if #available(iOS 26.0, *) {
+      button
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+    } else {
+      button
+        .buttonStyle(.bordered)
+        .clipShape(Circle())
     }
   }
 
   @ViewBuilder
-  private func downloadingContent(progress: Double?) -> some View {
-    VStack(spacing: 6) {
+  private func downloadingCapsule(progress: Double?) -> some View {
+    let content = VStack(spacing: 6) {
       HStack(spacing: 8) {
         ProgressView()
           .controlSize(.small)
@@ -263,14 +290,22 @@ struct BookDetailView: View {
           .monospacedDigit()
       }
       if let progress {
-        ProgressView(value: progress)
+        ProgressView(value: progress, total: 1.0)
           .progressViewStyle(.linear)
       } else {
         ProgressView()
           .progressViewStyle(.linear)
       }
     }
+    .padding(.horizontal, 20)
+    .padding(.vertical, 14)
     .frame(maxWidth: .infinity)
+
+    if #available(iOS 26.0, *) {
+      content.glassEffect(.regular, in: Capsule())
+    } else {
+      content.background(Capsule().fill(.regularMaterial))
+    }
   }
 
   private func progressLabel(_ progress: Double?) -> String {
@@ -304,27 +339,5 @@ struct BookDetailView: View {
       return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
     }
     return "\(count)"
-  }
-}
-
-// MARK: - Glass bubble modifier
-
-extension View {
-  /// Wraps content in a Liquid Glass background (iOS 26+) with `.regularMaterial`
-  /// fallback, plus a subtle stroke and drop shadow. Each control gets its
-  /// own bubble so they feel like discrete glass elements.
-  fileprivate func glassBubble(shape: some InsettableShape) -> some View {
-    self
-      .background {
-        if #available(iOS 26.0, *) {
-          shape.fill(.clear).glassEffect(in: shape)
-        } else {
-          shape.fill(.regularMaterial)
-        }
-      }
-      .overlay {
-        shape.stroke(.white.opacity(0.08), lineWidth: 0.5)
-      }
-      .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
   }
 }
