@@ -85,8 +85,7 @@ struct PodibleLibraryView: View {
         BookDetailView(
           item: item,
           localBook: localBooksById[item.id],
-          actions: detailActions(item: item, client: configuredClient),
-          onPresentPlayer: {}
+          actions: detailActions(item: item, client: configuredClient)
         )
       }
   }

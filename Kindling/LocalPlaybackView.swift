@@ -365,6 +365,16 @@ private struct PlaybackBookProgressSectionView: View {
               Capsule(style: .continuous)
                 .fill(Color.accentColor.opacity(0.14))
 
+              if totalDuration > 0, progress.bufferedSeconds > 0 {
+                let bufferedFraction = min(
+                  max((currentTime + progress.bufferedSeconds) / totalDuration, 0),
+                  1
+                )
+                Capsule(style: .continuous)
+                  .fill(Color.accentColor.opacity(0.32))
+                  .frame(width: max(proxy.size.width * bufferedFraction, 0))
+              }
+
               Capsule(style: .continuous)
                 .fill(Color.accentColor)
                 .frame(width: max(proxy.size.width * bookProgress, 10))
@@ -688,9 +698,17 @@ struct LocalPlaybackView: View {
         }
 
         Button(action: player.togglePlayback) {
-          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 54, weight: .regular))
-            .frame(width: 68, height: 68)
+          ZStack {
+            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+              .font(.system(size: 54, weight: .regular))
+              .opacity(player.isStalled ? 0.25 : 1)
+            if player.isStalled {
+              ProgressView()
+                .controlSize(.large)
+                .tint(.accent)
+            }
+          }
+          .frame(width: 68, height: 68)
         }
         .buttonStyle(.plain)
 

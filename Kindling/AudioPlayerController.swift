@@ -10,6 +10,9 @@ final class AudioPlayerController: ObservableObject {
   final class PlaybackProgressState: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
+    /// Total seconds of contiguous data buffered ahead of the playhead.
+    /// Always 0 for fully-local files (which have everything available).
+    @Published var bufferedSeconds: Double = 0
   }
 
   private enum ResumeStore {
@@ -44,6 +47,9 @@ final class AudioPlayerController: ObservableObject {
   @Published var transcript: PodibleTranscript?
   @Published var playbackRate: Double = 1.0
   @Published private(set) var seekHistory: [Double] = []
+  /// True when AVPlayer wants to play but is waiting on the network (typical
+  /// during initial buffering of streamed content or after a network stall).
+  @Published private(set) var isStalled: Bool = false
 
   let progress = PlaybackProgressState()
 
@@ -53,6 +59,8 @@ final class AudioPlayerController: ObservableObject {
   private var chapterLoadTask: Task<Void, Never>?
   private var currentResumeID: String?
   private var currentFileURL: URL?
+  private var loadedRangesObservation: NSKeyValueObservation?
+  private var timeControlObservation: NSKeyValueObservation?
   /// Retained because `AVURLAsset.resourceLoader.setDelegate(_:queue:)`
   /// holds the delegate weakly. Releasing this kills streaming mid-playback.
   private var streamingLoader: StreamingAssetLoader?
@@ -203,6 +211,7 @@ final class AudioPlayerController: ObservableObject {
       player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
     attachTimeObserver(to: player)
+    attachStreamingObservers(to: player)
     observeEndOfPlayback(for: player)
     if let chapterURL {
       loadChapters(from: chapterURL)
@@ -407,6 +416,55 @@ final class AudioPlayerController: ObservableObject {
           self.updateNowPlayingInfo()
         #endif
       }
+      self.refreshBufferedSeconds()
+    }
+  }
+
+  private func attachStreamingObservers(to player: AVPlayer) {
+    timeControlObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) {
+      [weak self] player, _ in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        switch player.timeControlStatus {
+        case .waitingToPlayAtSpecifiedRate:
+          self.isStalled = true
+        default:
+          self.isStalled = false
+        }
+      }
+    }
+    if let item = player.currentItem {
+      loadedRangesObservation = item.observe(\.loadedTimeRanges, options: [.new, .initial]) {
+        [weak self] _, _ in
+        DispatchQueue.main.async {
+          self?.refreshBufferedSeconds()
+        }
+      }
+    }
+  }
+
+  private func refreshBufferedSeconds() {
+    guard let item = player?.currentItem else {
+      progress.bufferedSeconds = 0
+      return
+    }
+    let currentSeconds = progress.currentTime
+    // Find the loaded range containing the playhead and report how far past
+    // the playhead it extends. Other islands of buffered data don't help us.
+    var bufferedAhead: Double = 0
+    for value in item.loadedTimeRanges {
+      let range = value.timeRangeValue
+      let start = range.start.seconds
+      let end = (range.start + range.duration).seconds
+      guard start.isFinite, end.isFinite else { continue }
+      if currentSeconds >= start && currentSeconds <= end {
+        bufferedAhead = max(bufferedAhead, end - currentSeconds)
+      } else if start > currentSeconds {
+        // No bridge between playhead and this future island — ignore.
+      }
+    }
+    if bufferedAhead != progress.bufferedSeconds {
+      progress.bufferedSeconds = bufferedAhead
     }
   }
 
@@ -434,6 +492,12 @@ final class AudioPlayerController: ObservableObject {
       NotificationCenter.default.removeObserver(endObserver)
       self.endObserver = nil
     }
+    loadedRangesObservation?.invalidate()
+    loadedRangesObservation = nil
+    timeControlObservation?.invalidate()
+    timeControlObservation = nil
+    isStalled = false
+    progress.bufferedSeconds = 0
   }
 
   private func rememberSeekOrigin(_ seconds: Double) {

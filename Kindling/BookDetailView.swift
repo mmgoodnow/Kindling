@@ -29,7 +29,6 @@ struct BookDetailView: View {
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
   let actions: BookDetailActions
-  let onPresentPlayer: () -> Void
 
   var body: some View {
     ScrollView {
