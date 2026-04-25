@@ -963,6 +963,15 @@ struct PodibleLibraryView: View {
     return urls
   }
 
+  private func rowSummary(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
+    let raw = item.summary?.isEmpty == false ? item.summary : localBook?.summary
+    guard let raw, raw.isEmpty == false else { return nil }
+    return
+      raw
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .replacingOccurrences(of: "\n", with: " ")
+  }
+
   private func bookMetricsText(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
     let runtimeSeconds = item.runtimeSeconds ?? localBook?.runtimeSeconds
     let wordCount = item.wordCount ?? localBook?.wordCount
@@ -1024,7 +1033,7 @@ struct PodibleLibraryView: View {
           )
           VStack(alignment: .leading, spacing: 6) {
             Text(item.title)
-              .font(.headline)
+              .font(.title3.weight(.semibold))
               .lineLimit(2)
             Text(item.author)
               .font(.subheadline)
@@ -1035,6 +1044,13 @@ struct PodibleLibraryView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+            }
+            if let summary = rowSummary(item: item, localBook: localBook) {
+              Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .padding(.top, 2)
             }
           }
           Spacer(minLength: 0)
