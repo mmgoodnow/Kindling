@@ -52,14 +52,24 @@ struct BookDetailView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .navigationTitle(item.title)
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      if hasMenuActions {
-        ToolbarItem(placement: .topBarTrailing) {
-          overflowMenu
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        if hasMenuActions {
+          ToolbarItem(placement: .topBarTrailing) {
+            overflowMenu
+          }
         }
       }
-    }
+    #else
+      .toolbar {
+        if hasMenuActions {
+          ToolbarItem(placement: .primaryAction) {
+            overflowMenu
+          }
+        }
+      }
+    #endif
     // Modifier order is outermost-wins: the LAST applied `.safeAreaInset`
     // sits closest to the screen edge. Mini bar applied first → ends up
     // ABOVE the dock; dock applied second → hugs the screen edge.
