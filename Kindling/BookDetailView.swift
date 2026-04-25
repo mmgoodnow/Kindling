@@ -56,15 +56,8 @@ struct BookDetailView: View {
     }
     .navigationTitle(item.title)
     .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      if hasSecondaryActions {
-        ToolbarItem(placement: .topBarTrailing) {
-          secondaryActionsMenu
-        }
-      }
-    }
     .overlay(alignment: .bottom) {
-      floatingPrimaryButton
+      floatingActionDock
         .padding(.horizontal, 24)
         .padding(.bottom, 16)
     }
@@ -151,27 +144,77 @@ struct BookDetailView: View {
     return nil
   }
 
-  // MARK: - Floating primary action
+  // MARK: - Floating action dock
 
-  /// Pill-shaped floating button anchored to the bottom of the screen.
-  /// Uses Liquid Glass on iOS 26+, regular material as a fallback.
+  /// Floating action dock anchored to the bottom of the screen. Hosts the
+  /// primary play / download button plus a row of icon-only secondary
+  /// actions. Uses Liquid Glass on iOS 26+, regular material as a fallback.
   @ViewBuilder
-  private var floatingPrimaryButton: some View {
-    primaryActionContent
-      .padding(.horizontal, 20)
-      .padding(.vertical, 14)
-      .frame(maxWidth: .infinity)
-      .background {
-        if #available(iOS 26.0, *) {
-          Capsule().fill(.clear).glassEffect(in: Capsule())
-        } else {
-          Capsule().fill(.regularMaterial)
-        }
+  private var floatingActionDock: some View {
+    let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+    VStack(spacing: 12) {
+      primaryActionContent
+      if hasSecondaryActions {
+        secondaryActionsRow
       }
-      .overlay {
-        Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5)
+    }
+    .padding(.horizontal, 18)
+    .padding(.vertical, 14)
+    .frame(maxWidth: .infinity)
+    .background {
+      if #available(iOS 26.0, *) {
+        shape.fill(.clear).glassEffect(in: shape)
+      } else {
+        shape.fill(.regularMaterial)
       }
-      .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+    .overlay {
+      shape.stroke(.white.opacity(0.08), lineWidth: 0.5)
+    }
+    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+  }
+
+  private var secondaryActionsRow: some View {
+    HStack(spacing: 0) {
+      if let shareEbook = actions.shareEbook {
+        dockIconButton(
+          systemImage: "square.and.arrow.up", accessibilityLabel: "Share eBook",
+          action: shareEbook)
+      }
+      if let emailToKindle = actions.emailToKindle {
+        dockIconButton(
+          systemImage: "paperplane", accessibilityLabel: "Send to Kindle",
+          action: emailToKindle)
+      }
+      if let reportIssue = actions.reportIssue {
+        dockIconButton(
+          systemImage: "exclamationmark.triangle", accessibilityLabel: "Report Issue",
+          tint: .orange, action: reportIssue)
+      }
+      if let deleteRemote = actions.deleteRemote {
+        dockIconButton(
+          systemImage: "trash", accessibilityLabel: "Delete",
+          tint: .red, action: deleteRemote)
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  private func dockIconButton(
+    systemImage: String,
+    accessibilityLabel: String,
+    tint: Color? = nil,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.title3)
+        .frame(maxWidth: .infinity, minHeight: 36)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(tint ?? .accentColor)
+    .accessibilityLabel(accessibilityLabel)
   }
 
   @ViewBuilder
@@ -231,48 +274,13 @@ struct BookDetailView: View {
     return "Downloading… \(Int((progress * 100).rounded()))%"
   }
 
-  // MARK: - Secondary actions menu
+  // MARK: - Secondary actions
 
   private var hasSecondaryActions: Bool {
     actions.shareEbook != nil
       || actions.emailToKindle != nil
       || actions.reportIssue != nil
       || actions.deleteRemote != nil
-  }
-
-  private var secondaryActionsMenu: some View {
-    Menu {
-      if let shareEbook = actions.shareEbook {
-        Button {
-          shareEbook()
-        } label: {
-          Label("Share eBook", systemImage: "square.and.arrow.up")
-        }
-      }
-      if let emailToKindle = actions.emailToKindle {
-        Button {
-          emailToKindle()
-        } label: {
-          Label("Send to Kindle", systemImage: "paperplane")
-        }
-      }
-      if let reportIssue = actions.reportIssue {
-        Button {
-          reportIssue()
-        } label: {
-          Label("Report Issue", systemImage: "exclamationmark.triangle")
-        }
-      }
-      if let deleteRemote = actions.deleteRemote {
-        Button(role: .destructive) {
-          deleteRemote()
-        } label: {
-          Label("Delete", systemImage: "trash")
-        }
-      }
-    } label: {
-      Image(systemName: "ellipsis.circle")
-    }
   }
 
   // MARK: - Formatting
