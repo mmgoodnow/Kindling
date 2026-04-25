@@ -277,10 +277,23 @@ private final class PodibleWebAuthenticator: NSObject,
     }
   #else
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-      UIApplication.shared.connectedScenes
+      let windows =
+        UIApplication.shared.connectedScenes
         .compactMap { $0 as? UIWindowScene }
         .flatMap(\.windows)
-        .first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+      if let key = windows.first(where: \.isKeyWindow) {
+        return key
+      }
+      if let any = windows.first {
+        return any
+      }
+      // Truly no windows: synthesize one bound to whatever scene we can find.
+      // We're in the foreground when this is called, so a scene must exist.
+      let scene = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first
+      precondition(scene != nil, "presentationAnchor called with no UIWindowScene available")
+      return UIWindow(windowScene: scene!)
     }
   #endif
 }

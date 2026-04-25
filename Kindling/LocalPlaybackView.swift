@@ -750,7 +750,7 @@ struct LocalPlaybackView: View {
   @ViewBuilder
   private var heroSection: some View {
     #if os(iOS)
-      let artworkSize = min(UIScreen.main.bounds.width - 24, 368)
+      let artworkSize = min(activeScreenSize().width - 24, 368)
     #else
       let artworkSize: CGFloat = 296
     #endif
@@ -944,7 +944,7 @@ struct LocalPlaybackView: View {
   }
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
-      min(UIScreen.main.bounds.height * 0.7, 620)
+      min(activeScreenSize().height * 0.7, 620)
     #else
       520
     #endif
@@ -1008,6 +1008,18 @@ extension View {
 }
 
 #if os(iOS)
+  /// Replacement for `UIScreen.main.bounds.size`, deprecated in iOS 26.
+  /// Walks the foreground active scenes for the first window scene's screen
+  /// dimensions. Falls back to a reasonable default if none is connected.
+  @MainActor
+  private func activeScreenSize() -> CGSize {
+    let scene =
+      UIApplication.shared.connectedScenes
+      .first { $0.activationState == .foregroundActive } as? UIWindowScene
+      ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
+    return scene?.screen.bounds.size ?? CGSize(width: 390, height: 844)
+  }
+
   private struct AirPlayRouteButton: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
       let view = AVRoutePickerView()
