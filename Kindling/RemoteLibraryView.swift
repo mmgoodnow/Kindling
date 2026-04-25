@@ -81,11 +81,13 @@ struct PodibleLibraryView: View {
 
   var body: some View {
     content(client: configuredClient)
+      .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
       .navigationDestination(for: PodibleLibraryItem.self) { item in
         BookDetailView(
           item: item,
           localBook: localBooksById[item.id],
-          actions: detailActions(item: item, client: configuredClient)
+          actions: detailActions(item: item, client: configuredClient),
+          isShowingPlayer: $isShowingPlayer
         )
       }
   }

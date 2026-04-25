@@ -945,6 +945,51 @@ struct LocalPlaybackView: View {
 }
 
 #if os(iOS)
+  /// Adds a `safeAreaInset(edge: .bottom)` containing the floating mini
+  /// playback bar. Apply on each screen that should host the bar; the bar
+  /// only renders when something is loaded in the player.
+  ///
+  /// Each screen owning its own inset keeps the bar cooperating with
+  /// system bottom UI (`.searchable`, etc.) and lets the screen control
+  /// whether other insets (e.g. a floating dock) sit above or below it.
+  struct MiniPlaybackBarInset: ViewModifier {
+    @ObservedObject var player: AudioPlayerController
+    @Binding var isShowingPlayer: Bool
+
+    func body(content: Content) -> some View {
+      content.safeAreaInset(edge: .bottom, spacing: 0) {
+        if player.hasLoadedItem {
+          MiniPlaybackBar(player: player) {
+            isShowingPlayer = true
+          }
+          .padding(.horizontal, 24)
+          .padding(.top, 10)
+          .padding(.bottom, 8)
+        }
+      }
+    }
+  }
+#endif
+
+extension View {
+  #if os(iOS)
+    func miniPlaybackBarInset(
+      player: AudioPlayerController,
+      isShowingPlayer: Binding<Bool>
+    ) -> some View {
+      modifier(MiniPlaybackBarInset(player: player, isShowingPlayer: isShowingPlayer))
+    }
+  #else
+    func miniPlaybackBarInset(
+      player: AudioPlayerController,
+      isShowingPlayer: Binding<Bool>
+    ) -> some View {
+      self
+    }
+  #endif
+}
+
+#if os(iOS)
   private struct AirPlayRouteButton: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
       let view = AVRoutePickerView()
