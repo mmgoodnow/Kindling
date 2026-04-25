@@ -53,6 +53,9 @@ final class AudioPlayerController: ObservableObject {
   private var chapterLoadTask: Task<Void, Never>?
   private var currentResumeID: String?
   private var currentFileURL: URL?
+  /// Retained because `AVURLAsset.resourceLoader.setDelegate(_:queue:)`
+  /// holds the delegate weakly. Releasing this kills streaming mid-playback.
+  private var streamingLoader: StreamingAssetLoader?
   #if os(iOS)
     private var artworkLoadTask: Task<Void, Never>?
     private var interruptionObserver: NSObjectProtocol?
@@ -86,6 +89,83 @@ final class AudioPlayerController: ObservableObject {
     description: String? = nil,
     artworkURL: URL? = nil
   ) {
+    streamingLoader = nil
+    prepareForLoad(
+      resumeID: resumeID,
+      url: url,
+      title: title,
+      author: author,
+      description: description,
+      artworkURL: artworkURL
+    )
+    let savedPosition = persistedPosition(for: resumeID)
+    let player = AVPlayer(url: url)
+    self.player = player
+    finishLoad(
+      player: player,
+      savedPosition: savedPosition,
+      chapterURL: url,
+      artworkURL: artworkURL
+    )
+  }
+
+  /// Streams audio over HTTP using `StreamingAssetLoader` so the request
+  /// carries an `Authorization: Bearer ...` header. `httpURL` is the real
+  /// HTTPS URL of the audio file; the loader proxies range requests.
+  func loadStreaming(
+    httpURL: URL,
+    accessToken: String?,
+    resumeID: String,
+    title: String,
+    author: String? = nil,
+    description: String? = nil,
+    artworkURL: URL? = nil
+  ) {
+    guard let proxyURL = StreamingAssetLoader.proxyURL(for: httpURL) else {
+      // Fall back to plain load if we can't construct the custom-scheme URL.
+      load(
+        url: httpURL, resumeID: resumeID, title: title, author: author,
+        description: description, artworkURL: artworkURL)
+      return
+    }
+
+    let loader = StreamingAssetLoader(httpURL: httpURL, accessToken: accessToken)
+    streamingLoader = loader
+    prepareForLoad(
+      resumeID: resumeID,
+      url: httpURL,
+      title: title,
+      author: author,
+      description: description,
+      artworkURL: artworkURL
+    )
+    let savedPosition = persistedPosition(for: resumeID)
+
+    let asset = AVURLAsset(url: proxyURL)
+    asset.resourceLoader.setDelegate(loader, queue: .main)
+    let item = AVPlayerItem(asset: asset)
+    let player = AVPlayer(playerItem: item)
+    self.player = player
+    // Don't run `loadChapters` for streamed playback yet — it forces an
+    // additional asset metadata load that may fetch the entire file from
+    // the end-of-file chapter atom on m4b. Punted; chapters arrive when /
+    // if the server-side chapter RPC is available via `applyRemoteChapters`.
+    finishLoad(
+      player: player,
+      savedPosition: savedPosition,
+      chapterURL: nil,
+      artworkURL: artworkURL
+    )
+  }
+
+  private func prepareForLoad(
+    resumeID: String,
+    url: URL,
+    title: String,
+    author: String?,
+    description: String?,
+    artworkURL: URL?
+  ) {
     resetObservers()
     chapterLoadTask?.cancel()
     #if os(iOS)
@@ -97,8 +177,7 @@ final class AudioPlayerController: ObservableObject {
     self.author = author ?? ""
     self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
-    let savedPosition = persistedPosition(for: resumeID)
-    progress.currentTime = savedPosition
+    progress.currentTime = persistedPosition(for: resumeID)
     progress.duration = 0
     self.isPlaying = false
     self.chapters = []
@@ -110,9 +189,14 @@ final class AudioPlayerController: ObservableObject {
       try? session.setCategory(.playback, mode: .spokenAudio)
       try? session.setActive(true)
     #endif
+  }
 
-    let player = AVPlayer(url: url)
-    self.player = player
+  private func finishLoad(
+    player: AVPlayer,
+    savedPosition: Double,
+    chapterURL: URL?,
+    artworkURL: URL?
+  ) {
     persistSession()
     if savedPosition > 0 {
       let resumeTime = CMTime(seconds: savedPosition, preferredTimescale: 1_000)
@@ -120,7 +204,9 @@ final class AudioPlayerController: ObservableObject {
     }
     attachTimeObserver(to: player)
     observeEndOfPlayback(for: player)
-    loadChapters(from: url)
+    if let chapterURL {
+      loadChapters(from: chapterURL)
+    }
     #if os(iOS)
       updateNowPlayingInfo()
       loadNowPlayingArtwork(from: artworkURL)
