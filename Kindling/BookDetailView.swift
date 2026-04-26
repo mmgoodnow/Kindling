@@ -79,7 +79,7 @@ struct BookDetailView: View {
     // bar doesn't carry padding it shouldn't on screens without a dock.
     .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
     }
   }
 
