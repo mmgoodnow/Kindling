@@ -79,7 +79,12 @@ struct BookDetailView: View {
     // bar doesn't carry padding it shouldn't on screens without a dock.
     .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
-        .padding(.horizontal, 20)
+        .padding(.leading, 20)
+        // Slightly more trailing padding than leading: the mini bar's
+        // play/pause glass-circle button carries built-in slop on its right
+        // edge, so the dock's right edge looks misaligned with it without
+        // a small extra nudge here.
+        .padding(.trailing, 24)
     }
   }
 
