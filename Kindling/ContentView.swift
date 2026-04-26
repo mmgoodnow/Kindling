@@ -25,4 +25,5 @@ struct ContentView: View {
   ContentView()
     .environmentObject(UserSettings())
     .environmentObject(PodibleAuthController())
+    .environmentObject(AudioPlayerController())
 }

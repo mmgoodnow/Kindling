@@ -1,8 +1,14 @@
+import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
+  @EnvironmentObject var player: AudioPlayerController
+  @Environment(\.modelContext) private var modelContext
+  @State private var isShowingWipeConfirmation = false
+  @State private var isWipingLocalLibrary = false
+  @State private var wipeErrorMessage: String?
 
   private var trimmedRPCURL: String {
     userSettings.podibleRPCURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -95,8 +101,67 @@ struct SettingsView: View {
           "Use your Send-to-Kindle email address if you want Kindling to deliver ebooks to your Kindle."
         )
       }
+
+      Section {
+        if let wipeErrorMessage {
+          Text(wipeErrorMessage)
+            .foregroundStyle(.red)
+            .font(.caption)
+        }
+
+        Button(role: .destructive) {
+          isShowingWipeConfirmation = true
+        } label: {
+          if isWipingLocalLibrary {
+            HStack(spacing: 8) {
+              ProgressView()
+              Text("Wiping Local Cache…")
+            }
+          } else {
+            Text("Wipe Local Cache")
+          }
+        }
+        .disabled(isWipingLocalLibrary)
+      } header: {
+        Text("Local Cache")
+      } footer: {
+        Text(
+          "Removes cached library records and downloaded files from this device. Your Podible library is not changed."
+        )
+      }
     }.formStyle(.grouped)
       .navigationTitle("Settings")
+      .confirmationDialog(
+        "Wipe Local Cache?",
+        isPresented: $isShowingWipeConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("Wipe Local Cache", role: .destructive) {
+          wipeLocalLibrary()
+        }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text(
+          "Kindling will remove its cached library records and downloaded files on this device. Your Podible library is not changed."
+        )
+      }
+  }
+
+  @MainActor
+  private func wipeLocalLibrary() {
+    guard isWipingLocalLibrary == false else { return }
+    isWipingLocalLibrary = true
+    wipeErrorMessage = nil
+    player.stop()
+
+    Task { @MainActor in
+      do {
+        try LocalLibraryResetService().wipeLocalLibrary(modelContext: modelContext)
+      } catch {
+        wipeErrorMessage = "Failed to wipe local cache: \(error.localizedDescription)"
+      }
+      isWipingLocalLibrary = false
+    }
   }
 }
 
@@ -104,4 +169,5 @@ struct SettingsView: View {
   SettingsView()
     .environmentObject(UserSettings())
     .environmentObject(PodibleAuthController())
+    .environmentObject(AudioPlayerController())
 }

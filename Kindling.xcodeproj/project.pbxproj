@@ -13,6 +13,7 @@
 		F179EC3C27C2960C9B95B01A /* LibraryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02C0597F979F491A121C9E4 /* LibraryModels.swift */; };
 		4A3CF8737D2AB537C847C3D3 /* LibrarySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0734DF343642F7C19150FF /* LibrarySyncService.swift */; };
 		7B99BF464A48C4046CFDD414 /* LibraryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF8EFA05C54AA50F9A65946 /* LibraryStorage.swift */; };
+		51A0C1082F03000000123456 /* LocalLibraryResetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1092F03000000123456 /* LocalLibraryResetService.swift */; };
 		AC51F2FF6BDBD56E5AF08A08 /* AudioPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E3345ED29E3DE0EA3028BA /* AudioPlayerController.swift */; };
 		A60704A8F6F2A9549AD58A68 /* LocalPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29254AEE04BE82BE845D3C8F /* LocalPlaybackView.swift */; };
 		514A16C42CB19C2300B6F94E /* ExportViewModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */; };
@@ -99,6 +100,7 @@
 		51A0C1032F00000000123456 /* PodibleTranscriptCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodibleTranscriptCache.swift; sourceTree = "<group>"; };
 		51A0C1052F01000000123456 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
 		51A0C1072F02000000123456 /* StreamingAssetLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAssetLoader.swift; sourceTree = "<group>"; };
+		51A0C1092F03000000123456 /* LocalLibraryResetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibraryResetService.swift; sourceTree = "<group>"; };
 		514A16C22CB124E500B6F94E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewModifier.swift; sourceTree = "<group>"; };
 		51792F8D2C900EEA004B6E71 /* Kindling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kindling.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -200,6 +202,7 @@
 				B02C0597F979F491A121C9E4 /* LibraryModels.swift */,
 				9F0734DF343642F7C19150FF /* LibrarySyncService.swift */,
 				9AF8EFA05C54AA50F9A65946 /* LibraryStorage.swift */,
+				51A0C1092F03000000123456 /* LocalLibraryResetService.swift */,
 				A1E3345ED29E3DE0EA3028BA /* AudioPlayerController.swift */,
 				29254AEE04BE82BE845D3C8F /* LocalPlaybackView.swift */,
 				51A0C1012F00000000123456 /* TranscriptView.swift */,
@@ -431,6 +434,7 @@
 				F179EC3C27C2960C9B95B01A /* LibraryModels.swift in Sources */,
 				4A3CF8737D2AB537C847C3D3 /* LibrarySyncService.swift in Sources */,
 				7B99BF464A48C4046CFDD414 /* LibraryStorage.swift in Sources */,
+				51A0C1082F03000000123456 /* LocalLibraryResetService.swift in Sources */,
 				AC51F2FF6BDBD56E5AF08A08 /* AudioPlayerController.swift in Sources */,
 				A60704A8F6F2A9549AD58A68 /* LocalPlaybackView.swift in Sources */,
 				51A0C1002F00000000123456 /* TranscriptView.swift in Sources */,

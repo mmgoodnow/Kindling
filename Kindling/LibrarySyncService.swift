@@ -1,13 +1,8 @@
 import Foundation
-import OSLog
 import SwiftData
 
 @MainActor
 struct LibrarySyncService {
-  private static let logger = Logger(
-    subsystem: "com.bebopbeluga.kindling",
-    category: "LibrarySyncService"
-  )
   struct Summary {
     let insertedBooks: Int
     let updatedBooks: Int
@@ -22,9 +17,6 @@ struct LibrarySyncService {
     let existingAuthors = try modelContext.fetch(FetchDescriptor<Author>())
     let existingBooks = try modelContext.fetch(FetchDescriptor<LibraryBook>())
     let remoteIDs = Set(items.map(\.id))
-    Self.logger.debug(
-      "syncLibrary fetched remoteItems=\(items.count, privacy: .public) existingLocalBooks=\(existingBooks.count, privacy: .public)"
-    )
 
     var authorsById = Dictionary(
       uniqueKeysWithValues: existingAuthors.map { ($0.podibleId, $0) })
@@ -116,9 +108,6 @@ struct LibrarySyncService {
 
     for book in existingBooks where remoteIDs.contains(book.podibleId) == false {
       let shouldDelete = shouldDeleteLocalMirror(book)
-      Self.logger.debug(
-        "syncLibrary missing remote book id=\(book.podibleId, privacy: .public) title=\(book.title, privacy: .public) bookStatus=\(book.bookStatusRaw ?? "nil", privacy: .public) audioStatus=\(book.audioStatusRaw ?? "nil", privacy: .public) shouldDelete=\(shouldDelete, privacy: .public)"
-      )
       guard shouldDelete else { continue }
       deleteLocalMirror(book, modelContext: modelContext)
       booksById[book.podibleId] = nil

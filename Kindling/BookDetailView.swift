@@ -17,7 +17,8 @@ struct BookDetailActions {
   var setAlternateCover: ((PodibleAlternateCover) async throws -> PodibleLibraryItem)?
   var shareEbook: (() -> Void)?
   var emailToKindle: (() -> Void)?
-  var reportIssue: (() -> Void)?
+  var reportAudioIssue: (() -> Void)?
+  var reportEbookIssue: (() -> Void)?
   var deleteRemote: (() -> Void)?
 }
 
@@ -384,7 +385,8 @@ struct BookDetailView: View {
       || actions.setAlternateCover != nil
       || actions.shareEbook != nil
       || actions.emailToKindle != nil
-      || actions.reportIssue != nil
+      || actions.reportAudioIssue != nil
+      || actions.reportEbookIssue != nil
       || actions.deleteRemote != nil
   }
 
@@ -411,9 +413,14 @@ struct BookDetailView: View {
           Label("Send to Kindle", systemImage: "paperplane")
         }
       }
-      if let reportIssue = actions.reportIssue {
-        Button(action: reportIssue) {
-          Label("Report Issue", systemImage: "exclamationmark.triangle")
+      if let reportAudioIssue = actions.reportAudioIssue {
+        Button(action: reportAudioIssue) {
+          Label("Report Audio Issue", systemImage: "exclamationmark.triangle")
+        }
+      }
+      if let reportEbookIssue = actions.reportEbookIssue {
+        Button(action: reportEbookIssue) {
+          Label("Report eBook Issue", systemImage: "exclamationmark.triangle")
         }
       }
       if let deleteRemote = actions.deleteRemote {

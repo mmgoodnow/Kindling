@@ -53,6 +53,8 @@ struct KindlingApp: App {
           .frame(minWidth: 400, minHeight: 400)
           .environmentObject(userSettings)
           .environmentObject(podibleAuth)
+          .environmentObject(audioPlayer)
+          .modelContainer(sharedModelContainer)
       }
     #endif
   }

@@ -1,14 +1,9 @@
 import Foundation
 import Kingfisher
-import OSLog
 import SwiftData
 import SwiftUI
 
 struct PodibleLibraryView: View {
-  private static let logger = Logger(
-    subsystem: "com.bebopbeluga.kindling",
-    category: "RemoteLibraryView"
-  )
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
@@ -42,9 +37,6 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
-  @State private var isShowingWipeLocalLibraryConfirmation = false
-  @State private var isWipingLocalLibrary = false
-  @State private var pendingReportIssueBook: PendingReportIssueBook?
 
   let clientOverride: RemoteLibraryServing?
   @Binding var isShowingPlayer: Bool
@@ -57,11 +49,6 @@ struct PodibleLibraryView: View {
   private enum DownloadKind {
     case ebook
     case audiobook
-  }
-
-  private struct PendingReportIssueBook {
-    let id: String
-    let title: String
   }
 
   private var configuredClient: RemoteLibraryServing? {
@@ -169,8 +156,15 @@ struct PodibleLibraryView: View {
     }
 
     if let client, client.supportsImportIssueReporting {
-      actions.reportIssue = {
-        pendingReportIssueBook = PendingReportIssueBook(id: item.id, title: item.title)
+      actions.reportAudioIssue = {
+        Task {
+          await reportWrongImportedFile(bookID: item.id, library: .audio, client: client)
+        }
+      }
+      actions.reportEbookIssue = {
+        Task {
+          await reportWrongImportedFile(bookID: item.id, library: .ebook, client: client)
+        }
       }
     }
 
@@ -187,9 +181,6 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func applyLibraryItemUpdate(_ item: PodibleLibraryItem) {
-    Self.logger.debug(
-      "applyLibraryItemUpdate id=\(item.id, privacy: .public) title=\(item.title, privacy: .public) status=\(item.status.rawValue, privacy: .public)"
-    )
     if let index = viewModel.libraryItems.firstIndex(where: { $0.id == item.id }) {
       viewModel.libraryItems[index] = item
     } else {
@@ -200,26 +191,18 @@ struct PodibleLibraryView: View {
     let author = fetchOrCreateAuthor(name: item.author)
     updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
-      saveModelContext(reason: "apply library item update for \(item.id)")
+      saveModelContext()
     }
   }
 
   @MainActor
   private func persistRequestedBook(_ item: PodibleLibraryItem) {
-    Self.logger.debug(
-      "persistRequestedBook id=\(item.id, privacy: .public) title=\(item.title, privacy: .public) status=\(item.status.rawValue, privacy: .public) added=\(item.bookAdded?.description ?? "nil", privacy: .public)"
-    )
     let book = ensureLocalBook(for: item)
     let author = fetchOrCreateAuthor(name: item.author)
     updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
-      saveModelContext(reason: "persist requested book \(item.id)")
+      saveModelContext()
     }
-    let persistedBook = fetchLocalBook(byPodibleID: item.id)
-    Self.logger.debug(
-      "persistRequestedBook post-save id=\(item.id, privacy: .public) foundLocal=\((persistedBook != nil), privacy: .public) localTitle=\(persistedBook?.title ?? "nil", privacy: .public)"
-    )
-    logLocalBookSnapshot("after-persist-requested-\(item.id)")
   }
 
   @ViewBuilder
@@ -251,22 +234,14 @@ struct PodibleLibraryView: View {
           .font(.caption)
       }
 
-      if isWipingLocalLibrary {
-        HStack(spacing: 8) {
-          ProgressView()
-          Text("Wiping local library…")
-            .foregroundStyle(.secondary)
-        }
+      let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmedQuery.isEmpty {
+        libraryListing(client: client)
       } else {
-        let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedQuery.isEmpty {
-          libraryListing(client: client)
-        } else {
-          searchListing(query: trimmedQuery, client: client)
-        }
+        searchListing(query: trimmedQuery, client: client)
       }
 
-      if let syncFooterText, isWipingLocalLibrary == false {
+      if let syncFooterText {
         HStack {
           Spacer(minLength: 0)
           Text(syncFooterText)
@@ -287,122 +262,55 @@ struct PodibleLibraryView: View {
     #endif
     .navigationTitle("Library")
     .toolbar {
-      ToolbarItem {
-        Button(action: { startSync(using: client) }) {
-          if isSyncSpinnerVisible {
-            ProgressView()
-          } else {
-            Image(systemName: "arrow.triangle.2.circlepath")
+      #if os(macOS)
+        ToolbarItem {
+          Button(action: { startSync(using: client) }) {
+            if isSyncSpinnerVisible {
+              ProgressView()
+            } else {
+              Image(systemName: "arrow.triangle.2.circlepath")
+            }
           }
+          .disabled(client == nil || isSyncing)
+          .help("Sync from backend")
         }
-        .disabled(client == nil || isSyncing || isWipingLocalLibrary)
-        .help("Sync from backend")
-      }
-      ToolbarItem {
-        Button(role: .destructive) {
-          isShowingWipeLocalLibraryConfirmation = true
-        } label: {
-          Image(systemName: "trash")
-        }
-        .disabled(
-          isSyncing || isWipingLocalLibrary || downloadingBookID != nil
-            || localDownloadingBookIDs.isEmpty == false
-        )
-        .help("Wipe local library cache and downloads")
-      }
-    }
-    .confirmationDialog(
-      "Wipe Local Library?",
-      isPresented: $isShowingWipeLocalLibraryConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Wipe Local Library", role: .destructive) {
-        wipeLocalLibrary()
-      }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(
-        "Removes local SwiftData library records, sync state, and downloaded local files. The remote podible library is not changed."
-      )
-    }
-    .confirmationDialog(
-      "Report Issue",
-      isPresented: Binding(
-        get: { pendingReportIssueBook != nil },
-        set: { isPresented in
-          if isPresented == false {
-            pendingReportIssueBook = nil
-          }
-        }
-      ),
-      titleVisibility: .visible
-    ) {
-      Button("Audio Issue") {
-        submitReportIssue(library: .audio)
-      }
-      Button("eBook Issue") {
-        submitReportIssue(library: .ebook)
-      }
-      Button("Cancel", role: .cancel) {
-        pendingReportIssueBook = nil
-      }
-    } message: {
-      if let pendingReportIssueBook {
-        Text("What kind of issue is wrong for “\(pendingReportIssueBook.title)”?")
-      }
+      #endif
     }
     .task(id: podibleAuth.accessToken ?? "") {
-      guard isWipingLocalLibrary == false else { return }
       guard let client else {
         viewModel.reset()
         return
       }
-      Self.logger.debug(
-        "startup task begin localBooks=\(self.localBooks.count, privacy: .public) lastSync=\(self.lastSync?.description ?? "nil", privacy: .public)"
-      )
-      logLocalBookSnapshot("startup-before-sync")
       await refresh(using: client)
       let remoteOnly = self.viewModel.libraryItems.filter { self.localBooksById[$0.id] == nil }
       if remoteOnly.isEmpty == false {
-        let remoteOnlySummary =
-          remoteOnly
-          .map { "\($0.id)|\($0.title)" }
-          .joined(separator: " || ")
-        Self.logger.debug(
-          "startup remote-only items count=\(remoteOnly.count, privacy: .public) items=\(remoteOnlySummary, privacy: .public)"
-        )
         for item in remoteOnly {
           applyLibraryItemUpdate(item)
         }
-        logLocalBookSnapshot("startup-after-remote-only-repair")
       }
-      Self.logger.debug(
-        "startup task end remoteItems=\(self.viewModel.libraryItems.count, privacy: .public) localBooks=\(self.localBooks.count, privacy: .public)"
-      )
     }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else { return }
-      guard isWipingLocalLibrary == false else { return }
       guard let client else { return }
       Task {
         await refresh(using: client)
       }
     }
     .refreshable {
-      guard let client, isWipingLocalLibrary == false else { return }
+      guard let client else { return }
       await refresh(using: client)
     }
     .searchable(text: $viewModel.query, prompt: "Search")
     #if os(macOS)
       .onSubmit(of: .search) {
-        guard let client, isWipingLocalLibrary == false else { return }
+        guard let client else { return }
         Task {
           await viewModel.search(using: client)
         }
       }
     #else
       .onSubmit(of: .search) {
-        guard let client, isWipingLocalLibrary == false else { return }
+        guard let client else { return }
         Task {
           await viewModel.search(using: client)
         }
@@ -410,7 +318,6 @@ struct PodibleLibraryView: View {
     #endif
     .onChange(of: viewModel.query) { _, newValue in
       searchTask?.cancel()
-      guard isWipingLocalLibrary == false else { return }
       let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
       if trimmed.isEmpty {
         viewModel.searchResults = []
@@ -603,24 +510,14 @@ struct PodibleLibraryView: View {
     isSyncing = true
     scheduleSyncSpinner()
     syncErrorMessage = nil
-    Self.logger.debug(
-      "syncFromRemote begin localBooks=\(self.localBooks.count, privacy: .public) lastSync=\(self.lastSync?.description ?? "nil", privacy: .public)"
-    )
-    logLocalBookSnapshot("before-syncFromRemote")
     do {
       let summary = try await LibrarySyncService().syncLibrary(
         using: client,
         modelContext: modelContext
       )
       updateSyncState(with: summary, syncedAt: Date())
-      Self.logger.debug(
-        "syncFromRemote end insertedBooks=\(summary.insertedBooks, privacy: .public) updatedBooks=\(summary.updatedBooks, privacy: .public)"
-      )
-      logLocalBookSnapshot("after-syncFromRemote")
     } catch {
       syncErrorMessage = error.localizedDescription
-      Self.logger.error(
-        "syncFromRemote failed error=\(error.localizedDescription, privacy: .public)")
     }
     cancelSyncSpinner()
     isSyncing = false
@@ -680,26 +577,9 @@ struct PodibleLibraryView: View {
       purgeLocalDownloadedAssets(forBookID: bookID)
       try await client.reportImportIssue(bookID: bookID, library: library)
       viewModel.watchBookStatus(bookID: bookID, using: client)
-      await viewModel.loadLibraryItems(using: client)
+      await refresh(using: client)
     } catch {
       downloadErrorMessage = error.localizedDescription
-    }
-  }
-
-  @MainActor
-  private func submitReportIssue(library: PodibleLibraryMedia) {
-    guard let pendingReportIssueBook else { return }
-    guard let client = configuredClient, client.supportsImportIssueReporting else {
-      self.pendingReportIssueBook = nil
-      return
-    }
-    self.pendingReportIssueBook = nil
-    Task {
-      await reportWrongImportedFile(
-        bookID: pendingReportIssueBook.id,
-        library: library,
-        client: client
-      )
     }
   }
 
@@ -965,78 +845,6 @@ struct PodibleLibraryView: View {
     }
   }
 
-  @MainActor
-  private func wipeLocalLibrary() {
-    guard isWipingLocalLibrary == false else { return }
-    isWipingLocalLibrary = true
-    player.stop()
-    isShowingPlayer = false
-    isShowingShareSheet = false
-    shareURL = nil
-    isShowingKindleExporter = false
-    kindleExportFile = nil
-    downloadErrorMessage = nil
-    syncErrorMessage = nil
-    localDownloadProgressByBookID.removeAll()
-    localDownloadingBookIDs.removeAll()
-    viewModel.reset()
-
-    Task { @MainActor in
-      // Let SwiftUI re-render without local rows before deleting SwiftData objects.
-      await Task.yield()
-      do {
-        try removeLocalLibraryFiles()
-        try deleteLocalLibraryRows()
-        try modelContext.save()
-      } catch {
-        syncErrorMessage = "Failed to wipe local library: \(error.localizedDescription)"
-      }
-      isWipingLocalLibrary = false
-    }
-  }
-
-  private func deleteLocalLibraryRows() throws {
-    try deleteAll(LibrarySyncState.self)
-    try deleteAll(LibraryBook.self)
-    // LibraryBook.files is nullify, so file rows are cleaned up explicitly after books are gone.
-    try deleteAll(LibraryBookFile.self)
-    try deleteAll(LocalBookState.self)
-    try deleteAll(Series.self)
-    try deleteAll(Author.self)
-  }
-
-  private func deleteAll<T: PersistentModel>(_ type: T.Type) throws {
-    let rows = try modelContext.fetch(FetchDescriptor<T>())
-    for row in rows {
-      modelContext.delete(row)
-    }
-  }
-
-  private func removeLocalLibraryFiles() throws {
-    let fm = FileManager.default
-    for url in localLibraryWipeTargets(fileManager: fm) {
-      if fm.fileExists(atPath: url.path) {
-        try fm.removeItem(at: url)
-      }
-    }
-  }
-
-  private func localLibraryWipeTargets(fileManager: FileManager) -> [URL] {
-    var urls: [URL] = []
-    if let appSupport = try? fileManager.url(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask,
-      appropriateFor: nil,
-      create: false
-    ) {
-      urls.append(appSupport.appendingPathComponent("KindlingLibrary", isDirectory: true))
-    }
-    let temp = fileManager.temporaryDirectory
-    urls.append(temp.appendingPathComponent("lazy-librarian", isDirectory: true))
-    urls.append(temp.appendingPathComponent("podible-backend", isDirectory: true))
-    return urls
-  }
-
   private func rowSummary(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
     let raw = item.summary?.isEmpty == false ? item.summary : localBook?.summary
     guard let raw, raw.isEmpty == false else { return nil }
@@ -1219,9 +1027,20 @@ struct PodibleLibraryView: View {
       }
       if let client, client.supportsImportIssueReporting {
         Button {
-          pendingReportIssueBook = PendingReportIssueBook(id: item.id, title: item.title)
+          Task {
+            await reportWrongImportedFile(bookID: item.id, library: .audio, client: client)
+          }
         } label: {
-          Label("Report Issue", systemImage: "exclamationmark.triangle")
+          Label("Audio Issue", systemImage: "exclamationmark.triangle")
+        }
+        .tint(.orange)
+
+        Button {
+          Task {
+            await reportWrongImportedFile(bookID: item.id, library: .ebook, client: client)
+          }
+        } label: {
+          Label("eBook Issue", systemImage: "exclamationmark.triangle")
         }
         .tint(.orange)
       }
@@ -1258,9 +1077,14 @@ struct PodibleLibraryView: View {
         Label("Send to Kindle", systemImage: "paperplane")
       }
     }
-    if let reportIssue = menuActions.reportIssue {
-      Button(action: reportIssue) {
-        Label("Report Issue", systemImage: "exclamationmark.triangle")
+    if let reportAudioIssue = menuActions.reportAudioIssue {
+      Button(action: reportAudioIssue) {
+        Label("Report Audio Issue", systemImage: "exclamationmark.triangle")
+      }
+    }
+    if let reportEbookIssue = menuActions.reportEbookIssue {
+      Button(action: reportEbookIssue) {
+        Label("Report eBook Issue", systemImage: "exclamationmark.triangle")
       }
     }
     if let deleteRemote = menuActions.deleteRemote {
@@ -1272,7 +1096,7 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func localLibraryRow(_ book: LibraryBook, client: RemoteLibraryServing?) -> some View {
-    libraryRow(localProxyItem(for: book), localBook: book, client: nil)
+    libraryRow(localProxyItem(for: book), localBook: book, client: client)
   }
 
   private func localProxyItem(for book: LibraryBook) -> PodibleLibraryItem {
@@ -1665,7 +1489,7 @@ struct PodibleLibraryView: View {
     )
     modelContext.insert(book)
     if modelContext.hasChanges {
-      saveModelContext(reason: "insert local book \(item.id)")
+      saveModelContext()
     }
     return book
   }
@@ -1742,41 +1566,17 @@ struct PodibleLibraryView: View {
       updated = true
     }
     if updated, modelContext.hasChanges {
-      saveModelContext(reason: "update local book \(item.id)")
+      saveModelContext()
     }
   }
 
   @MainActor
-  private func saveModelContext(reason: String) {
+  private func saveModelContext() {
     do {
       try modelContext.save()
-      Self.logger.debug("SwiftData save succeeded reason=\(reason, privacy: .public)")
     } catch {
-      Self.logger.error(
-        "SwiftData save failed reason=\(reason, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-      )
+      syncErrorMessage = "Failed to save library cache: \(error.localizedDescription)"
     }
-  }
-
-  @MainActor
-  private func logLocalBookSnapshot(_ label: String) {
-    let snapshot =
-      localBooks
-      .map {
-        "\($0.podibleId)|\($0.title)|bookStatus=\($0.bookStatusRaw ?? "nil")|audioStatus=\($0.audioStatusRaw ?? "nil")|added=\($0.addedAt?.description ?? "nil")"
-      }
-      .joined(separator: " || ")
-    Self.logger.debug(
-      "local snapshot label=\(label, privacy: .public) count=\(self.localBooks.count, privacy: .public) books=\(snapshot, privacy: .public)"
-    )
-  }
-
-  @MainActor
-  private func fetchLocalBook(byPodibleID podibleID: String) -> LibraryBook? {
-    let descriptor = FetchDescriptor<LibraryBook>(
-      predicate: #Predicate { $0.podibleId == podibleID }
-    )
-    return try? modelContext.fetch(descriptor).first
   }
 
   private func normalizeAuthorKey(_ name: String) -> String {
