@@ -982,7 +982,6 @@ struct LocalPlaybackView: View {
           }
           .padding(.horizontal, 24)
           .padding(.top, 10)
-          .padding(.bottom, 8)
         }
       }
     }
