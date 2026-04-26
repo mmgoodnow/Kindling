@@ -191,7 +191,7 @@ struct PodibleLibraryView: View {
     let author = fetchOrCreateAuthor(name: item.author)
     updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
-      try? modelContext.save()
+      saveModelContext(reason: "apply library item update for \(item.id)")
     }
   }
 
@@ -201,7 +201,7 @@ struct PodibleLibraryView: View {
     let author = fetchOrCreateAuthor(name: item.author)
     updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
-      try? modelContext.save()
+      saveModelContext(reason: "persist requested book \(item.id)")
     }
   }
 
@@ -1646,7 +1646,7 @@ struct PodibleLibraryView: View {
     )
     modelContext.insert(book)
     if modelContext.hasChanges {
-      try? modelContext.save()
+      saveModelContext(reason: "insert local book \(item.id)")
     }
     return book
   }
@@ -1723,7 +1723,17 @@ struct PodibleLibraryView: View {
       updated = true
     }
     if updated, modelContext.hasChanges {
-      try? modelContext.save()
+      saveModelContext(reason: "update local book \(item.id)")
+    }
+  }
+
+  @MainActor
+  private func saveModelContext(reason: String) {
+    do {
+      try modelContext.save()
+    } catch {
+      print(
+        "[RemoteLibraryView] SwiftData save failed during \(reason): \(error.localizedDescription)")
     }
   }
 
