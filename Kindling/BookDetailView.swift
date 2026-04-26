@@ -14,7 +14,7 @@ struct BookDetailActions {
   var downloadAudio: (() -> Void)?
   var audioDownload: AudioDownloadState = .idle
   var fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
-  var setAlternateCover: ((PodibleAlternateCover) async throws -> Void)?
+  var setAlternateCover: ((PodibleAlternateCover) async throws -> PodibleLibraryItem)?
   var shareEbook: (() -> Void)?
   var emailToKindle: (() -> Void)?
   var reportIssue: (() -> Void)?
@@ -97,9 +97,9 @@ struct BookDetailView: View {
         currentImagePath: currentCoverImagePath,
         fetchAlternateCovers: actions.fetchAlternateCovers,
         applyAlternateCover: { cover in
-          try await actions.setAlternateCover?(cover)
+          let updated = try await actions.setAlternateCover?(cover)
           await MainActor.run {
-            coverImagePathOverride = cover.imagePath
+            coverImagePathOverride = updated?.bookImagePath
           }
         }
       )

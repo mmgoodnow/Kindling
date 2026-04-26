@@ -310,7 +310,7 @@ protocol PodibleLibraryServing {
   func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func fetchAlternateCovers(bookID: String, limit: Int) async throws -> [PodibleAlternateCover]
-  func setAlternateCover(bookID: String, coverID: Int) async throws
+  func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem
   func resolveAudiobookAssetID(bookID: String) async throws -> Int?
   func fetchTranscript(assetID: Int) async throws -> PodibleTranscript?
   func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker]
@@ -366,9 +366,10 @@ extension PodibleLibraryServing {
     return []
   }
 
-  func setAlternateCover(bookID: String, coverID: Int) async throws {
+  func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem {
     _ = bookID
     _ = coverID
+    throw PodibleError.unsupported("This backend does not support alternate covers.")
   }
 
   func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
@@ -756,10 +757,12 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return Array(candidates.prefix(limit))
   }
 
-  func setAlternateCover(bookID: String, coverID: Int) async throws {
-    guard let index = libraryItems.firstIndex(where: { $0.id == bookID }) else { return }
+  func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem {
+    guard let index = libraryItems.firstIndex(where: { $0.id == bookID }) else {
+      throw PodibleError.badResponse
+    }
     let existing = libraryItems[index]
-    libraryItems[index] = PodibleLibraryItem(
+    let updated = PodibleLibraryItem(
       id: existing.id,
       openLibraryWorkID: existing.openLibraryWorkID,
       title: existing.title,
@@ -775,6 +778,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
       wordCount: existing.wordCount,
       runtimeSeconds: existing.runtimeSeconds
     )
+    libraryItems[index] = updated
+    return updated
   }
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
@@ -973,6 +978,10 @@ private struct PodibleOpenLibraryCoverCandidate: Decodable {
       (try? container.decodeIfPresent(String.self, forKey: .coverUrl))
       ?? (try? container.decodeIfPresent(String.self, forKey: .url))
   }
+}
+
+private struct PodibleOpenLibrarySetCoverResult: Decodable {
+  let book: PodibleLibraryBook
 }
 
 private struct PodibleLibraryBook: Decodable {
@@ -1305,13 +1314,13 @@ struct PodibleClient: PodibleLibraryServing {
     }
   }
 
-  func setAlternateCover(bookID: String, coverID: Int) async throws {
+  func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem {
     let numericBookID = try parseBookID(bookID)
-    _ =
-      try await rpcCall(
-        method: "openlibrary.setCover",
-        params: ["bookId": numericBookID, "coverId": coverID]
-      ) as PodibleEmptyResult
+    let response: PodibleOpenLibrarySetCoverResult = try await rpcCall(
+      method: "openlibrary.setCover",
+      params: ["bookId": numericBookID, "coverId": coverID]
+    )
+    return toLibraryItem(response.book)
   }
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {

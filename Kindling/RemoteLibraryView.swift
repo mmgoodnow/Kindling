@@ -139,10 +139,11 @@ struct PodibleLibraryView: View {
         try await client.fetchAlternateCovers(bookID: item.id, limit: 50)
       }
       actions.setAlternateCover = { cover in
-        try await client.setAlternateCover(bookID: item.id, coverID: cover.coverID)
+        let updated = try await client.setAlternateCover(bookID: item.id, coverID: cover.coverID)
         await MainActor.run {
-          applyAlternateCoverPath(cover.imagePath, to: item)
+          applyLibraryItemUpdate(updated)
         }
+        return updated
       }
     }
 
@@ -179,31 +180,16 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
-  private func applyAlternateCoverPath(_ imagePath: String, to item: PodibleLibraryItem) {
-    let updatedItem = PodibleLibraryItem(
-      id: item.id,
-      openLibraryWorkID: item.openLibraryWorkID,
-      title: item.title,
-      author: item.author,
-      summary: item.summary,
-      status: item.status,
-      ebookStatus: item.ebookStatus,
-      audioStatus: item.audioStatus,
-      bookAdded: item.bookAdded,
-      updatedAt: .now,
-      fullPseudoProgress: item.fullPseudoProgress,
-      bookImagePath: imagePath,
-      wordCount: item.wordCount,
-      runtimeSeconds: item.runtimeSeconds
-    )
-
+  private func applyLibraryItemUpdate(_ item: PodibleLibraryItem) {
     if let index = viewModel.libraryItems.firstIndex(where: { $0.id == item.id }) {
-      viewModel.libraryItems[index] = updatedItem
+      viewModel.libraryItems[index] = item
+    } else {
+      viewModel.libraryItems.append(item)
     }
 
-    let book = ensureLocalBook(for: updatedItem)
-    let author = fetchOrCreateAuthor(name: updatedItem.author)
-    updateLocalBook(book, with: updatedItem, author: author)
+    let book = ensureLocalBook(for: item)
+    let author = fetchOrCreateAuthor(name: item.author)
+    updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
       try? modelContext.save()
     }
@@ -1625,8 +1611,9 @@ struct PodibleLibraryView: View {
     let author = fetchOrCreateAuthor(name: item.author)
     let book = LibraryBook(
       podibleId: item.id,
+      openLibraryWorkID: item.openLibraryWorkID,
       title: item.title,
-      summary: nil,
+      summary: item.summary,
       coverURLString: item.bookImagePath,
       runtimeSeconds: item.runtimeSeconds,
       wordCount: item.wordCount,
@@ -1669,8 +1656,16 @@ struct PodibleLibraryView: View {
     author: Author
   ) {
     var updated = false
+    if book.openLibraryWorkID != item.openLibraryWorkID {
+      book.openLibraryWorkID = item.openLibraryWorkID
+      updated = true
+    }
     if book.title != item.title {
       book.title = item.title
+      updated = true
+    }
+    if book.summary != item.summary {
+      book.summary = item.summary
       updated = true
     }
     if book.coverURLString != item.bookImagePath {
