@@ -981,6 +981,7 @@ private struct PodibleLibraryBook: Decodable {
   let title: String
   let author: String
   let description: String?
+  let coverId: Int?
   let coverUrl: String?
   let addedAt: String
   let updatedAt: String
@@ -1453,6 +1454,9 @@ struct PodibleClient: PodibleLibraryServing {
     let audioStatus = mapPodibleStatus(book.audioStatus)
     let addedAt = PodibleDateParser.parse(book.addedAt)
     let updatedAt = PodibleDateParser.parse(book.updatedAt)
+    let coverPath =
+      absoluteAssetURLString(from: book.coverUrl)
+      ?? podibleOpenLibraryCoverURL(coverID: book.coverId)?.absoluteString
     return PodibleLibraryItem(
       id: String(book.id),
       openLibraryWorkID: book.identifiers?.openlibrary,
@@ -1465,7 +1469,7 @@ struct PodibleClient: PodibleLibraryServing {
       bookAdded: addedAt,
       updatedAt: updatedAt,
       fullPseudoProgress: book.fullPseudoProgress.map { Int($0.rounded()) },
-      bookImagePath: absoluteAssetURLString(from: book.coverUrl),
+      bookImagePath: coverPath,
       wordCount: book.wordCount,
       runtimeSeconds: book.durationMs.map { Int(($0 + 500) / 1000) }
     )
