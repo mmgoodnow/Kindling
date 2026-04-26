@@ -13,6 +13,8 @@ struct BookDetailActions {
   var play: (() -> Void)?
   var downloadAudio: (() -> Void)?
   var audioDownload: AudioDownloadState = .idle
+  var fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
+  var setAlternateCover: ((PodibleAlternateCover) async throws -> Void)?
   var shareEbook: (() -> Void)?
   var emailToKindle: (() -> Void)?
   var reportIssue: (() -> Void)?
@@ -33,6 +35,8 @@ struct BookDetailView: View {
   /// True if the audio is available remotely but not on disk (streamed only).
   let isStreamOnly: Bool
   @Binding var isShowingPlayer: Bool
+  @State private var isShowingCoverPicker = false
+  @State private var coverImagePathOverride: String?
 
   var body: some View {
     ScrollView {
@@ -86,6 +90,22 @@ struct BookDetailView: View {
         // a small extra nudge here.
         .padding(.trailing, 28)
     }
+    .sheet(isPresented: $isShowingCoverPicker) {
+      BookCoverPickerSheet(
+        title: item.title,
+        author: item.author,
+        currentImagePath: currentCoverImagePath,
+        fetchAlternateCovers: actions.fetchAlternateCovers,
+        applyAlternateCover: { cover in
+          try await actions.setAlternateCover?(cover)
+          await MainActor.run {
+            coverImagePathOverride = cover.imagePath
+          }
+        }
+      )
+      .environmentObject(userSettings)
+      .environmentObject(podibleAuth)
+    }
   }
 
   // MARK: - Hero
@@ -108,12 +128,39 @@ struct BookDetailView: View {
     .padding(.top, 8)
   }
 
+  private var currentCoverImagePath: String? {
+    coverImagePathOverride ?? localBook?.coverURLString ?? item.bookImagePath
+  }
+
   @ViewBuilder
   private var heroCover: some View {
     let url = remoteLibraryAssetURL(
       baseURLString: userSettings.podibleRPCURL,
-      path: item.bookImagePath
+      path: currentCoverImagePath
     )
+    if canChangeCover {
+      Button {
+        isShowingCoverPicker = true
+      } label: {
+        heroCoverArtwork(url: url)
+          .overlay(alignment: .bottomTrailing) {
+            Image(systemName: "photo.badge.plus")
+              .font(.footnote.weight(.semibold))
+              .foregroundStyle(.primary)
+              .padding(8)
+              .background(.ultraThinMaterial, in: Circle())
+              .padding(10)
+          }
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Change Cover")
+    } else {
+      heroCoverArtwork(url: url)
+    }
+  }
+
+  @ViewBuilder
+  private func heroCoverArtwork(url: URL?) -> some View {
     if let url {
       AuthenticatedRemoteImage(
         url: url,
@@ -326,14 +373,28 @@ struct BookDetailView: View {
   /// the dock as icons) so users have text-labelled access to them. Report
   /// and Delete only live here.
   private var hasMenuActions: Bool {
-    actions.shareEbook != nil
+    canChangeCover
+      || actions.fetchAlternateCovers != nil
+      || actions.setAlternateCover != nil
+      || actions.shareEbook != nil
       || actions.emailToKindle != nil
       || actions.reportIssue != nil
       || actions.deleteRemote != nil
   }
 
+  private var canChangeCover: Bool {
+    actions.fetchAlternateCovers != nil && actions.setAlternateCover != nil
+  }
+
   private var overflowMenu: some View {
     Menu {
+      if canChangeCover {
+        Button {
+          isShowingCoverPicker = true
+        } label: {
+          Label("Change Cover", systemImage: "photo.badge.plus")
+        }
+      }
       if let shareEbook = actions.shareEbook {
         Button(action: shareEbook) {
           Label("Share eBook", systemImage: "square.and.arrow.up")
@@ -376,5 +437,194 @@ struct BookDetailView: View {
       return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
     }
     return "\(count)"
+  }
+}
+
+private struct BookCoverPickerSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  @EnvironmentObject private var userSettings: UserSettings
+  @EnvironmentObject private var podibleAuth: PodibleAuthController
+
+  let title: String
+  let author: String
+  let currentImagePath: String?
+  let fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
+  let applyAlternateCover: ((PodibleAlternateCover) async throws -> Void)?
+
+  @State private var covers: [PodibleAlternateCover] = []
+  @State private var selectedCoverID: Int?
+  @State private var isLoading = false
+  @State private var isApplying = false
+  @State private var errorMessage: String?
+
+  private let columns = [
+    GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 12)
+  ]
+
+  var body: some View {
+    NavigationStack {
+      VStack(spacing: 16) {
+        selectedPreview
+        if let errorMessage {
+          Text(errorMessage)
+            .font(.caption)
+            .foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        content
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 16)
+      .padding(.bottom, 20)
+      .navigationTitle("Change Cover")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            dismiss()
+          }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Use This Cover") {
+            Task {
+              await applySelection()
+            }
+          }
+          .disabled(selectedCover == nil || isApplying)
+        }
+      }
+      .task {
+        await loadCoversIfNeeded()
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var selectedPreview: some View {
+    VStack(spacing: 12) {
+      previewImage(path: selectedCover?.imagePath ?? currentImagePath)
+      VStack(spacing: 4) {
+        Text(title)
+          .font(.headline)
+          .multilineTextAlignment(.center)
+        Text(author)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+        Text("Open Library covers")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var content: some View {
+    if isLoading {
+      Spacer(minLength: 0)
+      ProgressView("Loading Covers…")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      Spacer(minLength: 0)
+    } else if covers.isEmpty {
+      ContentUnavailableView(
+        "No Alternate Covers",
+        systemImage: "photo.on.rectangle",
+        description: Text("Open Library doesn't have any alternate covers for this book.")
+      )
+    } else {
+      ScrollView {
+        LazyVGrid(columns: columns, spacing: 12) {
+          ForEach(covers) { cover in
+            Button {
+              selectedCoverID = cover.id
+            } label: {
+              previewImage(path: cover.imagePath)
+                .overlay(alignment: .topTrailing) {
+                  if selectedCoverID == cover.id {
+                    Image(systemName: "checkmark.circle.fill")
+                      .font(.title3)
+                      .foregroundStyle(.white, .accent)
+                      .padding(8)
+                  }
+                }
+                .overlay {
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                      selectedCoverID == cover.id ? Color.accentColor : Color.clear,
+                      lineWidth: 3
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+          }
+        }
+        .padding(.bottom, 8)
+      }
+    }
+  }
+
+  private var selectedCover: PodibleAlternateCover? {
+    covers.first(where: { $0.id == selectedCoverID })
+  }
+
+  @ViewBuilder
+  private func previewImage(path: String?) -> some View {
+    let url = remoteLibraryAssetURL(
+      baseURLString: userSettings.podibleRPCURL,
+      path: path
+    )
+    if let url {
+      AuthenticatedRemoteImage(
+        url: url,
+        rpcURLString: userSettings.podibleRPCURL,
+        accessToken: podibleAuth.accessToken
+      ) {
+        bookCoverPlaceholder(title: title, author: author)
+          .frame(width: 132, height: 192)
+      }
+      .scaledToFill()
+      .frame(width: 132, height: 192)
+      .clipShape(RoundedRectangle(cornerRadius: 10))
+      .shadow(radius: 6, y: 3)
+    } else {
+      bookCoverPlaceholder(title: title, author: author)
+        .frame(width: 132, height: 192)
+    }
+  }
+
+  @MainActor
+  private func loadCoversIfNeeded() async {
+    guard covers.isEmpty, isLoading == false else { return }
+    guard let fetchAlternateCovers else { return }
+    isLoading = true
+    errorMessage = nil
+    defer { isLoading = false }
+    do {
+      let fetched = try await fetchAlternateCovers()
+      covers = fetched
+      if selectedCoverID == nil {
+        selectedCoverID = fetched.first?.id
+      }
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  @MainActor
+  private func applySelection() async {
+    guard isApplying == false else { return }
+    guard let selectedCover else { return }
+    guard let applyAlternateCover else { return }
+    isApplying = true
+    errorMessage = nil
+    defer { isApplying = false }
+    do {
+      try await applyAlternateCover(selectedCover)
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
   }
 }

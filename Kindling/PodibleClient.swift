@@ -309,6 +309,8 @@ protocol PodibleLibraryServing {
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
+  func fetchAlternateCovers(bookID: String, limit: Int) async throws -> [PodibleAlternateCover]
+  func setAlternateCover(bookID: String, coverID: Int) async throws
   func resolveAudiobookAssetID(bookID: String) async throws -> Int?
   func fetchTranscript(assetID: Int) async throws -> PodibleTranscript?
   func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker]
@@ -355,6 +357,18 @@ extension PodibleLibraryServing {
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
     _ = bookIDs
     return []
+  }
+
+  func fetchAlternateCovers(bookID: String, limit: Int = 50) async throws -> [PodibleAlternateCover]
+  {
+    _ = bookID
+    _ = limit
+    return []
+  }
+
+  func setAlternateCover(bookID: String, coverID: Int) async throws {
+    _ = bookID
+    _ = coverID
   }
 
   func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
@@ -442,6 +456,13 @@ struct PodibleDownloadProgressItem: Hashable, Decodable {
     progress = try? container.decodeIfPresent(Int.self, forKey: .progress)
     finished = try? container.decodeIfPresent(Bool.self, forKey: .finished)
   }
+}
+
+struct PodibleAlternateCover: Identifiable, Hashable {
+  let coverID: Int
+  let imagePath: String
+
+  var id: Int { coverID }
 }
 
 struct PodibleSearchResult: Identifiable, Hashable {
@@ -715,6 +736,47 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return items
   }
 
+  func fetchAlternateCovers(bookID: String, limit: Int = 50) async throws -> [PodibleAlternateCover]
+  {
+    let candidates = [
+      PodibleAlternateCover(
+        coverID: 240727,
+        imagePath: "https://covers.openlibrary.org/b/id/240727-L.jpg"
+      ),
+      PodibleAlternateCover(
+        coverID: 10_521_245,
+        imagePath: "https://covers.openlibrary.org/b/id/10521245-L.jpg"
+      ),
+      PodibleAlternateCover(
+        coverID: 11_118_815,
+        imagePath: "https://covers.openlibrary.org/b/id/11118815-L.jpg"
+      ),
+    ]
+    _ = bookID
+    return Array(candidates.prefix(limit))
+  }
+
+  func setAlternateCover(bookID: String, coverID: Int) async throws {
+    guard let index = libraryItems.firstIndex(where: { $0.id == bookID }) else { return }
+    let existing = libraryItems[index]
+    libraryItems[index] = PodibleLibraryItem(
+      id: existing.id,
+      openLibraryWorkID: existing.openLibraryWorkID,
+      title: existing.title,
+      author: existing.author,
+      summary: existing.summary,
+      status: existing.status,
+      ebookStatus: existing.ebookStatus,
+      audioStatus: existing.audioStatus,
+      bookAdded: existing.bookAdded,
+      updatedAt: .now,
+      fullPseudoProgress: existing.fullPseudoProgress,
+      bookImagePath: "https://covers.openlibrary.org/b/id/\(coverID)-L.jpg",
+      wordCount: existing.wordCount,
+      runtimeSeconds: existing.runtimeSeconds
+    )
+  }
+
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
     let filter = Set(bookIDs ?? [])
     for (bookID, p) in progress {
@@ -838,12 +900,79 @@ private struct PodibleOpenLibrarySearchResult: Decodable {
   let results: [PodibleOpenLibraryCandidate]
 }
 
+private struct PodibleOpenLibraryCoversResult: Decodable {
+  let covers: [PodibleOpenLibraryCoverCandidate]
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if let direct = try? container.decode([PodibleOpenLibraryCoverCandidate].self) {
+      covers = direct
+      return
+    }
+    if let directIDs = try? container.decode([Int].self) {
+      covers = directIDs.map { PodibleOpenLibraryCoverCandidate(coverId: $0, coverUrl: nil) }
+      return
+    }
+    let object = try decoder.container(keyedBy: DynamicCodingKey.self)
+    for key in ["covers", "results", "items"] {
+      let codingKey = DynamicCodingKey(stringValue: key)!
+      if let values = try? object.decode([PodibleOpenLibraryCoverCandidate].self, forKey: codingKey)
+      {
+        covers = values
+        return
+      }
+      if let values = try? object.decode([Int].self, forKey: codingKey) {
+        covers = values.map { PodibleOpenLibraryCoverCandidate(coverId: $0, coverUrl: nil) }
+        return
+      }
+    }
+    covers = []
+  }
+}
+
 private struct PodibleOpenLibraryCandidate: Decodable {
   let openLibraryKey: String
   let title: String
   let author: String
   let publishedAt: String?
   let coverId: Int?
+}
+
+private struct PodibleOpenLibraryCoverCandidate: Decodable {
+  let coverId: Int?
+  let coverUrl: String?
+
+  init(coverId: Int?, coverUrl: String?) {
+    self.coverId = coverId
+    self.coverUrl = coverUrl
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case coverId
+    case coverID
+    case id
+    case coverUrl
+    case url
+  }
+
+  init(from decoder: Decoder) throws {
+    if let container = try? decoder.singleValueContainer(),
+      let raw = try? container.decode(Int.self)
+    {
+      coverId = raw
+      coverUrl = nil
+      return
+    }
+
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    coverId =
+      (try? container.decodeIfPresent(Int.self, forKey: .coverId))
+      ?? (try? container.decodeIfPresent(Int.self, forKey: .coverID))
+      ?? (try? container.decodeIfPresent(Int.self, forKey: .id))
+    coverUrl =
+      (try? container.decodeIfPresent(String.self, forKey: .coverUrl))
+      ?? (try? container.decodeIfPresent(String.self, forKey: .url))
+  }
 }
 
 private struct PodibleLibraryBook: Decodable {
@@ -980,6 +1109,21 @@ private struct PodibleAsset: Decodable {
 
 private struct PodibleAssetFile: Decodable {
   let path: String
+}
+
+private struct DynamicCodingKey: CodingKey {
+  let stringValue: String
+  let intValue: Int?
+
+  init?(stringValue: String) {
+    self.stringValue = stringValue
+    intValue = nil
+  }
+
+  init?(intValue: Int) {
+    stringValue = String(intValue)
+    self.intValue = intValue
+  }
 }
 
 struct PodibleClient: PodibleLibraryServing {
@@ -1143,6 +1287,30 @@ struct PodibleClient: PodibleLibraryServing {
       return Array(mapped.prefix(limit))
     }
     return mapped
+  }
+
+  func fetchAlternateCovers(bookID: String, limit: Int = 50) async throws -> [PodibleAlternateCover]
+  {
+    let numericBookID = try parseBookID(bookID)
+    let response: PodibleOpenLibraryCoversResult = try await rpcCall(
+      method: "openlibrary.covers",
+      params: ["bookId": numericBookID, "limit": limit]
+    )
+    return response.covers.compactMap { candidate in
+      guard let coverID = candidate.coverId, coverID > 0 else { return nil }
+      let path = candidate.coverUrl ?? podibleOpenLibraryCoverURL(coverID: coverID)?.absoluteString
+      guard let path, path.isEmpty == false else { return nil }
+      return PodibleAlternateCover(coverID: coverID, imagePath: path)
+    }
+  }
+
+  func setAlternateCover(bookID: String, coverID: Int) async throws {
+    let numericBookID = try parseBookID(bookID)
+    _ =
+      try await rpcCall(
+        method: "openlibrary.setCover",
+        params: ["bookId": numericBookID, "coverId": coverID]
+      ) as PodibleEmptyResult
   }
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {

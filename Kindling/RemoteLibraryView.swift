@@ -134,6 +134,18 @@ struct PodibleLibraryView: View {
       actions.downloadAudio = { startLocalDownload(for: item, client: client) }
     }
 
+    if let client {
+      actions.fetchAlternateCovers = {
+        try await client.fetchAlternateCovers(bookID: item.id, limit: 50)
+      }
+      actions.setAlternateCover = { cover in
+        try await client.setAlternateCover(bookID: item.id, coverID: cover.coverID)
+        await MainActor.run {
+          applyAlternateCoverPath(cover.imagePath, to: item)
+        }
+      }
+    }
+
     if hasEbookAvailable, let client {
       actions.shareEbook = {
         Task {
@@ -164,6 +176,37 @@ struct PodibleLibraryView: View {
     }
 
     return actions
+  }
+
+  @MainActor
+  private func applyAlternateCoverPath(_ imagePath: String, to item: PodibleLibraryItem) {
+    let updatedItem = PodibleLibraryItem(
+      id: item.id,
+      openLibraryWorkID: item.openLibraryWorkID,
+      title: item.title,
+      author: item.author,
+      summary: item.summary,
+      status: item.status,
+      ebookStatus: item.ebookStatus,
+      audioStatus: item.audioStatus,
+      bookAdded: item.bookAdded,
+      updatedAt: .now,
+      fullPseudoProgress: item.fullPseudoProgress,
+      bookImagePath: imagePath,
+      wordCount: item.wordCount,
+      runtimeSeconds: item.runtimeSeconds
+    )
+
+    if let index = viewModel.libraryItems.firstIndex(where: { $0.id == item.id }) {
+      viewModel.libraryItems[index] = updatedItem
+    }
+
+    let book = ensureLocalBook(for: updatedItem)
+    let author = fetchOrCreateAuthor(name: updatedItem.author)
+    updateLocalBook(book, with: updatedItem, author: author)
+    if modelContext.hasChanges {
+      try? modelContext.save()
+    }
   }
 
   @ViewBuilder
