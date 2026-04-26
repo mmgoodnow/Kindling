@@ -77,6 +77,9 @@ struct BookDetailView: View {
     .safeAreaInset(edge: .bottom, spacing: 0) {
       floatingActionDock
         .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
     }
   }
 
