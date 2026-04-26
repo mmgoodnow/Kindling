@@ -214,6 +214,10 @@ struct PodibleLibraryView: View {
     if modelContext.hasChanges {
       saveModelContext(reason: "persist requested book \(item.id)")
     }
+    let persistedBook = fetchLocalBook(byPodibleID: item.id)
+    Self.logger.debug(
+      "persistRequestedBook post-save id=\(item.id, privacy: .public) foundLocal=\((persistedBook != nil), privacy: .public) localTitle=\(persistedBook?.title ?? "nil", privacy: .public)"
+    )
     logLocalBookSnapshot("after-persist-requested-\(item.id)")
   }
 
@@ -361,6 +365,16 @@ struct PodibleLibraryView: View {
       }
       logLocalBookSnapshot("startup-before-loadLibraryItems")
       await viewModel.loadLibraryItems(using: client)
+      let remoteOnly = self.viewModel.libraryItems.filter { self.localBooksById[$0.id] == nil }
+      if remoteOnly.isEmpty == false {
+        let remoteOnlySummary =
+          remoteOnly
+          .map { "\($0.id)|\($0.title)" }
+          .joined(separator: " || ")
+        Self.logger.debug(
+          "startup remote-only items count=\(remoteOnly.count, privacy: .public) items=\(remoteOnlySummary, privacy: .public)"
+        )
+      }
       Self.logger.debug(
         "startup task end remoteItems=\(self.viewModel.libraryItems.count, privacy: .public) localBooks=\(self.localBooks.count, privacy: .public)"
       )
@@ -1773,7 +1787,6 @@ struct PodibleLibraryView: View {
   private func logLocalBookSnapshot(_ label: String) {
     let snapshot =
       localBooks
-      .prefix(20)
       .map {
         "\($0.podibleId)|\($0.title)|bookStatus=\($0.bookStatusRaw ?? "nil")|audioStatus=\($0.audioStatusRaw ?? "nil")|added=\($0.addedAt?.description ?? "nil")"
       }
@@ -1781,6 +1794,14 @@ struct PodibleLibraryView: View {
     Self.logger.debug(
       "local snapshot label=\(label, privacy: .public) count=\(self.localBooks.count, privacy: .public) books=\(snapshot, privacy: .public)"
     )
+  }
+
+  @MainActor
+  private func fetchLocalBook(byPodibleID podibleID: String) -> LibraryBook? {
+    let descriptor = FetchDescriptor<LibraryBook>(
+      predicate: #Predicate { $0.podibleId == podibleID }
+    )
+    return try? modelContext.fetch(descriptor).first
   }
 
   private func normalizeAuthorKey(_ name: String) -> String {
