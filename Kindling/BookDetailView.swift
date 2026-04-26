@@ -26,7 +26,6 @@ struct BookDetailView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
-  @Namespace private var glassNamespace
 
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
@@ -214,9 +213,7 @@ struct BookDetailView: View {
         secondaryGlassButton(
           systemImage: "arrow.down.circle",
           accessibilityLabel: "Download for Offline",
-          action: downloadAudio
-        )
-        .glassEffectID("audioDownload", in: glassNamespace)
+          action: downloadAudio)
       }
       primaryButton
     }
@@ -315,7 +312,6 @@ struct BookDetailView: View {
     .padding(.vertical, 14)
     .frame(maxWidth: .infinity)
     .glassEffect(.regular, in: Capsule())
-    .glassEffectID("audioDownload", in: glassNamespace)
   }
 
   private func progressLabel(_ progress: Double?) -> String {

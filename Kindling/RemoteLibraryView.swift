@@ -1354,12 +1354,8 @@ struct PodibleLibraryView: View {
   @MainActor
   private func startLocalDownload(for book: LibraryBook, client: RemoteLibraryServing) {
     guard localDownloadingBookIDs.contains(book.podibleId) == false else { return }
-    // Animate the start so the dock's download glass-circle morphs into the
-    // progress capsule via shared `glassEffectID`.
-    withAnimation(.smooth) {
-      localDownloadingBookIDs.insert(book.podibleId)
-      localDownloadProgressByBookID[book.podibleId] = 0
-    }
+    localDownloadingBookIDs.insert(book.podibleId)
+    localDownloadProgressByBookID[book.podibleId] = 0
     downloadErrorMessage = nil
 
     let audioStatus = parseAudioStatus(from: book)
