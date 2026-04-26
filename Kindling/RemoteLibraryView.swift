@@ -1003,10 +1003,54 @@ struct PodibleLibraryView: View {
   private func rowSummary(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
     let raw = item.summary?.isEmpty == false ? item.summary : localBook?.summary
     guard let raw, raw.isEmpty == false else { return nil }
-    return
+    let lines =
       raw
+      .components(separatedBy: .newlines)
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { $0.isEmpty == false }
+      .map(compactMarkdownExcerptLine(_:))
+
+    let summary =
+      lines
+      .filter { $0.isEmpty == false }
+      .joined(separator: " ")
       .trimmingCharacters(in: .whitespacesAndNewlines)
-      .replacingOccurrences(of: "\n", with: " ")
+
+    return summary.isEmpty ? nil : summary
+  }
+
+  private func compactMarkdownExcerptLine(_ line: String) -> String {
+    var value = line
+
+    // Trim common markdown prefixes that waste horizontal space in compact rows.
+    value = value.replacingOccurrences(
+      of: #"^\s{0,3}(#{1,6}\s+|[-*+]\s+|\d+\.\s+|>\s+)"#,
+      with: "",
+      options: .regularExpression
+    )
+
+    // Remove emphasis and inline-code fences while keeping the text.
+    value = value.replacingOccurrences(of: "**", with: "")
+    value = value.replacingOccurrences(of: "__", with: "")
+    value = value.replacingOccurrences(of: "*", with: "")
+    value = value.replacingOccurrences(of: "_", with: "")
+    value = value.replacingOccurrences(of: "`", with: "")
+
+    // Flatten markdown links to just their visible labels.
+    value = value.replacingOccurrences(
+      of: #"\[([^\]]+)\]\([^)]+\)"#,
+      with: "$1",
+      options: .regularExpression
+    )
+
+    // Collapse extra whitespace introduced by stripping markdown markers.
+    value = value.replacingOccurrences(
+      of: #"\s+"#,
+      with: " ",
+      options: .regularExpression
+    )
+
+    return value.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private func bookMetricsText(item: PodibleLibraryItem, localBook: LibraryBook?) -> String? {
@@ -1094,7 +1138,7 @@ struct PodibleLibraryView: View {
               Text(summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(3)
                 .padding(.top, 2)
             }
           }
