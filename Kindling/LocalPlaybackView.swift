@@ -981,9 +981,7 @@ struct LocalPlaybackView: View {
             isShowingPlayer = true
           }
           .padding(.horizontal, 24)
-          .padding(.vertical, 8)
-          .frame(maxWidth: .infinity)
-          .background(.ultraThinMaterial)
+          .padding(.top, 10)
         }
       }
     }
