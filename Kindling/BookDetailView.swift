@@ -44,6 +44,7 @@ struct BookDetailView: View {
       VStack(alignment: .leading, spacing: 20) {
         hero
         metricsLine
+        audioEditionSection
         if let summary = displaySummary, summary.isEmpty == false {
           Text(summary)
             .font(.body)
@@ -231,6 +232,47 @@ struct BookDetailView: View {
       return summary
     }
     return nil
+  }
+
+  @ViewBuilder
+  private var audioEditionSection: some View {
+    if let audio = item.playback?.audio {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Audio Edition")
+          .font(.caption.weight(.semibold))
+          .textCase(.uppercase)
+          .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(audio.label?.isEmpty == false ? audio.label! : "Default Audio")
+            .font(.subheadline.weight(.semibold))
+          if let editionNote = audio.editionNote, editionNote.isEmpty == false {
+            Text(editionNote)
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
+          if audioEditionMetadata(audio).isEmpty == false {
+            Text(audioEditionMetadata(audio))
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          }
+        }
+      }
+      .padding(12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(.quaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+  }
+
+  private func audioEditionMetadata(_ audio: PodiblePlaybackAudio) -> String {
+    var parts: [String] = []
+    if let durationMs = audio.durationMs, durationMs > 0 {
+      parts.append(formatRuntime(seconds: Int((durationMs + 500) / 1000)))
+    }
+    if audio.sizeBytes > 0 {
+      parts.append(ByteCountFormatter.string(fromByteCount: audio.sizeBytes, countStyle: .file))
+    }
+    return parts.joined(separator: " • ")
   }
 
   // MARK: - Floating action dock

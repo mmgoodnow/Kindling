@@ -93,15 +93,17 @@ struct PodibleLibraryView: View {
     let localBook = localBooksById[item.id]
     let ebookStatus = item.ebookStatus ?? item.status
     let localEbookStatus = localEbookStatus(for: localBook, fallback: nil)
+    let playback = item.playback ?? localBook.flatMap { self.playback(from: $0.playbackJSON) }
     let hasEbookAvailable =
-      isImportedMediaStatus(ebookStatus) || isImportedMediaStatus(localEbookStatus)
-    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
+      playback?.ebook != nil || isImportedMediaStatus(ebookStatus)
+      || isImportedMediaStatus(localEbookStatus)
+    let hasAudioPlayback = playback?.audio != nil
     let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
     let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
     let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.podibleId ?? item.id)
     let canStartLocalAudioDownload =
       localPlaybackURL == nil
-      && isImportedMediaStatus(effectiveAudioStatus)
+      && hasAudioPlayback
       && localFileStatus != .completed
       && localFileStatus != .downloading
       && client != nil
@@ -117,7 +119,7 @@ struct PodibleLibraryView: View {
 
     if let localBook, let url = localPlaybackURL {
       actions.play = { startPlayback(for: localBook, url: url) }
-    } else if isImportedMediaStatus(effectiveAudioStatus), let client {
+    } else if hasAudioPlayback, let client {
       // No local file yet — stream over HTTP. The detail-view "Play"
       // button doesn't distinguish between local + streamed; this is an
       // implementation detail.
@@ -140,16 +142,18 @@ struct PodibleLibraryView: View {
       }
     }
 
-    if hasEbookAvailable, let client {
+    if hasEbookAvailable, let ebookPlayback = playback?.ebook, let client {
       actions.shareEbook = {
         Task {
-          await startEbookDownload(bookID: item.id, title: item.title, client: client)
+          await startEbookDownload(
+            playback: ebookPlayback, bookID: item.id, title: item.title, client: client)
         }
       }
       if userSettings.kindleEmailAddress.isEmpty == false {
         actions.emailToKindle = {
           Task {
-            await startKindleExport(bookID: item.id, title: item.title, client: client)
+            await startKindleExport(
+              playback: ebookPlayback, bookID: item.id, title: item.title, client: client)
           }
         }
       }
@@ -704,6 +708,7 @@ struct PodibleLibraryView: View {
   }
 
   private func startEbookDownload(
+    playback: PodiblePlaybackEbook,
     bookID: String,
     title: String,
     client: RemoteLibraryServing
@@ -719,7 +724,7 @@ struct PodibleLibraryView: View {
     downloadProgress = 0
     downloadErrorMessage = nil
     do {
-      let localURL = try await client.downloadEpub(bookID: bookID) { value in
+      let localURL = try await client.downloadEpub(playback: playback) { value in
         Task { @MainActor in
           downloadProgress = value
         }
@@ -736,6 +741,7 @@ struct PodibleLibraryView: View {
   }
 
   private func startKindleExport(
+    playback: PodiblePlaybackEbook,
     bookID: String,
     title: String,
     client: RemoteLibraryServing
@@ -756,7 +762,7 @@ struct PodibleLibraryView: View {
     downloadProgress = 0
     downloadErrorMessage = nil
     do {
-      let localURL = try await client.downloadEpub(bookID: bookID) { value in
+      let localURL = try await client.downloadEpub(playback: playback) { value in
         Task { @MainActor in
           downloadProgress = value
         }
@@ -774,6 +780,7 @@ struct PodibleLibraryView: View {
   }
 
   private func startAudiobookDownload(
+    playback: PodiblePlaybackAudio,
     bookID: String,
     title: String,
     client: RemoteLibraryServing
@@ -783,7 +790,7 @@ struct PodibleLibraryView: View {
     downloadProgress = 0
     downloadErrorMessage = nil
     do {
-      let localURL = try await client.downloadAudiobook(bookID: bookID) { value in
+      let localURL = try await client.downloadAudiobook(playback: playback) { value in
         Task { @MainActor in
           downloadProgress = value
         }
@@ -1105,15 +1112,20 @@ struct PodibleLibraryView: View {
     let overallStatus = ebookStatus ?? audioStatus
     return PodibleLibraryItem(
       id: book.podibleId,
+      openLibraryWorkID: book.openLibraryWorkID,
       title: book.title,
       author: book.author?.name ?? "Unknown Author",
+      summary: book.summary,
       status: overallStatus,
       ebookStatus: ebookStatus,
       audioStatus: audioStatus,
       bookAdded: book.addedAt,
       updatedAt: book.updatedAt,
       fullPseudoProgress: nil,
-      bookImagePath: book.coverURLString
+      bookImagePath: book.coverURLString,
+      wordCount: book.wordCount,
+      runtimeSeconds: book.runtimeSeconds,
+      playback: playback(from: book.playbackJSON)
     )
   }
 
@@ -1142,7 +1154,7 @@ struct PodibleLibraryView: View {
     client: RemoteLibraryServing?
   ) -> some View {
     let isDownloading = localDownloadingBookIDs.contains(book.podibleId)
-    let canDownload = isImportedMediaStatus(audioStatus) && client != nil
+    let canDownload = playback(from: book.playbackJSON)?.audio != nil && client != nil
     Button(action: {
       guard let client else { return }
       startLocalDownload(for: book, client: client)
@@ -1216,8 +1228,9 @@ struct PodibleLibraryView: View {
       artworkURL: book.coverURLString.flatMap(URL.init(string:))
     )
     if let client = configuredClient {
+      let playbackAudio = playback(from: book.playbackJSON)?.audio
       Task {
-        await loadPlaybackMetadata(for: book, client: client)
+        await loadPlaybackMetadata(playback: playbackAudio, resumeID: resumeID, client: client)
       }
     }
     player.play()
@@ -1233,10 +1246,15 @@ struct PodibleLibraryView: View {
     let resumeID = streamingResumeID(for: item)
     Task {
       do {
-        guard let httpURL = try await client.audiobookStreamURL(bookID: item.id) else {
+        guard
+          let playbackAudio =
+            item.playback?.audio
+            ?? localBooksById[item.id].flatMap({ self.playback(from: $0.playbackJSON)?.audio })
+        else {
           downloadErrorMessage = "Audiobook not available for streaming."
           return
         }
+        let httpURL = try client.audiobookStreamURL(playback: playbackAudio)
         await MainActor.run {
           player.loadStreaming(
             httpURL: httpURL,
@@ -1252,8 +1270,8 @@ struct PodibleLibraryView: View {
           )
           player.play()
           // Server-side chapters/transcript still available — fire and forget.
-          if let localBook = localBooksById[item.id] {
-            Task { await loadPlaybackMetadata(for: localBook, client: client) }
+          Task {
+            await loadPlaybackMetadata(playback: playbackAudio, resumeID: resumeID, client: client)
           }
         }
       } catch {
@@ -1263,42 +1281,61 @@ struct PodibleLibraryView: View {
   }
 
   private func streamingResumeID(for item: PodibleLibraryItem) -> String {
-    if let workID = item.openLibraryWorkID, workID.isEmpty == false {
-      return workID
-    }
-    return item.id
+    let manifestationID =
+      item.playback?.audio?.manifestationId
+      ?? localBooksById[item.id].flatMap {
+        self.playback(from: $0.playbackJSON)?.audio?.manifestationId
+      }
+    return manifestationResumeID(
+      bookIdentity: item.openLibraryWorkID,
+      fallback: item.id,
+      manifestationID: manifestationID
+    )
   }
 
   @MainActor
-  private func loadPlaybackMetadata(for book: LibraryBook, client: RemoteLibraryServing) async {
-    let resumeID = playbackResumeID(for: book)
+  private func loadPlaybackMetadata(
+    playback: PodiblePlaybackAudio?,
+    resumeID: String,
+    client: RemoteLibraryServing
+  ) async {
+    guard let playback else {
+      player.applyRemoteTranscript(nil, for: resumeID)
+      player.applyRemoteChapters([], for: resumeID)
+      return
+    }
     do {
-      guard let assetID = try await client.resolveAudiobookAssetID(bookID: book.podibleId) else {
-        await MainActor.run {
-          player.applyRemoteTranscript(nil, for: resumeID)
-        }
-        return
-      }
-
-      async let transcript = client.fetchTranscript(assetID: assetID)
-      async let chapters = client.fetchChapters(assetID: assetID)
+      async let transcript = client.fetchTranscript(playback: playback)
+      async let chapters = client.fetchChapters(playback: playback)
       let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
-      await MainActor.run {
-        player.applyRemoteTranscript(resolvedTranscript, for: resumeID)
-        player.applyRemoteChapters(resolvedChapters, for: resumeID)
-      }
+      player.applyRemoteTranscript(resolvedTranscript, for: resumeID)
+      player.applyRemoteChapters(resolvedChapters, for: resumeID)
     } catch {
-      await MainActor.run {
-        player.applyRemoteTranscript(nil, for: resumeID)
-      }
+      player.applyRemoteTranscript(nil, for: resumeID)
     }
   }
 
   private func playbackResumeID(for book: LibraryBook) -> String {
-    if let workID = book.openLibraryWorkID, workID.isEmpty == false {
-      return workID
+    return manifestationResumeID(
+      bookIdentity: book.openLibraryWorkID,
+      fallback: book.podibleId,
+      manifestationID: playback(from: book.playbackJSON)?.audio?.manifestationId
+    )
+  }
+
+  private func manifestationResumeID(
+    bookIdentity: String?,
+    fallback: String,
+    manifestationID: Int?
+  ) -> String {
+    let base: String
+    if let bookIdentity, bookIdentity.isEmpty == false {
+      base = bookIdentity
+    } else {
+      base = fallback
     }
-    return book.podibleId
+    guard let manifestationID else { return base }
+    return "\(base)#manifestation-\(manifestationID)"
   }
 
   @MainActor
@@ -1309,8 +1346,8 @@ struct PodibleLibraryView: View {
     downloadErrorMessage = nil
 
     let audioStatus = parseAudioStatus(from: book)
-    guard isImportedMediaStatus(audioStatus) else {
-      downloadErrorMessage = "Audiobook not ready (AudioStatus: \(audioStatus.rawValue))."
+    guard let playbackAudio = playback(from: book.playbackJSON)?.audio else {
+      downloadErrorMessage = "Audiobook playback URL unavailable."
       localDownloadingBookIDs.remove(book.podibleId)
       localDownloadProgressByBookID[book.podibleId] = nil
       return
@@ -1323,7 +1360,7 @@ struct PodibleLibraryView: View {
       fileRecord.bytesDownloaded = 0
 
       do {
-        let tempURL = try await client.downloadAudiobook(bookID: book.podibleId) { value in
+        let tempURL = try await client.downloadAudiobook(playback: playbackAudio) { value in
           Task { @MainActor in
             localDownloadProgressByBookID[book.podibleId] = value
           }
@@ -1402,8 +1439,8 @@ struct PodibleLibraryView: View {
   /// not yet present locally. Used to surface a cloud indicator on rows
   /// and the detail page so users can tell stream-only from downloaded.
   private func isStreamOnly(item: PodibleLibraryItem, localBook: LibraryBook?) -> Bool {
-    let effectiveAudioStatus = item.audioStatus ?? audioStatus(for: localBook, fallback: nil)
-    guard isImportedMediaStatus(effectiveAudioStatus) else { return false }
+    let playback = item.playback ?? localBook.flatMap { self.playback(from: $0.playbackJSON) }
+    guard playback?.audio != nil else { return false }
     return localBook.flatMap { playbackURL(for: $0) } == nil
   }
 
@@ -1484,6 +1521,7 @@ struct PodibleLibraryView: View {
       seriesIndex: nil,
       bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
       audioStatusRaw: item.audioStatus?.rawValue,
+      playbackJSON: playbackData(for: item.playback),
       author: author,
       series: nil
     )
@@ -1565,9 +1603,26 @@ struct PodibleLibraryView: View {
       book.audioStatusRaw = item.audioStatus?.rawValue
       updated = true
     }
+    if let itemPlayback = item.playback {
+      let nextPlaybackJSON = playbackData(for: itemPlayback)
+      if book.playbackJSON != nextPlaybackJSON {
+        book.playbackJSON = nextPlaybackJSON
+        updated = true
+      }
+    }
     if updated, modelContext.hasChanges {
       saveModelContext()
     }
+  }
+
+  private func playbackData(for playback: PodiblePlayback?) -> Data? {
+    guard let playback else { return nil }
+    return try? JSONEncoder().encode(playback)
+  }
+
+  private func playback(from data: Data?) -> PodiblePlayback? {
+    guard let data else { return nil }
+    return try? JSONDecoder().decode(PodiblePlayback.self, from: data)
   }
 
   @MainActor

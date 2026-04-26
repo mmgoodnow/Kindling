@@ -151,6 +151,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let bookImagePath: String?
   let wordCount: Int?
   let runtimeSeconds: Int?
+  let playback: PodiblePlayback?
 
   init(
     id: String,
@@ -166,7 +167,8 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     fullPseudoProgress: Int? = nil,
     bookImagePath: String? = nil,
     wordCount: Int? = nil,
-    runtimeSeconds: Int? = nil
+    runtimeSeconds: Int? = nil,
+    playback: PodiblePlayback? = nil
   ) {
     self.id = id
     self.openLibraryWorkID = openLibraryWorkID
@@ -182,6 +184,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.bookImagePath = bookImagePath
     self.wordCount = wordCount
     self.runtimeSeconds = runtimeSeconds
+    self.playback = playback
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -204,6 +207,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case fullPseudoProgress = "fullPseudoProgress"
     case bookImageUpper = "BookImg"
     case bookImageLower = "bookimg"
+    case playback
   }
 
   init(from decoder: Decoder) throws {
@@ -247,7 +251,32 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     }
     wordCount = nil
     runtimeSeconds = nil
+    playback = try? container.decodeIfPresent(PodiblePlayback.self, forKey: .playback)
   }
+}
+
+struct PodiblePlayback: Hashable, Codable {
+  let audio: PodiblePlaybackAudio?
+  let ebook: PodiblePlaybackEbook?
+}
+
+struct PodiblePlaybackAudio: Hashable, Codable {
+  let manifestationId: Int
+  let label: String?
+  let editionNote: String?
+  let streamUrl: String
+  let chaptersUrl: String
+  let transcriptUrl: String?
+  let mimeType: String
+  let durationMs: Int?
+  let sizeBytes: Int64
+}
+
+struct PodiblePlaybackEbook: Hashable, Codable {
+  let assetId: Int
+  let downloadUrl: String
+  let mimeType: String
+  let sizeBytes: Int64
 }
 
 private enum PodibleDateParser {
@@ -311,15 +340,14 @@ protocol PodibleLibraryServing {
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func fetchAlternateCovers(bookID: String, limit: Int) async throws -> [PodibleAlternateCover]
   func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem
-  func resolveAudiobookAssetID(bookID: String) async throws -> Int?
-  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript?
-  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker]
-  func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
-  func downloadAudiobook(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL
-  /// Returns the streaming HTTPS URL for the preferred audio asset on
-  /// this book, or `nil` if no audiobook is available. Backends that
-  /// don't support direct streaming may return `nil`.
-  func audiobookStreamURL(bookID: String) async throws -> URL?
+  func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript?
+  func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker]
+  func downloadEpub(playback: PodiblePlaybackEbook, progress: @escaping (Double) -> Void)
+    async throws -> URL
+  func downloadAudiobook(playback: PodiblePlaybackAudio, progress: @escaping (Double) -> Void)
+    async throws -> URL
+  /// Returns the opaque streaming URL Podible exposed for this manifestation.
+  func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL
 }
 
 typealias RemoteLibraryServing = PodibleLibraryServing
@@ -341,12 +369,12 @@ extension PodibleLibraryServing {
     throw PodibleError.unsupported("This backend does not support deleting library books.")
   }
 
-  func downloadEpub(bookID: String) async throws -> URL {
-    try await downloadEpub(bookID: bookID, progress: { _ in })
+  func downloadEpub(playback: PodiblePlaybackEbook) async throws -> URL {
+    try await downloadEpub(playback: playback, progress: { _ in })
   }
 
-  func downloadAudiobook(bookID: String) async throws -> URL {
-    try await downloadAudiobook(bookID: bookID, progress: { _ in })
+  func downloadAudiobook(playback: PodiblePlaybackAudio) async throws -> URL {
+    try await downloadAudiobook(playback: playback, progress: { _ in })
   }
 
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
@@ -372,24 +400,19 @@ extension PodibleLibraryServing {
     throw PodibleError.unsupported("This backend does not support alternate covers.")
   }
 
-  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
-    _ = bookID
+  func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
+    _ = playback
     return nil
   }
 
-  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
-    _ = assetID
-    return nil
-  }
-
-  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
-    _ = assetID
+  func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker] {
+    _ = playback
     return []
   }
 
-  func audiobookStreamURL(bookID: String) async throws -> URL? {
-    _ = bookID
-    return nil
+  func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL {
+    _ = playback
+    throw PodibleError.unsupported("This backend does not support direct streaming.")
   }
 }
 
@@ -647,7 +670,27 @@ final actor PodibleMockClient: PodibleLibraryServing {
   private var libraryItems: [PodibleLibraryItem] = [
     PodibleLibraryItem(
       id: "1", title: "Project Hail Mary", author: "Andy Weir", status: .downloaded,
-      bookAdded: Date().addingTimeInterval(-86_400 * 3)),
+      bookAdded: Date().addingTimeInterval(-86_400 * 3),
+      runtimeSeconds: 59_400,
+      playback: PodiblePlayback(
+        audio: PodiblePlaybackAudio(
+          manifestationId: 101,
+          label: "Default Audio",
+          editionNote: nil,
+          streamUrl: "/mock-playback/audio/1.mp3",
+          chaptersUrl: "/mock-playback/chapter-markers-1.json",
+          transcriptUrl: "/mock-playback/transcript-1.json",
+          mimeType: "audio/mpeg",
+          durationMs: 59_400_000,
+          sizeBytes: 512_000_000
+        ),
+        ebook: PodiblePlaybackEbook(
+          assetId: 201,
+          downloadUrl: "/mock-playback/ebook-1.epub",
+          mimeType: "application/epub+zip",
+          sizeBytes: 2_400_000
+        )
+      )),
     PodibleLibraryItem(
       id: "2", title: "The City We Became", author: "N. K. Jemisin", status: .requested,
       bookAdded: Date().addingTimeInterval(-86_400 * 12)),
@@ -686,7 +729,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
       id: openLibraryKey,
       title: titleHint ?? "Requested \(openLibraryKey)",
       author: authorHint ?? "Unknown",
-      status: .requested
+      status: .requested,
+      playback: nil
     )
     libraryItems.append(new)
     progress[openLibraryKey] = (ebook: 0, audio: 0)
@@ -776,7 +820,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
       fullPseudoProgress: existing.fullPseudoProgress,
       bookImagePath: "https://covers.openlibrary.org/b/id/\(coverID)-L.jpg",
       wordCount: existing.wordCount,
-      runtimeSeconds: existing.runtimeSeconds
+      runtimeSeconds: existing.runtimeSeconds,
+      playback: existing.playback
     )
     libraryItems[index] = updated
     return updated
@@ -802,7 +847,10 @@ final actor PodibleMockClient: PodibleLibraryServing {
         bookAdded: existing.bookAdded,
         updatedAt: .now,
         fullPseudoProgress: combined,
-        bookImagePath: existing.bookImagePath
+        bookImagePath: existing.bookImagePath,
+        wordCount: existing.wordCount,
+        runtimeSeconds: existing.runtimeSeconds,
+        playback: existing.playback
       )
       libraryItems[index] = next
     }
@@ -825,39 +873,40 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return inProgress.filter { filter.contains($0.id) }
   }
 
-  func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL {
+  func downloadEpub(
+    playback: PodiblePlaybackEbook,
+    progress: @escaping (Double) -> Void
+  ) async throws -> URL {
     let fm = FileManager.default
     let folder = fm.temporaryDirectory.appendingPathComponent("lazy-librarian", isDirectory: true)
     try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-    let destination = folder.appendingPathComponent("\(bookID)-mock").appendingPathExtension("epub")
-    let data = Data("mock-ebook-\(bookID)".utf8)
+    let destination = folder.appendingPathComponent("ebook-\(playback.assetId)-mock")
+      .appendingPathExtension("epub")
+    let data = Data("mock-ebook-\(playback.assetId)".utf8)
     try data.write(to: destination, options: .atomic)
     progress(1.0)
     return destination
   }
 
   func downloadAudiobook(
-    bookID: String,
+    playback: PodiblePlaybackAudio,
     progress: @escaping (Double) -> Void
   ) async throws -> URL {
     let fm = FileManager.default
     let folder = fm.temporaryDirectory.appendingPathComponent("lazy-librarian", isDirectory: true)
     try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-    let destination = folder.appendingPathComponent("\(bookID)-mock").appendingPathExtension("m4b")
-    let data = Data("mock-audio-\(bookID)".utf8)
+    let destination = folder.appendingPathComponent("audio-\(playback.manifestationId)-mock")
+      .appendingPathExtension("m4b")
+    let data = Data("mock-audio-\(playback.manifestationId)".utf8)
     try data.write(to: destination, options: .atomic)
     progress(1.0)
     return destination
   }
 
-  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
-    Int(bookID)
-  }
-
-  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
+  func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
     PodibleTranscript(
       version: "mock",
-      text: "This is a mock transcript for asset \(assetID).",
+      text: "This is a mock transcript for manifestation \(playback.manifestationId).",
       words: [
         .init(startMs: 0, endMs: 400, text: "This", token: "this"),
         .init(startMs: 400, endMs: 700, text: "is", token: "is"),
@@ -868,11 +917,19 @@ final actor PodibleMockClient: PodibleLibraryServing {
     )
   }
 
-  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
-    [
+  func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker] {
+    _ = playback
+    return [
       .init(startTime: 0, title: "Chapter 1"),
       .init(startTime: 600, title: "Chapter 2"),
     ]
+  }
+
+  nonisolated func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL {
+    if let absolute = URL(string: playback.streamUrl), absolute.scheme != nil {
+      return absolute
+    }
+    return URL(string: "https://example.test\(playback.streamUrl)")!
   }
 }
 
@@ -1001,6 +1058,7 @@ private struct PodibleLibraryBook: Decodable {
   let fullPseudoProgress: Double?
   let durationMs: Int?
   let wordCount: Int?
+  let playback: PodiblePlayback?
 }
 
 private struct PodibleLibraryIdentifiers: Decodable {
@@ -1039,10 +1097,6 @@ private struct PodibleDownload: Decodable {
   let bookId: Int?
   let fullPseudoProgress: Double?
   let downloadProgress: PodibleDownloadProgress?
-}
-
-private struct PodibleAssetsResult: Decodable {
-  let assets: [PodibleAsset]
 }
 
 private struct PodibleAuthBeginResult: Decodable {
@@ -1107,18 +1161,6 @@ private struct PodibleChaptersResponse: Decodable {
 struct PodibleChapterMarker: Decodable, Equatable {
   let startTime: Double
   let title: String
-}
-
-private struct PodibleAsset: Decodable {
-  let id: Int
-  let kind: String
-  let mime: String
-  let files: [PodibleAssetFile]
-  let streamExt: String
-}
-
-private struct PodibleAssetFile: Decodable {
-  let path: String
 }
 
 private struct DynamicCodingKey: CodingKey {
@@ -1335,52 +1377,45 @@ struct PodibleClient: PodibleLibraryServing {
     return response.items.map(toLibraryItem(_:))
   }
 
-  func downloadEpub(bookID: String, progress: @escaping (Double) -> Void) async throws -> URL {
-    let numericBookID = try parseBookID(bookID)
-    let assets = try await fetchAssets(bookID: numericBookID)
-    guard let asset = assets.first(where: { $0.kind == "ebook" }) else {
-      throw PodibleError.server("No ebook asset available.")
-    }
-    let fallbackFilename: String = {
-      if let path = asset.files.first?.path, path.isEmpty == false {
-        return URL(fileURLWithPath: path).lastPathComponent
-      }
-      return "\(bookID)-ebook-\(asset.id).\(fileExtensionForEbookMime(asset.mime) ?? "epub")"
-    }()
-    let url = try webURL(path: "/ebook/\(asset.id)")
+  func downloadEpub(
+    playback: PodiblePlaybackEbook,
+    progress: @escaping (Double) -> Void
+  ) async throws -> URL {
+    let fallbackFilename =
+      "ebook-\(playback.assetId).\(fileExtensionForEbookMime(playback.mimeType) ?? "epub")"
+    let url = try playbackURL(from: playback.downloadUrl)
     return try await downloadHTTPFile(
       url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
 
-  func resolveAudiobookAssetID(bookID: String) async throws -> Int? {
-    let numericBookID = try parseBookID(bookID)
-    let assets = try await fetchAssets(bookID: numericBookID)
-    return preferredAudioAsset(from: assets)?.id
-  }
-
-  func fetchTranscript(assetID: Int) async throws -> PodibleTranscript? {
-    if let cached = PodibleTranscriptCache.load(assetID: assetID) {
+  func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
+    guard let transcriptURL = playback.transcriptUrl, transcriptURL.isEmpty == false else {
+      return nil
+    }
+    let url = try playbackURL(from: transcriptURL)
+    let cacheKey = PodibleTranscriptCache.cacheKey(for: url)
+    if let cached = PodibleTranscriptCache.load(cacheKey: cacheKey) {
       return cached
     }
     do {
       let data = try await fetchJSONData(
-        path: "/transcripts/\(assetID).json",
+        url: url,
         acceptEncoding: "br"
       )
       let decoder = JSONDecoder()
       decoder.keyDecodingStrategy = .convertFromSnakeCase
       let transcript = try decoder.decode(PodibleTranscript.self, from: data)
-      PodibleTranscriptCache.store(data, assetID: assetID)
+      PodibleTranscriptCache.store(data, cacheKey: cacheKey)
       return transcript
     } catch let error as PodibleHTTPError where error.statusCode == 404 {
       return nil
     }
   }
 
-  func fetchChapters(assetID: Int) async throws -> [PodibleChapterMarker] {
+  func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker] {
     do {
       let response: PodibleChaptersResponse = try await fetchJSON(
-        path: "/chapters/\(assetID).json",
+        url: try playbackURL(from: playback.chaptersUrl),
         as: PodibleChaptersResponse.self
       )
       return response.chapters
@@ -1390,27 +1425,18 @@ struct PodibleClient: PodibleLibraryServing {
   }
 
   func downloadAudiobook(
-    bookID: String,
+    playback: PodiblePlaybackAudio,
     progress: @escaping (Double) -> Void
   ) async throws -> URL {
-    let numericBookID = try parseBookID(bookID)
-    let assets = try await fetchAssets(bookID: numericBookID)
-    guard let asset = preferredAudioAsset(from: assets) else {
-      throw PodibleError.server("No audiobook asset available.")
-    }
-    let ext = asset.streamExt.isEmpty ? "mp3" : asset.streamExt
-    let fallbackFilename = "\(bookID)-audio-\(asset.id).\(ext)"
-    let url = try webURL(path: "/stream/\(asset.id).\(ext)")
+    let ext = fileExtensionForAudioMime(playback.mimeType) ?? "mp3"
+    let fallbackFilename = "manifestation-\(playback.manifestationId).\(ext)"
+    let url = try playbackURL(from: playback.streamUrl)
     return try await downloadHTTPFile(
       url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
 
-  func audiobookStreamURL(bookID: String) async throws -> URL? {
-    let numericBookID = try parseBookID(bookID)
-    let assets = try await fetchAssets(bookID: numericBookID)
-    guard let asset = preferredAudioAsset(from: assets) else { return nil }
-    let ext = asset.streamExt.isEmpty ? "mp3" : asset.streamExt
-    return try webURL(path: "/stream/\(asset.id).\(ext)")
+  func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL {
+    try playbackURL(from: playback.streamUrl)
   }
 
   private func toSearchResult(
@@ -1434,21 +1460,6 @@ struct PodibleClient: PodibleLibraryServing {
       dict["leechers"] = leechers
     }
     return PodibleSearchResult(dictionary: dict)
-  }
-
-  private func preferredAudioAsset(from assets: [PodibleAsset]) -> PodibleAsset? {
-    if let single = assets.first(where: { $0.kind == "single" }) { return single }
-    if let multi = assets.first(where: { $0.kind == "multi" }) { return multi }
-    return nil
-  }
-
-  private func fetchAssets(bookID: Int) async throws -> [PodibleAsset] {
-    let response: PodibleAssetsResult = try await fetchJSON(
-      path: "/assets",
-      queryItems: [URLQueryItem(name: "bookId", value: String(bookID))],
-      as: PodibleAssetsResult.self
-    )
-    return response.assets
   }
 
   private func parseBookID(_ raw: String) throws -> Int {
@@ -1480,7 +1491,10 @@ struct PodibleClient: PodibleLibraryServing {
       fullPseudoProgress: book.fullPseudoProgress.map { Int($0.rounded()) },
       bookImagePath: coverPath,
       wordCount: book.wordCount,
-      runtimeSeconds: book.durationMs.map { Int(($0 + 500) / 1000) }
+      runtimeSeconds: (book.durationMs ?? book.playback?.audio?.durationMs).map {
+        Int(($0 + 500) / 1000)
+      },
+      playback: book.playback
     )
   }
 
@@ -1522,11 +1536,38 @@ struct PodibleClient: PodibleLibraryServing {
     return (try? webURL(path: path))?.absoluteString
   }
 
+  private func playbackURL(from raw: String) throws -> URL {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.isEmpty == false else {
+      throw PodibleError.badURL
+    }
+    if let absolute = URL(string: trimmed), absolute.scheme != nil {
+      return absolute
+    }
+    guard
+      let base = URL(string: "/", relativeTo: baseWebURL())?.absoluteURL,
+      let url = URL(string: trimmed, relativeTo: base)?.absoluteURL
+    else {
+      throw PodibleError.badURL
+    }
+    return url
+  }
+
   private func fileExtensionForEbookMime(_ mime: String) -> String? {
     let lowered = mime.lowercased()
     if lowered.contains("epub") { return "epub" }
     if lowered.contains("pdf") { return "pdf" }
     if lowered.contains("mobi") { return "mobi" }
+    return nil
+  }
+
+  private func fileExtensionForAudioMime(_ mime: String) -> String? {
+    let lowered = mime.lowercased()
+    if lowered.contains("mpeg") || lowered.contains("mp3") { return "mp3" }
+    if lowered.contains("mp4") || lowered.contains("m4a") { return "m4a" }
+    if lowered.contains("x-m4b") || lowered.contains("m4b") { return "m4b" }
+    if lowered.contains("flac") { return "flac" }
+    if lowered.contains("ogg") { return "ogg" }
     return nil
   }
 
@@ -1636,12 +1677,47 @@ struct PodibleClient: PodibleLibraryServing {
     return try decoder.decode(Result.self, from: data)
   }
 
+  private func fetchJSON<Result: Decodable>(
+    url: URL,
+    acceptEncoding: String? = nil,
+    as type: Result.Type
+  ) async throws -> Result {
+    let data = try await fetchJSONData(url: url, acceptEncoding: acceptEncoding)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(Result.self, from: data)
+  }
+
   private func fetchJSONData(
     path: String,
     queryItems: [URLQueryItem] = [],
     acceptEncoding: String? = nil
   ) async throws -> Data {
     let url = try webURL(path: path, queryItems: queryItems)
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    try applyAuthorization(to: &request)
+    if let acceptEncoding {
+      request.setValue(acceptEncoding, forHTTPHeaderField: "Accept-Encoding")
+    }
+
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else {
+      throw PodibleError.server("Failed to fetch backend data.")
+    }
+    if http.statusCode == 401 || http.statusCode == 403 {
+      throw PodibleError.unauthorized
+    }
+    guard (200..<300).contains(http.statusCode) else {
+      throw PodibleHTTPError(statusCode: http.statusCode)
+    }
+    return data
+  }
+
+  private func fetchJSONData(
+    url: URL,
+    acceptEncoding: String? = nil
+  ) async throws -> Data {
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
     try applyAuthorization(to: &request)
@@ -1770,6 +1846,14 @@ struct PodibleClient: PodibleLibraryServing {
         }
         guard let tempURL, let http = task.response as? HTTPURLResponse else {
           continuation?.resume(throwing: PodibleError.badResponse)
+          return
+        }
+        if http.statusCode == 401 || http.statusCode == 403 {
+          continuation?.resume(throwing: PodibleError.unauthorized)
+          return
+        }
+        guard (200..<300).contains(http.statusCode) else {
+          continuation?.resume(throwing: PodibleHTTPError(statusCode: http.statusCode))
           return
         }
         continuation?.resume(returning: (tempURL, http))

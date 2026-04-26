@@ -1,10 +1,16 @@
+import CryptoKit
 import Foundation
 
 enum PodibleTranscriptCache {
   private static let folderName = "podible-transcripts"
 
-  static func load(assetID: Int) -> PodibleTranscript? {
-    guard let url = fileURL(for: assetID),
+  static func cacheKey(for url: URL) -> String {
+    let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+    return digest.map { String(format: "%02x", $0) }.joined()
+  }
+
+  static func load(cacheKey: String) -> PodibleTranscript? {
+    guard let url = fileURL(for: cacheKey),
       let data = try? Data(contentsOf: url)
     else { return nil }
     let decoder = JSONDecoder()
@@ -12,16 +18,16 @@ enum PodibleTranscriptCache {
     return try? decoder.decode(PodibleTranscript.self, from: data)
   }
 
-  static func store(_ data: Data, assetID: Int) {
+  static func store(_ data: Data, cacheKey: String) {
     guard let folder = folderURL() else { return }
     try? FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true)
-    let url = folder.appendingPathComponent("\(assetID).json")
+    let url = folder.appendingPathComponent("\(cacheKey).json")
     try? data.write(to: url, options: .atomic)
   }
 
-  private static func fileURL(for assetID: Int) -> URL? {
-    folderURL()?.appendingPathComponent("\(assetID).json")
+  private static func fileURL(for cacheKey: String) -> URL? {
+    folderURL()?.appendingPathComponent("\(cacheKey).json")
   }
 
   private static func folderURL() -> URL? {

@@ -122,15 +122,20 @@ final class PodibleLibraryViewModel: ObservableObject {
         let existing = libraryItems[existingIndex]
         let updated = PodibleLibraryItem(
           id: requested.id,
+          openLibraryWorkID: requested.openLibraryWorkID ?? existing.openLibraryWorkID,
           title: requested.title,
           author: requested.author,
+          summary: requested.summary ?? existing.summary,
           status: requested.status,
           ebookStatus: requested.ebookStatus ?? existing.ebookStatus,
           audioStatus: requested.audioStatus,
           bookAdded: requested.bookAdded ?? existing.bookAdded,
           updatedAt: requested.updatedAt ?? existing.updatedAt,
           fullPseudoProgress: requested.fullPseudoProgress ?? existing.fullPseudoProgress,
-          bookImagePath: requested.bookImagePath ?? existing.bookImagePath
+          bookImagePath: requested.bookImagePath ?? existing.bookImagePath,
+          wordCount: requested.wordCount ?? existing.wordCount,
+          runtimeSeconds: requested.runtimeSeconds ?? existing.runtimeSeconds,
+          playback: requested.playback ?? existing.playback
         )
         libraryItems[existingIndex] = updated
       } else {
@@ -370,15 +375,20 @@ final class PodibleLibraryViewModel: ObservableObject {
       let existing = libraryItems[index]
       let merged = PodibleLibraryItem(
         id: item.id,
+        openLibraryWorkID: item.openLibraryWorkID ?? existing.openLibraryWorkID,
         title: item.title,
         author: item.author,
+        summary: item.summary ?? existing.summary,
         status: item.status,
         ebookStatus: item.ebookStatus ?? existing.ebookStatus,
         audioStatus: item.audioStatus ?? existing.audioStatus,
         bookAdded: item.bookAdded ?? existing.bookAdded,
         updatedAt: item.updatedAt ?? existing.updatedAt,
         fullPseudoProgress: item.fullPseudoProgress ?? existing.fullPseudoProgress,
-        bookImagePath: item.bookImagePath ?? existing.bookImagePath
+        bookImagePath: item.bookImagePath ?? existing.bookImagePath,
+        wordCount: item.wordCount ?? existing.wordCount,
+        runtimeSeconds: item.runtimeSeconds ?? existing.runtimeSeconds,
+        playback: item.playback ?? existing.playback
       )
       libraryItems[index] = merged
       updatePolledProgressSnapshot(for: merged)

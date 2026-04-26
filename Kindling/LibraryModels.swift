@@ -81,6 +81,7 @@ final class LibraryBook {
   var seriesIndex: Double?
   var bookStatusRaw: String?
   var audioStatusRaw: String?
+  var playbackJSON: Data?
 
   var author: Author?
   var series: Series?
@@ -102,6 +103,7 @@ final class LibraryBook {
     seriesIndex: Double? = nil,
     bookStatusRaw: String? = nil,
     audioStatusRaw: String? = nil,
+    playbackJSON: Data? = nil,
     author: Author? = nil,
     series: Series? = nil
   ) {
@@ -118,6 +120,7 @@ final class LibraryBook {
     self.seriesIndex = seriesIndex
     self.bookStatusRaw = bookStatusRaw
     self.audioStatusRaw = audioStatusRaw
+    self.playbackJSON = playbackJSON
     self.author = author
     self.series = series
   }
