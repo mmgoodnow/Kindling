@@ -74,7 +74,10 @@ struct BookDetailView: View {
     // sits closest to the screen edge. Mini bar applied first → ends up
     // ABOVE the dock; dock applied second → hugs the screen edge.
     .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
-    .safeAreaInset(edge: .bottom, spacing: 0) {
+    // `spacing: 8` puts the gap between the dock and whatever sits above it
+    // in the safe-area stack (the mini bar). Localizes the gap so the mini
+    // bar doesn't carry padding it shouldn't on screens without a dock.
+    .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
         .padding(.horizontal, 20)
     }

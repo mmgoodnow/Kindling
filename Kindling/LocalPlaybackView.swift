@@ -982,9 +982,6 @@ struct LocalPlaybackView: View {
           }
           .padding(.horizontal, 24)
           .padding(.top, 10)
-          // Gap between the mini bar and whatever sits below it in the
-          // safe-area stack (typically the floating action dock).
-          .padding(.bottom, 8)
         }
       }
     }
