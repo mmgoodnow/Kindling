@@ -1,9 +1,14 @@
 import Foundation
 import Kingfisher
+import OSLog
 import SwiftData
 import SwiftUI
 
 struct PodibleLibraryView: View {
+  private static let logger = Logger(
+    subsystem: "com.bebopbeluga.kindling",
+    category: "RemoteLibraryView"
+  )
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
@@ -181,6 +186,9 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func applyLibraryItemUpdate(_ item: PodibleLibraryItem) {
+    Self.logger.debug(
+      "applyLibraryItemUpdate id=\(item.id, privacy: .public) title=\(item.title, privacy: .public) status=\(item.status.rawValue, privacy: .public)"
+    )
     if let index = viewModel.libraryItems.firstIndex(where: { $0.id == item.id }) {
       viewModel.libraryItems[index] = item
     } else {
@@ -197,12 +205,16 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func persistRequestedBook(_ item: PodibleLibraryItem) {
+    Self.logger.debug(
+      "persistRequestedBook id=\(item.id, privacy: .public) title=\(item.title, privacy: .public) status=\(item.status.rawValue, privacy: .public) added=\(item.bookAdded?.description ?? "nil", privacy: .public)"
+    )
     let book = ensureLocalBook(for: item)
     let author = fetchOrCreateAuthor(name: item.author)
     updateLocalBook(book, with: item, author: author)
     if modelContext.hasChanges {
       saveModelContext(reason: "persist requested book \(item.id)")
     }
+    logLocalBookSnapshot("after-persist-requested-\(item.id)")
   }
 
   @ViewBuilder
@@ -340,10 +352,18 @@ struct PodibleLibraryView: View {
         viewModel.reset()
         return
       }
+      Self.logger.debug(
+        "startup task begin localBooks=\(self.localBooks.count, privacy: .public) lastSync=\(self.lastSync?.description ?? "nil", privacy: .public)"
+      )
+      logLocalBookSnapshot("startup-before-sync")
       if localBooks.isEmpty || lastSync == nil {
         await syncFromRemote(using: client)
       }
+      logLocalBookSnapshot("startup-before-loadLibraryItems")
       await viewModel.loadLibraryItems(using: client)
+      Self.logger.debug(
+        "startup task end remoteItems=\(self.viewModel.libraryItems.count, privacy: .public) localBooks=\(self.localBooks.count, privacy: .public)"
+      )
     }
     .refreshable {
       guard let client, isWipingLocalLibrary == false else { return }
@@ -594,14 +614,24 @@ struct PodibleLibraryView: View {
     isSyncing = true
     scheduleSyncSpinner()
     syncErrorMessage = nil
+    Self.logger.debug(
+      "syncFromRemote begin localBooks=\(self.localBooks.count, privacy: .public) lastSync=\(self.lastSync?.description ?? "nil", privacy: .public)"
+    )
+    logLocalBookSnapshot("before-syncFromRemote")
     do {
       let summary = try await LibrarySyncService().syncLibrary(
         using: client,
         modelContext: modelContext
       )
       updateSyncState(with: summary, syncedAt: Date())
+      Self.logger.debug(
+        "syncFromRemote end insertedBooks=\(summary.insertedBooks, privacy: .public) updatedBooks=\(summary.updatedBooks, privacy: .public)"
+      )
+      logLocalBookSnapshot("after-syncFromRemote")
     } catch {
       syncErrorMessage = error.localizedDescription
+      Self.logger.error(
+        "syncFromRemote failed error=\(error.localizedDescription, privacy: .public)")
     }
     cancelSyncSpinner()
     isSyncing = false
@@ -1731,10 +1761,26 @@ struct PodibleLibraryView: View {
   private func saveModelContext(reason: String) {
     do {
       try modelContext.save()
+      Self.logger.debug("SwiftData save succeeded reason=\(reason, privacy: .public)")
     } catch {
-      print(
-        "[RemoteLibraryView] SwiftData save failed during \(reason): \(error.localizedDescription)")
+      Self.logger.error(
+        "SwiftData save failed reason=\(reason, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+      )
     }
+  }
+
+  @MainActor
+  private func logLocalBookSnapshot(_ label: String) {
+    let snapshot =
+      localBooks
+      .prefix(20)
+      .map {
+        "\($0.podibleId)|\($0.title)|bookStatus=\($0.bookStatusRaw ?? "nil")|audioStatus=\($0.audioStatusRaw ?? "nil")|added=\($0.addedAt?.description ?? "nil")"
+      }
+      .joined(separator: " || ")
+    Self.logger.debug(
+      "local snapshot label=\(label, privacy: .public) count=\(self.localBooks.count, privacy: .public) books=\(snapshot, privacy: .public)"
+    )
   }
 
   private func normalizeAuthorKey(_ name: String) -> String {
