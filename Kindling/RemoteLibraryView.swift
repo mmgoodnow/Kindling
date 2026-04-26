@@ -472,6 +472,7 @@ struct PodibleLibraryView: View {
     let remoteItems = viewModel.libraryItems
     let remoteIds = Set(remoteItems.map(\.id))
     let localOnly = localBooks.filter { remoteIds.contains($0.podibleId) == false }
+    let displayItems = mergedDisplayItems(remoteItems: remoteItems, localOnlyBooks: localOnly)
 
     if remoteItems.isEmpty && localBooks.isEmpty {
       centeredListEmptyState {
@@ -485,22 +486,40 @@ struct PodibleLibraryView: View {
           )
         )
       }
-    } else if remoteItems.isEmpty {
-      ForEach(localBooks) { book in
-        localLibraryRow(book, client: client)
-      }
     } else {
-      ForEach(remoteItems) { item in
-        libraryRow(item, localBook: localBooksById[item.id], client: client)
-      }
-      if localOnly.isEmpty == false {
-        Section("Local Only") {
-          ForEach(localOnly) { book in
-            localLibraryRow(book, client: client)
-          }
-        }
+      ForEach(displayItems) { item in
+        let rowClient = remoteIds.contains(item.id) ? client : nil
+        libraryRow(item, localBook: localBooksById[item.id], client: rowClient)
       }
     }
+  }
+
+  private func mergedDisplayItems(
+    remoteItems: [PodibleLibraryItem],
+    localOnlyBooks: [LibraryBook]
+  ) -> [PodibleLibraryItem] {
+    let localOnlyItems = localOnlyBooks.map(localProxyItem(for:))
+    return (remoteItems + localOnlyItems).sorted(by: compareLibraryItems(_:_:))
+  }
+
+  private func compareLibraryItems(_ lhs: PodibleLibraryItem, _ rhs: PodibleLibraryItem) -> Bool {
+    switch (lhs.bookAdded, rhs.bookAdded) {
+    case let (left?, right?):
+      if left != right {
+        return left > right
+      }
+    case (_?, nil):
+      return true
+    case (nil, _?):
+      return false
+    case (nil, nil):
+      break
+    }
+
+    if lhs.title != rhs.title {
+      return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+    }
+    return lhs.id < rhs.id
   }
 
   @ViewBuilder
