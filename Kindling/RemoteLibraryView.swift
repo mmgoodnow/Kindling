@@ -12,6 +12,7 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
+  @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
   @Query(
@@ -360,11 +361,7 @@ struct PodibleLibraryView: View {
         "startup task begin localBooks=\(self.localBooks.count, privacy: .public) lastSync=\(self.lastSync?.description ?? "nil", privacy: .public)"
       )
       logLocalBookSnapshot("startup-before-sync")
-      if localBooks.isEmpty || lastSync == nil {
-        await syncFromRemote(using: client)
-      }
-      logLocalBookSnapshot("startup-before-loadLibraryItems")
-      await viewModel.loadLibraryItems(using: client)
+      await refresh(using: client)
       let remoteOnly = self.viewModel.libraryItems.filter { self.localBooksById[$0.id] == nil }
       if remoteOnly.isEmpty == false {
         let remoteOnlySummary =
@@ -374,10 +371,22 @@ struct PodibleLibraryView: View {
         Self.logger.debug(
           "startup remote-only items count=\(remoteOnly.count, privacy: .public) items=\(remoteOnlySummary, privacy: .public)"
         )
+        for item in remoteOnly {
+          applyLibraryItemUpdate(item)
+        }
+        logLocalBookSnapshot("startup-after-remote-only-repair")
       }
       Self.logger.debug(
         "startup task end remoteItems=\(self.viewModel.libraryItems.count, privacy: .public) localBooks=\(self.localBooks.count, privacy: .public)"
       )
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      guard newPhase == .active else { return }
+      guard isWipingLocalLibrary == false else { return }
+      guard let client else { return }
+      Task {
+        await refresh(using: client)
+      }
     }
     .refreshable {
       guard let client, isWipingLocalLibrary == false else { return }
@@ -503,12 +512,7 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func libraryListing(client: RemoteLibraryServing?) -> some View {
-    let remoteItems = viewModel.libraryItems
-    let remoteIds = Set(remoteItems.map(\.id))
-    let localOnly = localBooks.filter { remoteIds.contains($0.podibleId) == false }
-    let displayItems = mergedDisplayItems(remoteItems: remoteItems, localOnlyBooks: localOnly)
-
-    if remoteItems.isEmpty && localBooks.isEmpty {
+    if localBooks.isEmpty {
       centeredListEmptyState {
         ContentUnavailableView(
           "No Books",
@@ -521,39 +525,10 @@ struct PodibleLibraryView: View {
         )
       }
     } else {
-      ForEach(displayItems) { item in
-        let rowClient = remoteIds.contains(item.id) ? client : nil
-        libraryRow(item, localBook: localBooksById[item.id], client: rowClient)
+      ForEach(localBooks) { book in
+        localLibraryRow(book, client: client)
       }
     }
-  }
-
-  private func mergedDisplayItems(
-    remoteItems: [PodibleLibraryItem],
-    localOnlyBooks: [LibraryBook]
-  ) -> [PodibleLibraryItem] {
-    let localOnlyItems = localOnlyBooks.map(localProxyItem(for:))
-    return (remoteItems + localOnlyItems).sorted(by: compareLibraryItems(_:_:))
-  }
-
-  private func compareLibraryItems(_ lhs: PodibleLibraryItem, _ rhs: PodibleLibraryItem) -> Bool {
-    switch (lhs.bookAdded, rhs.bookAdded) {
-    case let (left?, right?):
-      if left != right {
-        return left > right
-      }
-    case (_?, nil):
-      return true
-    case (nil, _?):
-      return false
-    case (nil, nil):
-      break
-    }
-
-    if lhs.title != rhs.title {
-      return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-    }
-    return lhs.id < rhs.id
   }
 
   @ViewBuilder
