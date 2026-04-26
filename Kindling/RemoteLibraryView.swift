@@ -209,6 +209,16 @@ struct PodibleLibraryView: View {
     }
   }
 
+  @MainActor
+  private func persistRequestedBook(_ item: PodibleLibraryItem) {
+    let book = ensureLocalBook(for: item)
+    let author = fetchOrCreateAuthor(name: item.author)
+    updateLocalBook(book, with: item, author: author)
+    if modelContext.hasChanges {
+      try? modelContext.save()
+    }
+  }
+
   @ViewBuilder
   private func content(client: RemoteLibraryServing?) -> some View {
     List {
@@ -527,6 +537,9 @@ struct PodibleLibraryView: View {
             viewModel: viewModel,
             book: book,
             client: client,
+            onRequested: { requested in
+              persistRequestedBook(requested)
+            },
             pendingItemIDs: $pendingSearchItemIDs
           )
         }
@@ -1107,7 +1120,8 @@ struct PodibleLibraryView: View {
             author: item.author,
             url: remoteLibraryAssetURL(
               baseURLString: remoteAssetBaseURLString,
-              path: item.bookImagePath
+              path: item.bookImagePath,
+              versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
             ),
             rpcURLString: userSettings.podibleRPCURL,
             accessToken: podibleAuth.accessToken
@@ -1385,7 +1399,8 @@ struct PodibleLibraryView: View {
             description: item.summary,
             artworkURL: remoteLibraryAssetURL(
               baseURLString: remoteAssetBaseURLString,
-              path: item.bookImagePath)
+              path: item.bookImagePath,
+              versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) })
           )
           player.play()
           // Server-side chapters/transcript still available — fire and forget.
@@ -1984,13 +1999,17 @@ func coverPlaceholderColor(title: String, author: String) -> Color {
 }
 
 func remoteLibraryAssetURL(baseURLString: String, path: String?) -> URL? {
+  remoteLibraryAssetURL(baseURLString: baseURLString, path: path, versionToken: nil)
+}
+
+func remoteLibraryAssetURL(baseURLString: String, path: String?, versionToken: String?) -> URL? {
   guard let path else { return nil }
   let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
   if trimmed.lowercased().hasSuffix("nocover.png") {
     return nil
   }
   if let absolute = URL(string: trimmed), absolute.scheme != nil {
-    return absolute
+    return versionedAssetURL(absolute, versionToken: versionToken)
   }
   guard let baseURL = URL(string: baseURLString) else { return nil }
   var base = baseURL
@@ -2005,7 +2024,17 @@ func remoteLibraryAssetURL(baseURLString: String, path: String?) -> URL? {
   guard let url = URL(string: path, relativeTo: base)?.absoluteURL else {
     return nil
   }
-  return url
+  return versionedAssetURL(url, versionToken: versionToken)
+}
+
+private func versionedAssetURL(_ url: URL, versionToken: String?) -> URL {
+  guard let versionToken, versionToken.isEmpty == false else { return url }
+  guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+  var items = components.queryItems ?? []
+  items.removeAll { $0.name == "v" }
+  items.append(URLQueryItem(name: "v", value: versionToken))
+  components.queryItems = items
+  return components.url ?? url
 }
 
 struct ActivityShareSheet: View {

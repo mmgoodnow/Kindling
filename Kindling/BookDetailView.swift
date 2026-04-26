@@ -132,11 +132,17 @@ struct BookDetailView: View {
     coverImagePathOverride ?? localBook?.coverURLString ?? item.bookImagePath
   }
 
+  private var currentCoverVersionToken: String? {
+    let date = localBook?.updatedAt ?? item.updatedAt
+    return date.map { String(Int($0.timeIntervalSince1970)) }
+  }
+
   @ViewBuilder
   private var heroCover: some View {
     let url = remoteLibraryAssetURL(
       baseURLString: userSettings.podibleRPCURL,
-      path: currentCoverImagePath
+      path: currentCoverImagePath,
+      versionToken: currentCoverVersionToken
     )
     if canChangeCover {
       Button {

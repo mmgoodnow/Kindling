@@ -92,7 +92,8 @@ final class PodibleLibraryViewModel: ObservableObject {
     }
   }
 
-  func request(_ book: PodibleBook, using client: RemoteLibraryServing) async {
+  func request(_ book: PodibleBook, using client: RemoteLibraryServing) async -> PodibleLibraryItem?
+  {
     isLoading = true
     errorMessage = nil
     do {
@@ -151,6 +152,8 @@ final class PodibleLibraryViewModel: ObservableObject {
       libraryItems = filtered(libraryItems)
       libraryItems = mergePending(into: libraryItems)
       startPolling(bookID: requested.id, client: client)
+      isLoading = false
+      return requested
     } catch {
       if shouldIgnoreError(error) == false {
         self.errorMessage = error.localizedDescription
@@ -158,6 +161,7 @@ final class PodibleLibraryViewModel: ObservableObject {
       }
     }
     isLoading = false
+    return nil
   }
 
   func triggerAcquire(

@@ -5,6 +5,7 @@ struct PodibleSearchResultsView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   let client: RemoteLibraryServing
+  let onRequested: (PodibleLibraryItem) -> Void
   @State private var pendingItemIDs: Set<String> = []
 
   var body: some View {
@@ -26,6 +27,7 @@ struct PodibleSearchResultsView: View {
             viewModel: viewModel,
             book: book,
             client: client,
+            onRequested: onRequested,
             pendingItemIDs: $pendingItemIDs
           )
         }
@@ -41,6 +43,7 @@ struct PodibleSearchResultRow: View {
   @EnvironmentObject var podibleAuth: PodibleAuthController
   let book: PodibleBook
   let client: RemoteLibraryServing
+  let onRequested: (PodibleLibraryItem) -> Void
   @Binding var pendingItemIDs: Set<String>
 
   var body: some View {
@@ -96,10 +99,12 @@ struct PodibleSearchResultRow: View {
               pendingItemIDs.insert(book.id)
               viewModel.beginOptimisticRequest(for: book)
               Task {
-                await viewModel.request(
+                if let requested = await viewModel.request(
                   book,
                   using: client
-                )
+                ) {
+                  onRequested(requested)
+                }
                 let updated = viewModel
                   .searchResults
                   .first(where: {
@@ -188,7 +193,8 @@ struct PodibleSearchResultRow: View {
   return NavigationStack {
     PodibleSearchResultsView(
       viewModel: viewModel,
-      client: PodibleMockClient()
+      client: PodibleMockClient(),
+      onRequested: { _ in }
     )
     .environmentObject(UserSettings())
     .environmentObject(PodibleAuthController())
