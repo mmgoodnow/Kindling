@@ -458,7 +458,7 @@ private struct BookCoverPickerSheet: View {
   @State private var errorMessage: String?
 
   private let columns = [
-    GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 12)
+    GridItem(.adaptive(minimum: 104, maximum: 140), spacing: 14)
   ]
 
   var body: some View {
@@ -513,9 +513,6 @@ private struct BookCoverPickerSheet: View {
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
-        Text("Open Library covers")
-          .font(.caption)
-          .foregroundStyle(.secondary)
       }
     }
   }
@@ -535,7 +532,7 @@ private struct BookCoverPickerSheet: View {
       )
     } else {
       ScrollView {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: 14) {
           ForEach(covers) { cover in
             Button {
               selectedCoverID = cover.id
@@ -575,23 +572,22 @@ private struct BookCoverPickerSheet: View {
       baseURLString: userSettings.podibleRPCURL,
       path: path
     )
-    if let url {
-      AuthenticatedRemoteImage(
-        url: url,
-        rpcURLString: userSettings.podibleRPCURL,
-        accessToken: podibleAuth.accessToken
-      ) {
-        bookCoverPlaceholder(title: title, author: author)
-          .frame(width: 132, height: 192)
-      }
-      .scaledToFill()
-      .frame(width: 132, height: 192)
-      .clipShape(RoundedRectangle(cornerRadius: 10))
-      .shadow(radius: 6, y: 3)
-    } else {
+    ZStack {
       bookCoverPlaceholder(title: title, author: author)
-        .frame(width: 132, height: 192)
+      if let url {
+        AuthenticatedRemoteImage(
+          url: url,
+          rpcURLString: userSettings.podibleRPCURL,
+          accessToken: podibleAuth.accessToken
+        ) {
+          Color.clear
+        }
+        .scaledToFill()
+      }
     }
+    .frame(width: 132, height: 192)
+    .clipShape(RoundedRectangle(cornerRadius: 10))
+    .shadow(radius: 6, y: 3)
   }
 
   @MainActor
