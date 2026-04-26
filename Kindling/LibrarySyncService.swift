@@ -207,7 +207,25 @@ struct LibrarySyncService {
       if file.localRelativePath?.isEmpty == false { return false }
       if file.downloadStatus == .completed { return false }
     }
+    if shouldPreservePendingMirror(book) {
+      return false
+    }
     return true
+  }
+
+  private func shouldPreservePendingMirror(_ book: LibraryBook) -> Bool {
+    let statuses = [book.bookStatusRaw, book.audioStatusRaw].compactMap {
+      $0.flatMap(PodibleLibraryItemStatus.init(rawValue:))
+    }
+    for status in statuses {
+      switch status {
+      case .requested, .wanted, .snatched, .seeding:
+        return true
+      default:
+        continue
+      }
+    }
+    return false
   }
 
   private func deleteLocalMirror(_ book: LibraryBook, modelContext: ModelContext) {
