@@ -89,6 +89,7 @@ struct LibrarySyncService {
           seriesIndex: nil,
           bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
           audioStatusRaw: item.audioStatus?.rawValue,
+          playbackJSON: playbackData(for: item.playback),
           author: author,
           series: nil
         )
@@ -197,7 +198,19 @@ struct LibrarySyncService {
       book.audioStatusRaw = item.audioStatus?.rawValue
       updated += 1
     }
+    if let playback = item.playback {
+      let nextPlaybackJSON = playbackData(for: playback)
+      if book.playbackJSON != nextPlaybackJSON {
+        book.playbackJSON = nextPlaybackJSON
+        updated += 1
+      }
+    }
     return updated > 0 ? 1 : 0
+  }
+
+  private func playbackData(for playback: PodiblePlayback?) -> Data? {
+    guard let playback else { return nil }
+    return try? JSONEncoder().encode(playback)
   }
 
   private func shouldDeleteLocalMirror(_ book: LibraryBook) -> Bool {
