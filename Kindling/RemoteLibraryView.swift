@@ -1225,7 +1225,12 @@ struct PodibleLibraryView: View {
       title: book.title,
       author: book.author?.name,
       description: book.summary,
-      artworkURL: book.coverURLString.flatMap(URL.init(string:))
+      artworkURL: remoteLibraryAssetURL(
+        baseURLString: remoteAssetBaseURLString,
+        path: book.coverURLString,
+        versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+      ),
+      artworkAccessToken: podibleAuth.accessToken
     )
     if let client = configuredClient {
       let playbackAudio = playback(from: book.playbackJSON)?.audio
@@ -1266,7 +1271,8 @@ struct PodibleLibraryView: View {
             artworkURL: remoteLibraryAssetURL(
               baseURLString: remoteAssetBaseURLString,
               path: item.bookImagePath,
-              versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) })
+              versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) }),
+            artworkAccessToken: podibleAuth.accessToken
           )
           player.play()
           // Server-side chapters/transcript still available — fire and forget.

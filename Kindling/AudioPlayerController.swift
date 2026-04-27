@@ -68,6 +68,7 @@ final class AudioPlayerController: ObservableObject {
   private var streamingLoader: StreamingAssetLoader?
   #if os(iOS)
     private var artworkLoadTask: Task<Void, Never>?
+    private var artworkAccessToken: String?
     private var interruptionObserver: NSObjectProtocol?
     private var shouldResumeAfterInterruption = false
   #endif
@@ -97,7 +98,8 @@ final class AudioPlayerController: ObservableObject {
     title: String,
     author: String? = nil,
     description: String? = nil,
-    artworkURL: URL? = nil
+    artworkURL: URL? = nil,
+    artworkAccessToken: String? = nil
   ) {
     streamingLoader = nil
     prepareForLoad(
@@ -106,7 +108,8 @@ final class AudioPlayerController: ObservableObject {
       title: title,
       author: author,
       description: description,
-      artworkURL: artworkURL
+      artworkURL: artworkURL,
+      artworkAccessToken: artworkAccessToken
     )
     let savedPosition = persistedPosition(for: resumeID)
     let player = AVPlayer(url: url)
@@ -130,13 +133,14 @@ final class AudioPlayerController: ObservableObject {
     title: String,
     author: String? = nil,
     description: String? = nil,
-    artworkURL: URL? = nil
+    artworkURL: URL? = nil,
+    artworkAccessToken: String? = nil
   ) {
     guard let proxyURL = StreamingAssetLoader.proxyURL(for: httpURL) else {
       // Fall back to plain load if we can't construct the custom-scheme URL.
       load(
         url: httpURL, resumeID: resumeID, title: title, author: author,
-        description: description, artworkURL: artworkURL)
+        description: description, artworkURL: artworkURL, artworkAccessToken: artworkAccessToken)
       return
     }
 
@@ -148,7 +152,8 @@ final class AudioPlayerController: ObservableObject {
       title: title,
       author: author,
       description: description,
-      artworkURL: artworkURL
+      artworkURL: artworkURL,
+      artworkAccessToken: artworkAccessToken
     )
     let savedPosition = persistedPosition(for: resumeID)
 
@@ -176,7 +181,8 @@ final class AudioPlayerController: ObservableObject {
     title: String,
     author: String?,
     description: String?,
-    artworkURL: URL?
+    artworkURL: URL?,
+    artworkAccessToken: String?
   ) {
     resetObservers()
     chapterLoadTask?.cancel()
@@ -189,6 +195,9 @@ final class AudioPlayerController: ObservableObject {
     self.author = author ?? ""
     self.bookDescription = description ?? ""
     self.artworkURL = artworkURL
+    #if os(iOS)
+      self.artworkAccessToken = artworkAccessToken
+    #endif
     progress.currentTime = persistedPosition(for: resumeID)
     progress.duration = 0
     self.isPlaying = false
@@ -331,6 +340,7 @@ final class AudioPlayerController: ObservableObject {
     transcript = nil
     seekHistory = []
     #if os(iOS)
+      artworkAccessToken = nil
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     #endif
   }
@@ -367,7 +377,8 @@ final class AudioPlayerController: ObservableObject {
       title: session.title,
       author: session.author.isEmpty ? nil : session.author,
       description: session.description.isEmpty ? nil : session.description,
-      artworkURL: session.artworkURLString.flatMap(URL.init(string:))
+      artworkURL: session.artworkURLString.flatMap(URL.init(string:)),
+      artworkAccessToken: nil
     )
     return true
   }
@@ -643,9 +654,12 @@ final class AudioPlayerController: ObservableObject {
       commandCenter.changePlaybackPositionCommand.isEnabled = true
       commandCenter.skipBackwardCommand.isEnabled = true
       commandCenter.skipForwardCommand.isEnabled = true
+      commandCenter.seekBackwardCommand.isEnabled = true
+      commandCenter.seekForwardCommand.isEnabled = true
+      commandCenter.previousTrackCommand.isEnabled = true
+      commandCenter.nextTrackCommand.isEnabled = true
       commandCenter.skipBackwardCommand.preferredIntervals = [15]
       commandCenter.skipForwardCommand.preferredIntervals = [30]
-
       commandCenter.playCommand.addTarget { [weak self] _ in
         guard let self else { return .commandFailed }
         self.play()
@@ -674,6 +688,26 @@ final class AudioPlayerController: ObservableObject {
         self.skip(by: 30)
         return .success
       }
+      commandCenter.seekBackwardCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: -15)
+        return .success
+      }
+      commandCenter.seekForwardCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: 30)
+        return .success
+      }
+      commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: -15)
+        return .success
+      }
+      commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+        guard let self else { return .commandFailed }
+        self.skip(by: 30)
+        return .success
+      }
     }
 
     private func teardownRemoteCommands() {
@@ -683,6 +717,10 @@ final class AudioPlayerController: ObservableObject {
       commandCenter.changePlaybackPositionCommand.removeTarget(nil)
       commandCenter.skipBackwardCommand.removeTarget(nil)
       commandCenter.skipForwardCommand.removeTarget(nil)
+      commandCenter.seekBackwardCommand.removeTarget(nil)
+      commandCenter.seekForwardCommand.removeTarget(nil)
+      commandCenter.previousTrackCommand.removeTarget(nil)
+      commandCenter.nextTrackCommand.removeTarget(nil)
     }
 
     private func updateNowPlayingInfo(artwork: MPMediaItemArtwork? = nil) {
@@ -701,8 +739,13 @@ final class AudioPlayerController: ObservableObject {
     private func loadNowPlayingArtwork(from url: URL?) {
       guard let url else { return }
       artworkLoadTask = Task { [weak self] in
+        var request = URLRequest(url: url)
+        if let token = self?.artworkAccessToken, token.isEmpty == false {
+          request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         guard
-          let (data, _) = try? await URLSession.shared.data(from: url),
+          let (data, response) = try? await URLSession.shared.data(for: request),
+          (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
           let image = UIImage(data: data)
         else { return }
         let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
