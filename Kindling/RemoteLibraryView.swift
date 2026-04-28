@@ -2015,21 +2015,27 @@ func bookCoverPlaceholder(
   height: CGFloat = 128,
   cornerRadius: CGFloat = 6
 ) -> some View {
-  RoundedRectangle(cornerRadius: cornerRadius)
+  let scale = min(width / 88, height / 128)
+  let titleSize = 12 * scale
+  let authorSize = 10 * scale
+  let textSpacing = 6 * scale
+  let textPadding = 8 * scale
+
+  return RoundedRectangle(cornerRadius: cornerRadius)
     .fill(coverPlaceholderColor(title: title, author: author))
     .frame(width: width, height: height)
     .overlay(
-      VStack(spacing: 6) {
+      VStack(spacing: textSpacing) {
         Text(title)
-          .font(.caption.weight(.semibold))
+          .font(.system(size: titleSize, weight: .semibold))
           .multilineTextAlignment(.center)
           .lineLimit(3)
         Text(author)
-          .font(.caption2)
+          .font(.system(size: authorSize))
           .multilineTextAlignment(.center)
           .lineLimit(2)
       }
-      .padding(8)
+      .padding(textPadding)
       .foregroundStyle(.white.opacity(0.9))
     )
 }
