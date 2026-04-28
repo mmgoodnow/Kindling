@@ -523,9 +523,18 @@ private struct BookCoverPickerSheet: View {
   @State private var isApplying = false
   @State private var errorMessage: String?
 
-  private let columns = [
-    GridItem(.adaptive(minimum: 104, maximum: 140), spacing: 14)
-  ]
+  private static let coverWidth: CGFloat = 132
+  private static let coverHeight: CGFloat = 192
+  private static let coverSpacing: CGFloat = 16
+
+  private var columns: [GridItem] {
+    [
+      GridItem(
+        .adaptive(minimum: Self.coverWidth, maximum: Self.coverWidth),
+        spacing: Self.coverSpacing
+      )
+    ]
+  }
 
   var body: some View {
     NavigationStack {
@@ -598,7 +607,7 @@ private struct BookCoverPickerSheet: View {
       )
     } else {
       ScrollView {
-        LazyVGrid(columns: columns, spacing: 14) {
+        LazyVGrid(columns: columns, spacing: Self.coverSpacing) {
           ForEach(covers) { cover in
             Button {
               selectedCoverID = cover.id
@@ -642,8 +651,8 @@ private struct BookCoverPickerSheet: View {
       bookCoverPlaceholder(
         title: title,
         author: author,
-        width: 132,
-        height: 192,
+        width: Self.coverWidth,
+        height: Self.coverHeight,
         cornerRadius: 10
       )
       if let url {
@@ -657,7 +666,7 @@ private struct BookCoverPickerSheet: View {
         .scaledToFill()
       }
     }
-    .frame(width: 132, height: 192)
+    .frame(width: Self.coverWidth, height: Self.coverHeight)
     .clipShape(RoundedRectangle(cornerRadius: 10))
     .shadow(radius: 6, y: 3)
   }
