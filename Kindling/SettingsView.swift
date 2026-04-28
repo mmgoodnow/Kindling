@@ -31,13 +31,16 @@ struct SettingsView: View {
         .padding(.vertical, 2)
 
         LabeledContent("Server") {
-          TextField("https://podible.example.com/rpc", text: userSettings.$podibleRPCURL)
-            .multilineTextAlignment(.trailing)
-            #if os(iOS)
+          #if os(iOS)
+            TextField("https://podible.example.com", text: userSettings.$podibleRPCURL)
+              .multilineTextAlignment(.trailing)
               .textInputAutocapitalization(.never)
               .keyboardType(.URL)
               .autocorrectionDisabled()
-            #endif
+          #else
+            TextField("https://podible.example.com", text: userSettings.$podibleRPCURL)
+              .multilineTextAlignment(.trailing)
+          #endif
         }
 
         LabeledContent("Account") {
@@ -85,7 +88,7 @@ struct SettingsView: View {
         }
       } footer: {
         Text(
-          "Use the full /rpc URL for your Podible server. Kindling will open Podible's web sign-in flow and store the returned session securely in Keychain."
+          "Use your Podible server URL. Kindling adds the RPC path automatically, opens Podible's web sign-in flow, and stores the returned session securely in Keychain."
         )
       }
 

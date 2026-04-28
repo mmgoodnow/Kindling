@@ -68,6 +68,14 @@ struct PodibleLibraryView: View {
     return nil
   }
 
+  private var trimmedPodibleRPCURL: String {
+    userSettings.podibleRPCURL.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var canStartPodibleSignIn: Bool {
+    trimmedPodibleRPCURL.isEmpty == false && podibleAuth.isAuthenticating == false
+  }
+
   private var remoteAssetBaseURLString: String {
     userSettings.podibleRPCURL
   }
@@ -212,12 +220,8 @@ struct PodibleLibraryView: View {
   @ViewBuilder
   private func content(client: RemoteLibraryServing?) -> some View {
     List {
-      if client == nil {
-        Text(
-          "Sign in to Podible in Settings to access your remote library. Downloaded local audiobooks still work."
-        )
-        .foregroundStyle(.secondary)
-        .font(.caption)
+      if client == nil && localBooks.isEmpty == false {
+        podibleConnectionBanner
       }
 
       if let error = viewModel.errorMessage {
@@ -425,15 +429,15 @@ struct PodibleLibraryView: View {
   private func libraryListing(client: RemoteLibraryServing?) -> some View {
     if localBooks.isEmpty {
       centeredListEmptyState {
-        ContentUnavailableView(
-          "No Books",
-          systemImage: "tray",
-          description: Text(
-            client == nil
-              ? "Add audiobooks to your local library to get started."
-              : "Tap Sync to pull your remote library."
+        if client == nil {
+          podibleOnboardingCard
+        } else {
+          ContentUnavailableView(
+            "No Books",
+            systemImage: "tray",
+            description: Text("Pull to refresh your Podible library.")
           )
-        )
+        }
       }
     } else {
       ForEach(localBooks) { book in
@@ -498,6 +502,117 @@ struct PodibleLibraryView: View {
     .frame(maxWidth: .infinity, minHeight: 260)
     .listRowSeparator(.hidden)
     .listRowBackground(Color.clear)
+  }
+
+  private var podibleOnboardingCard: some View {
+    VStack(spacing: 18) {
+      Image(systemName: "books.vertical.fill")
+        .font(.system(size: 44, weight: .semibold))
+        .foregroundStyle(.tint)
+        .padding(18)
+        .background(.tint.opacity(0.12), in: Circle())
+
+      VStack(spacing: 8) {
+        Text("Connect Your Library")
+          .font(.title2.weight(.bold))
+          .multilineTextAlignment(.center)
+        Text("Sign in to Podible to sync your audiobooks, covers, chapters, and transcripts.")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      VStack(spacing: 10) {
+        podibleServerTextField
+        podibleSignInButton
+        podibleAuthErrorText
+      }
+      .frame(maxWidth: 360)
+    }
+    .padding(.horizontal, 24)
+    .padding(.vertical, 28)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var podibleConnectionBanner: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(alignment: .top, spacing: 12) {
+        Image(systemName: "person.crop.circle.badge.plus")
+          .font(.title2)
+          .foregroundStyle(.tint)
+          .frame(width: 34)
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Connect Podible")
+            .font(.headline)
+          Text(
+            "Sign in here to refresh your remote library. Downloaded audiobooks still work offline."
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        }
+      }
+      podibleServerTextField
+      podibleSignInButton
+      podibleAuthErrorText
+    }
+    .padding(14)
+    .background(.quaternary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+    .listRowSeparator(.hidden)
+    .listRowBackground(Color.clear)
+  }
+
+  private var podibleServerTextField: some View {
+    #if os(iOS)
+      TextField("https://podible.example.com", text: userSettings.$podibleRPCURL)
+        .textFieldStyle(.roundedBorder)
+        .textInputAutocapitalization(.never)
+        .keyboardType(.URL)
+        .autocorrectionDisabled()
+    #else
+      TextField("https://podible.example.com", text: userSettings.$podibleRPCURL)
+        .textFieldStyle(.roundedBorder)
+    #endif
+  }
+
+  private var podibleSignInButton: some View {
+    Button {
+      startPodibleSignIn()
+    } label: {
+      HStack(spacing: 8) {
+        if podibleAuth.isAuthenticating {
+          ProgressView()
+        }
+        Text(podibleAuth.isAuthenticating ? "Signing In..." : "Sign In to Podible")
+      }
+      .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.borderedProminent)
+    .disabled(canStartPodibleSignIn == false)
+  }
+
+  @ViewBuilder
+  private var podibleAuthErrorText: some View {
+    if let errorMessage = podibleAuth.errorMessage {
+      Text(errorMessage)
+        .font(.caption)
+        .foregroundStyle(.red)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+    } else if trimmedPodibleRPCURL.isEmpty {
+      Text("Enter your Podible server URL to continue.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+    }
+  }
+
+  private func startPodibleSignIn() {
+    guard canStartPodibleSignIn else { return }
+    Task {
+      await podibleAuth.signIn(rpcURLString: userSettings.podibleRPCURL)
+    }
   }
 
   private func startSync(using client: RemoteLibraryServing?) {
