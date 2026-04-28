@@ -125,6 +125,20 @@ struct SettingsView: View {
           }
         }
         .disabled(isWipingLocalLibrary)
+        .confirmationDialog(
+          "Wipe Local Cache?",
+          isPresented: $isShowingWipeConfirmation,
+          titleVisibility: .visible
+        ) {
+          Button("Wipe Local Cache", role: .destructive) {
+            wipeLocalLibrary()
+          }
+          Button("Cancel", role: .cancel) {}
+        } message: {
+          Text(
+            "Kindling will remove its cached library records and downloaded files on this device. Your Podible library is not changed."
+          )
+        }
       } header: {
         Text("Local Cache")
       } footer: {
@@ -132,22 +146,9 @@ struct SettingsView: View {
           "Removes cached library records and downloaded files from this device. Your Podible library is not changed."
         )
       }
-    }.formStyle(.grouped)
-      .navigationTitle("Settings")
-      .confirmationDialog(
-        "Wipe Local Cache?",
-        isPresented: $isShowingWipeConfirmation,
-        titleVisibility: .visible
-      ) {
-        Button("Wipe Local Cache", role: .destructive) {
-          wipeLocalLibrary()
-        }
-        Button("Cancel", role: .cancel) {}
-      } message: {
-        Text(
-          "Kindling will remove its cached library records and downloaded files on this device. Your Podible library is not changed."
-        )
-      }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Settings")
   }
 
   @MainActor
