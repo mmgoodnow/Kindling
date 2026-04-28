@@ -88,7 +88,7 @@ struct SettingsView: View {
         }
       } footer: {
         Text(
-          "Use your Podible server URL. Kindling adds the RPC path automatically, opens Podible's web sign-in flow, and stores the returned session securely in Keychain."
+          "Enter the web address for your Podible server. After you sign in, your library will sync to this device."
         )
       }
 
