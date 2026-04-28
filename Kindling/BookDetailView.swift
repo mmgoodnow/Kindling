@@ -175,16 +175,27 @@ struct BookDetailView: View {
         rpcURLString: userSettings.podibleRPCURL,
         accessToken: podibleAuth.accessToken
       ) {
-        bookCoverPlaceholder(title: item.title, author: item.author)
-          .frame(width: 200, height: 290)
+        bookCoverPlaceholder(
+          title: item.title,
+          author: item.author,
+          width: 200,
+          height: 290,
+          cornerRadius: 10
+        )
       }
       .scaledToFill()
       .frame(width: 200, height: 290)
       .clipShape(RoundedRectangle(cornerRadius: 10))
       .shadow(radius: 8, y: 4)
     } else {
-      bookCoverPlaceholder(title: item.title, author: item.author)
-        .frame(width: 200, height: 290)
+      bookCoverPlaceholder(
+        title: item.title,
+        author: item.author,
+        width: 200,
+        height: 290,
+        cornerRadius: 10
+      )
+      .shadow(radius: 8, y: 4)
     }
   }
 
@@ -628,7 +639,13 @@ private struct BookCoverPickerSheet: View {
       path: path
     )
     ZStack {
-      bookCoverPlaceholder(title: title, author: author)
+      bookCoverPlaceholder(
+        title: title,
+        author: author,
+        width: 132,
+        height: 192,
+        cornerRadius: 10
+      )
       if let url {
         AuthenticatedRemoteImage(
           url: url,

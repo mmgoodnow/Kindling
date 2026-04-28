@@ -1985,7 +1985,10 @@ func bookCoverView(
   author: String,
   url: URL?,
   rpcURLString: String,
-  accessToken: String?
+  accessToken: String?,
+  width: CGFloat = 88,
+  height: CGFloat = 128,
+  cornerRadius: CGFloat = 6
 ) -> some View {
   if let url {
     AuthenticatedRemoteImage(
@@ -1993,20 +1996,28 @@ func bookCoverView(
       rpcURLString: rpcURLString,
       accessToken: accessToken
     ) {
-      bookCoverPlaceholder(title: title, author: author)
+      bookCoverPlaceholder(
+        title: title, author: author, width: width, height: height, cornerRadius: cornerRadius)
     }
     .scaledToFill()
-    .frame(width: 88, height: 128)
-    .clipShape(RoundedRectangle(cornerRadius: 6))
+    .frame(width: width, height: height)
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
   } else {
-    bookCoverPlaceholder(title: title, author: author)
+    bookCoverPlaceholder(
+      title: title, author: author, width: width, height: height, cornerRadius: cornerRadius)
   }
 }
 
-func bookCoverPlaceholder(title: String, author: String) -> some View {
-  RoundedRectangle(cornerRadius: 6)
+func bookCoverPlaceholder(
+  title: String,
+  author: String,
+  width: CGFloat = 88,
+  height: CGFloat = 128,
+  cornerRadius: CGFloat = 6
+) -> some View {
+  RoundedRectangle(cornerRadius: cornerRadius)
     .fill(coverPlaceholderColor(title: title, author: author))
-    .frame(width: 88, height: 128)
+    .frame(width: width, height: height)
     .overlay(
       VStack(spacing: 6) {
         Text(title)
