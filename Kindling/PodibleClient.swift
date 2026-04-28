@@ -1129,6 +1129,10 @@ struct PodibleAuthExchangeResult: Decodable {
   }
 }
 
+private struct PodibleAuthMeResult: Decodable {
+  let user: PodibleAuthUser
+}
+
 struct PodibleTranscript: Decodable, Equatable {
   struct Word: Decodable, Equatable, Identifiable {
     let startMs: Int
@@ -1221,7 +1225,8 @@ struct PodibleClient: PodibleLibraryServing {
   }
 
   func fetchCurrentUser() async throws -> PodibleAuthUser {
-    try await rpcCall(method: "auth.me", params: [:])
+    let response: PodibleAuthMeResult = try await rpcCall(method: "auth.me", params: [:])
+    return response.user
   }
 
   func logout() async throws {

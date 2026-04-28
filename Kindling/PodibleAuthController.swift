@@ -23,7 +23,7 @@ final class PodibleAuthController: ObservableObject {
   var accessToken: String? { session?.accessToken }
   var isAuthenticated: Bool { accessToken?.isEmpty == false }
   var currentUserDescription: String? {
-    session?.user.displayName ?? session?.user.id.map(String.init)
+    session?.user.displayLabel ?? session?.user.id.map(String.init)
   }
 
   func refreshStoredSession(rpcURLString: String) async {
@@ -160,13 +160,17 @@ final class PodibleAuthController: ObservableObject {
 
 struct PodibleAuthUser: Codable, Equatable {
   let id: Int?
+  let displayName: String?
   let email: String?
   let name: String?
   let username: String?
   let plexUsername: String?
+  let provider: String?
+  let thumbUrl: String?
+  let isAdmin: Bool?
 
-  var displayName: String? {
-    [name, username, plexUsername, email]
+  var displayLabel: String? {
+    [displayName, name, username, plexUsername, email]
       .compactMap { $0 }
       .first(where: { $0.isEmpty == false })
   }
