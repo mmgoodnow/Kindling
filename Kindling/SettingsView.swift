@@ -21,15 +21,6 @@ struct SettingsView: View {
   var body: some View {
     Form {
       Section {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Podible")
-            .font(.headline)
-          Text("Connect Kindling to your Podible server, then sign in to access your library.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 2)
-
         LabeledContent("Server") {
           #if os(iOS)
             TextField("https://podible.example.com", text: userSettings.$podibleRPCURL)
@@ -86,6 +77,8 @@ struct SettingsView: View {
           }
           .disabled(canSignIn == false)
         }
+      } header: {
+        Text("Podible")
       } footer: {
         Text(
           "Enter the web address for your Podible server. After you sign in, your library will sync to this device."
