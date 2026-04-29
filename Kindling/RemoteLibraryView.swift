@@ -113,6 +113,7 @@ struct PodibleLibraryView: View {
       || isImportedMediaStatus(localEbookStatus)
     let hasAudioPlayback = playback?.audio != nil
     let localPlaybackURL = localBook.flatMap { playbackURL(for: $0) }
+    let defaultManifestationID = playback?.audio?.manifestationId
     let localFileStatus = localBook?.files.first?.downloadStatus ?? .notStarted
     let isLocalDownloading = localDownloadingBookIDs.contains(localBook?.podibleId ?? item.id)
     let canStartLocalAudioDownload =
@@ -138,6 +139,19 @@ struct PodibleLibraryView: View {
       // button doesn't distinguish between local + streamed; this is an
       // implementation detail.
       actions.play = { startStreamingPlayback(for: item, client: client) }
+    }
+    actions.canPlayAudioEdition = { audio in
+      if audio.manifestationId == defaultManifestationID, localPlaybackURL != nil {
+        return true
+      }
+      return client != nil
+    }
+    actions.playAudioEdition = { audio in
+      if audio.manifestationId == defaultManifestationID, let localBook, let localPlaybackURL {
+        startPlayback(for: localBook, url: localPlaybackURL)
+      } else if let client {
+        startStreamingPlayback(for: item, playbackAudio: audio, client: client)
+      }
     }
     if canStartLocalAudioDownload, let client {
       actions.downloadAudio = { startLocalDownload(for: item, client: client) }
@@ -1387,18 +1401,27 @@ struct PodibleLibraryView: View {
     for item: PodibleLibraryItem,
     client: RemoteLibraryServing
   ) {
+    guard
+      let playbackAudio =
+        item.playback?.audio
+        ?? localBooksById[item.id].flatMap({ self.playback(from: $0.playbackJSON)?.audio })
+    else {
+      downloadErrorMessage = "Audiobook not available for streaming."
+      return
+    }
+    startStreamingPlayback(for: item, playbackAudio: playbackAudio, client: client)
+  }
+
+  @MainActor
+  private func startStreamingPlayback(
+    for item: PodibleLibraryItem,
+    playbackAudio: PodiblePlaybackAudio,
+    client: RemoteLibraryServing
+  ) {
     isShowingPlayer = true
-    let resumeID = streamingResumeID(for: item)
+    let resumeID = streamingResumeID(for: item, playbackAudio: playbackAudio)
     Task {
       do {
-        guard
-          let playbackAudio =
-            item.playback?.audio
-            ?? localBooksById[item.id].flatMap({ self.playback(from: $0.playbackJSON)?.audio })
-        else {
-          downloadErrorMessage = "Audiobook not available for streaming."
-          return
-        }
         let httpURL = try client.audiobookStreamURL(playback: playbackAudio)
         await MainActor.run {
           player.loadStreaming(
@@ -1426,9 +1449,13 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private func streamingResumeID(for item: PodibleLibraryItem) -> String {
+  private func streamingResumeID(
+    for item: PodibleLibraryItem,
+    playbackAudio: PodiblePlaybackAudio? = nil
+  ) -> String {
     let manifestationID =
-      item.playback?.audio?.manifestationId
+      playbackAudio?.manifestationId
+      ?? item.playback?.audio?.manifestationId
       ?? localBooksById[item.id].flatMap {
         self.playback(from: $0.playbackJSON)?.audio?.manifestationId
       }

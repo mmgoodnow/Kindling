@@ -11,6 +11,8 @@ enum AudioDownloadState {
 
 struct BookDetailActions {
   var play: (() -> Void)?
+  var canPlayAudioEdition: ((PodiblePlaybackAudio) -> Bool)?
+  var playAudioEdition: ((PodiblePlaybackAudio) -> Void)?
   var downloadAudio: (() -> Void)?
   var audioDownload: AudioDownloadState = .idle
   var fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
@@ -270,32 +272,48 @@ struct BookDetailView: View {
           .foregroundStyle(.secondary)
 
         ForEach(Array(options.enumerated()), id: \.element.manifestationId) { index, audio in
-          VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-              Text(audioEditionTitle(audio, index: index, total: options.count))
-                .font(.subheadline.weight(.semibold))
-              if isDefaultAudioEdition(audio) && options.count > 1 {
-                Text("Default")
-                  .font(.caption2.weight(.semibold))
+          HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+              HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(audioEditionTitle(audio, index: index, total: options.count))
+                  .font(.subheadline.weight(.semibold))
+                if isDefaultAudioEdition(audio) && options.count > 1 {
+                  Text("Default")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+                }
+              }
+              if let editionNote = audio.editionNote, editionNote.isEmpty == false {
+                Text(editionNote)
+                  .font(.footnote)
                   .foregroundStyle(.secondary)
-                  .padding(.horizontal, 6)
-                  .padding(.vertical, 2)
-                  .background(.quaternary, in: Capsule())
+              }
+              if audioEditionMetadata(audio).isEmpty == false {
+                Text(audioEditionMetadata(audio))
+                  .font(.footnote)
+                  .foregroundStyle(.secondary)
+                  .monospacedDigit()
               }
             }
-            if let editionNote = audio.editionNote, editionNote.isEmpty == false {
-              Text(editionNote)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-            if audioEditionMetadata(audio).isEmpty == false {
-              Text(audioEditionMetadata(audio))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if canPlayAudioEdition(audio), let playAudioEdition = actions.playAudioEdition {
+              Button {
+                playAudioEdition(audio)
+              } label: {
+                Image(systemName: "play.fill")
+                  .font(.caption.weight(.bold))
+                  .frame(width: 30, height: 30)
+              }
+              .buttonStyle(.bordered)
+              .buttonBorderShape(.circle)
+              .accessibilityLabel(
+                "Play \(audioEditionTitle(audio, index: index, total: options.count))")
             }
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
       .padding(12)
@@ -333,6 +351,10 @@ struct BookDetailView: View {
 
   private func isDefaultAudioEdition(_ audio: PodiblePlaybackAudio) -> Bool {
     item.playback?.audio?.manifestationId == audio.manifestationId
+  }
+
+  private func canPlayAudioEdition(_ audio: PodiblePlaybackAudio) -> Bool {
+    actions.canPlayAudioEdition?(audio) ?? false
   }
 
   private func audioEditionMetadata(_ audio: PodiblePlaybackAudio) -> String {
