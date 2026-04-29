@@ -528,12 +528,7 @@ struct BookDetailView: View {
         Button {
           openReleaseSearch(media: .audio)
         } label: {
-          Label("Find Audio", systemImage: "headphones")
-        }
-        Button {
-          openReleaseSearch(media: .ebook)
-        } label: {
-          Label("Find eBook", systemImage: "book")
+          Label("Find Releases", systemImage: "magnifyingglass")
         }
       }
       if canChangeCover {
