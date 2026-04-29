@@ -76,6 +76,12 @@ struct PodibleLibraryView: View {
     trimmedPodibleRPCURL.isEmpty == false && podibleAuth.isAuthenticating == false
   }
 
+  private var isWaitingForStoredPodibleSession: Bool {
+    clientOverride == nil
+      && trimmedPodibleRPCURL.isEmpty == false
+      && podibleAuth.isCheckingStoredSession
+  }
+
   private var remoteAssetBaseURLString: String {
     userSettings.podibleRPCURL
   }
@@ -236,7 +242,7 @@ struct PodibleLibraryView: View {
   @ViewBuilder
   private func content(client: RemoteLibraryServing?) -> some View {
     List {
-      if client == nil && localBooks.isEmpty == false {
+      if client == nil && localBooks.isEmpty == false && isWaitingForStoredPodibleSession == false {
         podibleConnectionBanner
       }
 
@@ -300,7 +306,8 @@ struct PodibleLibraryView: View {
         }
       #endif
     }
-    .task(id: podibleAuth.accessToken ?? "") {
+    .task(id: "\(podibleAuth.accessToken ?? "")|\(podibleAuth.hasCheckedStoredSession)") {
+      guard isWaitingForStoredPodibleSession == false else { return }
       guard let client else {
         viewModel.reset()
         return
@@ -445,7 +452,9 @@ struct PodibleLibraryView: View {
   private func libraryListing(client: RemoteLibraryServing?) -> some View {
     if localBooks.isEmpty {
       centeredListEmptyState {
-        if client == nil {
+        if isWaitingForStoredPodibleSession {
+          ProgressView()
+        } else if client == nil {
           podibleOnboardingCard
         } else {
           ContentUnavailableView(

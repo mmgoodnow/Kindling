@@ -15,6 +15,7 @@ final class PodibleAuthController: ObservableObject {
 
   @Published private(set) var session: PodibleAppSession?
   @Published private(set) var isAuthenticating = false
+  @Published private(set) var hasCheckedStoredSession = false
   @Published var errorMessage: String?
 
   private let keychain = PodibleSessionKeychain()
@@ -22,11 +23,15 @@ final class PodibleAuthController: ObservableObject {
 
   var accessToken: String? { session?.accessToken }
   var isAuthenticated: Bool { accessToken?.isEmpty == false }
+  var isCheckingStoredSession: Bool { hasCheckedStoredSession == false }
   var currentUserDescription: String? {
     session?.user.displayLabel ?? session?.user.id.map(String.init)
   }
 
   func refreshStoredSession(rpcURLString: String) async {
+    hasCheckedStoredSession = false
+    defer { hasCheckedStoredSession = true }
+
     let trimmed = rpcURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed.isEmpty == false, let rpcURL = URL(string: trimmed) else {
       session = nil
