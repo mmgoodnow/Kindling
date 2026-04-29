@@ -340,6 +340,16 @@ protocol PodibleLibraryServing {
   func fetchDownloadProgress(limit: Int?) async throws -> [PodibleDownloadProgressItem]
   func fetchAlternateCovers(bookID: String, limit: Int) async throws -> [PodibleAlternateCover]
   func setAlternateCover(bookID: String, coverID: Int) async throws -> PodibleLibraryItem
+  func searchReleases(
+    bookID: String,
+    mediaType: PodibleReleaseMedia,
+    query: String?,
+    limit: Int?
+  ) async throws -> PodibleReleaseSearch
+  func createManifestationFromSearch(
+    bookID: String,
+    selection: PodibleManifestationSearchSelection
+  ) async throws -> PodibleCreateManifestationResult
   func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript?
   func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker]
   func downloadEpub(playback: PodiblePlaybackEbook, progress: @escaping (Double) -> Void)
@@ -398,6 +408,28 @@ extension PodibleLibraryServing {
     _ = bookID
     _ = coverID
     throw PodibleError.unsupported("This backend does not support alternate covers.")
+  }
+
+  func searchReleases(
+    bookID: String,
+    mediaType: PodibleReleaseMedia,
+    query: String? = nil,
+    limit: Int? = nil
+  ) async throws -> PodibleReleaseSearch {
+    _ = bookID
+    _ = mediaType
+    _ = query
+    _ = limit
+    throw PodibleError.unsupported("This backend does not support release search.")
+  }
+
+  func createManifestationFromSearch(
+    bookID: String,
+    selection: PodibleManifestationSearchSelection
+  ) async throws -> PodibleCreateManifestationResult {
+    _ = bookID
+    _ = selection
+    throw PodibleError.unsupported("This backend does not support release selection.")
   }
 
   func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
@@ -487,6 +519,62 @@ struct PodibleAlternateCover: Identifiable, Hashable {
   let imagePath: String
 
   var id: Int { coverID }
+}
+
+enum PodibleReleaseMedia: String, Codable, CaseIterable, Identifiable {
+  case audio
+  case ebook
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .audio:
+      return "Audio"
+    case .ebook:
+      return "eBook"
+    }
+  }
+}
+
+struct PodibleReleaseSearch: Decodable, Equatable {
+  let searchId: String
+  let query: String
+  let mediaType: PodibleReleaseMedia
+  let expiresAt: String
+  let results: [PodibleReleaseSearchResult]
+}
+
+struct PodibleReleaseSearchResult: Identifiable, Decodable, Equatable, Hashable {
+  let index: Int
+  let title: String
+  let provider: String
+  let mediaType: PodibleReleaseMedia
+  let sizeBytes: Int64?
+  let guid: String?
+  let infoHash: String?
+  let seeders: Int?
+  let leechers: Int?
+
+  var id: Int { index }
+}
+
+struct PodibleManifestationSearchSelection: Equatable {
+  let mediaType: PodibleReleaseMedia
+  let searchId: String
+  let indexes: [Int]
+  let label: String?
+  let editionNote: String?
+}
+
+struct PodibleCreateManifestationResult: Decodable, Equatable {
+  struct JobResult: Decodable, Equatable {
+    let jobId: Int
+    let idempotent: Bool
+  }
+
+  let manifestationId: Int?
+  let results: [JobResult]
 }
 
 struct PodibleSearchResult: Identifiable, Hashable {
@@ -825,6 +913,124 @@ final actor PodibleMockClient: PodibleLibraryServing {
     )
     libraryItems[index] = updated
     return updated
+  }
+
+  func searchReleases(
+    bookID: String,
+    mediaType: PodibleReleaseMedia,
+    query: String? = nil,
+    limit: Int? = nil
+  ) async throws -> PodibleReleaseSearch {
+    let baseQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let searchQuery =
+      baseQuery?.isEmpty == false
+      ? baseQuery!
+      : libraryItems.first(where: { $0.id == bookID }).map { "\($0.title) \($0.author)" }
+        ?? "Mock Search"
+    let rows = [
+      PodibleReleaseSearchResult(
+        index: 0,
+        title: "\(searchQuery) - Unabridged",
+        provider: "MockIndexer",
+        mediaType: mediaType,
+        sizeBytes: mediaType == .audio ? 512_000_000 : 2_400_000,
+        guid: "mock-\(bookID)-0",
+        infoHash: nil,
+        seeders: 42,
+        leechers: 3
+      ),
+      PodibleReleaseSearchResult(
+        index: 1,
+        title: "\(searchQuery) - Part 1",
+        provider: "MockIndexer",
+        mediaType: mediaType,
+        sizeBytes: mediaType == .audio ? 260_000_000 : 2_100_000,
+        guid: "mock-\(bookID)-1",
+        infoHash: nil,
+        seeders: 19,
+        leechers: 1
+      ),
+      PodibleReleaseSearchResult(
+        index: 2,
+        title: "\(searchQuery) - Part 2",
+        provider: "MockIndexer",
+        mediaType: mediaType,
+        sizeBytes: mediaType == .audio ? 268_000_000 : 1_900_000,
+        guid: "mock-\(bookID)-2",
+        infoHash: nil,
+        seeders: 17,
+        leechers: 1
+      ),
+    ]
+    return PodibleReleaseSearch(
+      searchId: "mock-search-\(bookID)-\(mediaType.rawValue)",
+      query: searchQuery,
+      mediaType: mediaType,
+      expiresAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(1800)),
+      results: Array(rows.prefix(limit ?? rows.count))
+    )
+  }
+
+  func createManifestationFromSearch(
+    bookID: String,
+    selection: PodibleManifestationSearchSelection
+  ) async throws -> PodibleCreateManifestationResult {
+    guard let index = libraryItems.firstIndex(where: { $0.id == bookID }) else {
+      throw PodibleError.badResponse
+    }
+    let existing = libraryItems[index]
+    let manifestationID = Int.random(in: 1000...9999)
+    let playback: PodiblePlayback
+    switch selection.mediaType {
+    case .audio:
+      playback = PodiblePlayback(
+        audio: PodiblePlaybackAudio(
+          manifestationId: manifestationID,
+          label: selection.label,
+          editionNote: selection.editionNote,
+          streamUrl: "/mock-playback/audio/\(bookID)-\(manifestationID).mp3",
+          chaptersUrl: "/mock-playback/chapter-markers-\(bookID)-\(manifestationID).json",
+          transcriptUrl: nil,
+          mimeType: "audio/mpeg",
+          durationMs: existing.playback?.audio?.durationMs ?? 60_000_000,
+          sizeBytes: 512_000_000
+        ),
+        ebook: existing.playback?.ebook
+      )
+    case .ebook:
+      playback = PodiblePlayback(
+        audio: existing.playback?.audio,
+        ebook: PodiblePlaybackEbook(
+          assetId: manifestationID,
+          downloadUrl: "/mock-playback/ebook-\(bookID)-\(manifestationID).epub",
+          mimeType: "application/epub+zip",
+          sizeBytes: 2_400_000
+        )
+      )
+    }
+    libraryItems[index] = PodibleLibraryItem(
+      id: existing.id,
+      openLibraryWorkID: existing.openLibraryWorkID,
+      title: existing.title,
+      author: existing.author,
+      summary: existing.summary,
+      status: .snatched,
+      ebookStatus: selection.mediaType == .ebook ? .snatched : existing.ebookStatus,
+      audioStatus: selection.mediaType == .audio ? .snatched : existing.audioStatus,
+      bookAdded: existing.bookAdded,
+      updatedAt: .now,
+      fullPseudoProgress: existing.fullPseudoProgress,
+      bookImagePath: existing.bookImagePath,
+      wordCount: existing.wordCount,
+      runtimeSeconds: existing.runtimeSeconds,
+      playback: playback
+    )
+    return PodibleCreateManifestationResult(
+      manifestationId: manifestationID,
+      results: selection.indexes.enumerated().map { offset, _ in
+        .init(jobId: manifestationID + offset, idempotent: false)
+      }
+    )
   }
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
@@ -1368,6 +1574,50 @@ struct PodibleClient: PodibleLibraryServing {
       params: ["bookId": numericBookID, "coverId": coverID]
     )
     return toLibraryItem(response.book)
+  }
+
+  func searchReleases(
+    bookID: String,
+    mediaType: PodibleReleaseMedia,
+    query: String? = nil,
+    limit: Int? = nil
+  ) async throws -> PodibleReleaseSearch {
+    let numericBookID = try parseBookID(bookID)
+    var params: [String: Any] = [
+      "bookId": numericBookID,
+      "mediaType": mediaType.rawValue,
+    ]
+    if let trimmed = query?.trimmingCharacters(in: .whitespacesAndNewlines),
+      trimmed.isEmpty == false
+    {
+      params["query"] = trimmed
+    }
+    if let limit {
+      params["limit"] = limit
+    }
+    return try await rpcCall(method: "library.searchReleases", params: params)
+  }
+
+  func createManifestationFromSearch(
+    bookID: String,
+    selection: PodibleManifestationSearchSelection
+  ) async throws -> PodibleCreateManifestationResult {
+    let numericBookID = try parseBookID(bookID)
+    let label = selection.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let editionNote = selection.editionNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let manifestation: [String: Any] = [
+      "label": label?.isEmpty == false ? label! : NSNull(),
+      "editionNote": editionNote?.isEmpty == false ? editionNote! : NSNull(),
+    ]
+    return try await rpcCall(
+      method: "library.createManifestationFromSearch",
+      params: [
+        "bookId": numericBookID,
+        "mediaType": selection.mediaType.rawValue,
+        "searchId": selection.searchId,
+        "indexes": selection.indexes,
+        "manifestation": manifestation,
+      ])
   }
 
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {

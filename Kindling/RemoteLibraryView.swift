@@ -148,6 +148,22 @@ struct PodibleLibraryView: View {
         }
         return updated
       }
+      actions.searchReleases = { media, query in
+        try await client.searchReleases(
+          bookID: item.id,
+          mediaType: media,
+          query: query,
+          limit: 50
+        )
+      }
+      actions.createManifestationFromSearch = { selection in
+        let result = try await client.createManifestationFromSearch(
+          bookID: item.id,
+          selection: selection
+        )
+        await refresh(using: client)
+        return result
+      }
     }
 
     if hasEbookAvailable, let ebookPlayback = playback?.ebook, let client {

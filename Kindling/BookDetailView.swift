@@ -15,6 +15,9 @@ struct BookDetailActions {
   var audioDownload: AudioDownloadState = .idle
   var fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
   var setAlternateCover: ((PodibleAlternateCover) async throws -> PodibleLibraryItem)?
+  var searchReleases: ((PodibleReleaseMedia, String?) async throws -> PodibleReleaseSearch)?
+  var createManifestationFromSearch:
+    ((PodibleManifestationSearchSelection) async throws -> PodibleCreateManifestationResult)?
   var shareEbook: (() -> Void)?
   var emailToKindle: (() -> Void)?
   var reportAudioIssue: (() -> Void)?
@@ -37,6 +40,8 @@ struct BookDetailView: View {
   let isStreamOnly: Bool
   @Binding var isShowingPlayer: Bool
   @State private var isShowingCoverPicker = false
+  @State private var isShowingReleaseSearch = false
+  @State private var releaseSearchInitialMedia: PodibleReleaseMedia = .audio
   @State private var coverImagePathOverride: String?
 
   var body: some View {
@@ -107,6 +112,15 @@ struct BookDetailView: View {
       )
       .environmentObject(userSettings)
       .environmentObject(podibleAuth)
+    }
+    .sheet(isPresented: $isShowingReleaseSearch) {
+      BookReleaseSearchSheet(
+        title: item.title,
+        author: item.author,
+        initialMedia: releaseSearchInitialMedia,
+        searchReleases: actions.searchReleases,
+        createManifestationFromSearch: actions.createManifestationFromSearch
+      )
     }
   }
 
@@ -343,6 +357,11 @@ struct BookDetailView: View {
           title: "Download Audiobook",
           systemImage: "arrow.down.circle",
           action: downloadAudio)
+      } else if canSearchReleases {
+        primaryGlassButton(
+          title: "Find Audiobook",
+          systemImage: "magnifyingglass",
+          action: { openReleaseSearch(media: .audio) })
       } else {
         primaryGlassButton(
           title: "Audio Unavailable",
@@ -434,6 +453,7 @@ struct BookDetailView: View {
   /// and Delete only live here.
   private var hasMenuActions: Bool {
     canChangeCover
+      || canSearchReleases
       || actions.fetchAlternateCovers != nil
       || actions.setAlternateCover != nil
       || actions.shareEbook != nil
@@ -447,8 +467,29 @@ struct BookDetailView: View {
     actions.fetchAlternateCovers != nil && actions.setAlternateCover != nil
   }
 
+  private var canSearchReleases: Bool {
+    actions.searchReleases != nil && actions.createManifestationFromSearch != nil
+  }
+
+  private func openReleaseSearch(media: PodibleReleaseMedia) {
+    releaseSearchInitialMedia = media
+    isShowingReleaseSearch = true
+  }
+
   private var overflowMenu: some View {
     Menu {
+      if canSearchReleases {
+        Button {
+          openReleaseSearch(media: .audio)
+        } label: {
+          Label("Find Audio", systemImage: "headphones")
+        }
+        Button {
+          openReleaseSearch(media: .ebook)
+        } label: {
+          Label("Find eBook", systemImage: "book")
+        }
+      }
       if canChangeCover {
         Button {
           isShowingCoverPicker = true
@@ -503,6 +544,304 @@ struct BookDetailView: View {
       return String(format: thousands >= 100 ? "%.0fk" : "%.1fk", thousands)
     }
     return "\(count)"
+  }
+}
+
+private struct BookReleaseSearchSheet: View {
+  @Environment(\.dismiss) private var dismiss
+
+  let title: String
+  let author: String
+  let initialMedia: PodibleReleaseMedia
+  let searchReleases: ((PodibleReleaseMedia, String?) async throws -> PodibleReleaseSearch)?
+  let createManifestationFromSearch:
+    ((PodibleManifestationSearchSelection) async throws -> PodibleCreateManifestationResult)?
+
+  @State private var media: PodibleReleaseMedia
+  @State private var query = ""
+  @State private var editionLabel = ""
+  @State private var editionNote = ""
+  @State private var search: PodibleReleaseSearch?
+  @State private var selectedIndexes: [Int] = []
+  @State private var isSearching = false
+  @State private var isCreating = false
+  @State private var errorMessage: String?
+
+  init(
+    title: String,
+    author: String,
+    initialMedia: PodibleReleaseMedia,
+    searchReleases: ((PodibleReleaseMedia, String?) async throws -> PodibleReleaseSearch)?,
+    createManifestationFromSearch:
+      ((PodibleManifestationSearchSelection) async throws -> PodibleCreateManifestationResult)?
+  ) {
+    self.title = title
+    self.author = author
+    self.initialMedia = initialMedia
+    self.searchReleases = searchReleases
+    self.createManifestationFromSearch = createManifestationFromSearch
+    _media = State(initialValue: initialMedia)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        searchSection
+        editionSection
+        resultsSection
+      }
+      .navigationTitle("Find Releases")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            dismiss()
+          }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button(isCreating ? "Creating…" : createButtonTitle) {
+            Task {
+              await createSelection()
+            }
+          }
+          .disabled(canCreate == false)
+        }
+      }
+      .task {
+        await runSearchIfNeeded()
+      }
+      .onChange(of: media) { _, _ in
+        search = nil
+        selectedIndexes = []
+        errorMessage = nil
+        Task {
+          await runSearch()
+        }
+      }
+    }
+  }
+
+  private var searchSection: some View {
+    Section {
+      Picker("Media", selection: $media) {
+        ForEach(PodibleReleaseMedia.allCases) { option in
+          Text(option.title).tag(option)
+        }
+      }
+      .pickerStyle(.segmented)
+
+      TextField(defaultQuery, text: $query)
+        #if os(iOS)
+          .textInputAutocapitalization(.words)
+          .autocorrectionDisabled()
+        #endif
+
+      Button {
+        Task {
+          await runSearch()
+        }
+      } label: {
+        if isSearching {
+          HStack(spacing: 8) {
+            ProgressView()
+            Text("Searching…")
+          }
+        } else {
+          Label("Search", systemImage: "magnifyingglass")
+        }
+      }
+      .disabled(isSearching)
+
+      if let errorMessage {
+        Text(errorMessage)
+          .font(.caption)
+          .foregroundStyle(.red)
+      }
+    } header: {
+      Text("Search")
+    } footer: {
+      if let search {
+        Text("Showing results for “\(search.query)”.")
+      } else {
+        Text("Search your configured indexers and choose releases in playback order.")
+      }
+    }
+  }
+
+  private var editionSection: some View {
+    Section {
+      TextField("Optional label", text: $editionLabel)
+      TextField("Optional note", text: $editionNote)
+    } header: {
+      Text("Edition")
+    }
+  }
+
+  @ViewBuilder
+  private var resultsSection: some View {
+    Section {
+      if isSearching && search == nil {
+        HStack(spacing: 8) {
+          ProgressView()
+          Text("Searching…")
+            .foregroundStyle(.secondary)
+        }
+      } else if let search, search.results.isEmpty {
+        ContentUnavailableView(
+          "No Results",
+          systemImage: "magnifyingglass",
+          description: Text("Try a different search query.")
+        )
+      } else if let search {
+        ForEach(search.results) { result in
+          Button {
+            toggleSelection(result.index)
+          } label: {
+            ReleaseSearchResultRow(
+              result: result,
+              selectedOrder: selectedOrder(for: result.index)
+            )
+          }
+          .buttonStyle(.plain)
+        }
+      } else {
+        ContentUnavailableView(
+          "No Search Yet",
+          systemImage: "magnifyingglass",
+          description: Text("Run a search to see release options.")
+        )
+      }
+    } header: {
+      Text("Results")
+    } footer: {
+      if selectedIndexes.isEmpty == false {
+        Text("\(selectedIndexes.count) selected. Tap selected rows again to remove them.")
+      }
+    }
+  }
+
+  private var defaultQuery: String {
+    "\(title) \(author)"
+  }
+
+  private var canCreate: Bool {
+    isCreating == false && selectedIndexes.isEmpty == false && search != nil
+  }
+
+  private var createButtonTitle: String {
+    selectedIndexes.count <= 1 ? "Create" : "Create \(selectedIndexes.count)"
+  }
+
+  private func selectedOrder(for index: Int) -> Int? {
+    selectedIndexes.firstIndex(of: index).map { $0 + 1 }
+  }
+
+  private func toggleSelection(_ index: Int) {
+    if let existing = selectedIndexes.firstIndex(of: index) {
+      selectedIndexes.remove(at: existing)
+    } else {
+      selectedIndexes.append(index)
+    }
+  }
+
+  @MainActor
+  private func runSearchIfNeeded() async {
+    guard search == nil else { return }
+    await runSearch()
+  }
+
+  @MainActor
+  private func runSearch() async {
+    guard isSearching == false else { return }
+    guard let searchReleases else { return }
+    isSearching = true
+    errorMessage = nil
+    selectedIndexes = []
+    defer { isSearching = false }
+    do {
+      let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+      search = try await searchReleases(media, trimmed.isEmpty ? nil : trimmed)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  @MainActor
+  private func createSelection() async {
+    guard isCreating == false else { return }
+    guard let search else { return }
+    guard let createManifestationFromSearch else { return }
+    isCreating = true
+    errorMessage = nil
+    defer { isCreating = false }
+    do {
+      let label = editionLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+      let note = editionNote.trimmingCharacters(in: .whitespacesAndNewlines)
+      _ = try await createManifestationFromSearch(
+        PodibleManifestationSearchSelection(
+          mediaType: media,
+          searchId: search.searchId,
+          indexes: selectedIndexes,
+          label: label.isEmpty ? nil : label,
+          editionNote: note.isEmpty ? nil : note
+        ))
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+}
+
+private struct ReleaseSearchResultRow: View {
+  let result: PodibleReleaseSearchResult
+  let selectedOrder: Int?
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 12) {
+      selectionIndicator
+      VStack(alignment: .leading, spacing: 4) {
+        Text(result.title)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.primary)
+          .fixedSize(horizontal: false, vertical: true)
+        Text(metadata)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
+      Spacer(minLength: 0)
+    }
+    .contentShape(Rectangle())
+    .padding(.vertical, 4)
+  }
+
+  @ViewBuilder
+  private var selectionIndicator: some View {
+    if let selectedOrder {
+      Text("\(selectedOrder)")
+        .font(.caption.weight(.bold))
+        .foregroundStyle(.white)
+        .frame(width: 24, height: 24)
+        .background(Color.accentColor, in: Circle())
+    } else {
+      Image(systemName: "circle")
+        .font(.title3)
+        .foregroundStyle(.tertiary)
+        .frame(width: 24, height: 24)
+    }
+  }
+
+  private var metadata: String {
+    var parts = [result.provider, result.mediaType.title]
+    if let seeders = result.seeders {
+      parts.append("\(seeders) seeders")
+    }
+    if let sizeBytes = result.sizeBytes, sizeBytes > 0 {
+      parts.append(ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file))
+    }
+    return parts.joined(separator: " • ")
   }
 }
 
