@@ -933,33 +933,6 @@ struct PodibleLibraryView: View {
     downloadProgress = nil
   }
 
-  private func startAudiobookDownload(
-    playback: PodiblePlaybackAudio,
-    bookID: String,
-    title: String,
-    client: RemoteLibraryServing
-  ) async {
-    downloadingBookID = bookID
-    downloadKind = .audiobook
-    downloadProgress = 0
-    downloadErrorMessage = nil
-    do {
-      let localURL = try await client.downloadAudiobook(playback: playback) { value in
-        Task { @MainActor in
-          downloadProgress = value
-        }
-      }
-      let filename = localURL.lastPathComponent
-      shareURL = makeShareableCopy(of: localURL, filename: filename) ?? localURL
-      isShowingShareSheet = true
-    } catch {
-      downloadErrorMessage = error.localizedDescription
-    }
-    downloadingBookID = nil
-    downloadKind = nil
-    downloadProgress = nil
-  }
-
   private func sanitizeFilename(_ value: String) -> String {
     let sanitized = value.trimmingCharacters(in: .whitespacesAndNewlines)
       .replacingOccurrences(of: "[\\\\/:*?\"<>|]", with: "-", options: .regularExpression)
@@ -1420,9 +1393,18 @@ struct PodibleLibraryView: View {
   ) {
     isShowingPlayer = true
     let resumeID = streamingResumeID(for: item, playbackAudio: playbackAudio)
+    let localBookID = ensureLocalBook(for: item).podibleId
     Task {
       do {
         let httpURL = try client.audiobookStreamURL(playback: playbackAudio)
+        let cache = try? StreamingAudioCache(
+          sourceURL: httpURL,
+          suggestedFilename: audiobookFilename(
+            title: item.title,
+            playback: playbackAudio,
+            sourceURL: httpURL
+          )
+        )
         await MainActor.run {
           player.loadStreaming(
             httpURL: httpURL,
@@ -1435,9 +1417,31 @@ struct PodibleLibraryView: View {
               baseURLString: remoteAssetBaseURLString,
               path: item.bookImagePath,
               versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) }),
-            artworkAccessToken: podibleAuth.accessToken
+            artworkAccessToken: podibleAuth.accessToken,
+            cache: cache,
+            onCacheCompleted: { completed in
+              Task { @MainActor in
+                completeCachedStreamingDownload(completed, forBookID: localBookID)
+              }
+            }
           )
           player.play()
+          if let cache {
+            Task {
+              try? await Task.sleep(nanoseconds: 2_000_000_000)
+              do {
+                let completed = try await cache.fillAll(
+                  accessToken: podibleAuth.accessToken,
+                  progress: { _ in }
+                )
+                await MainActor.run {
+                  completeCachedStreamingDownload(completed, forBookID: localBookID)
+                }
+              } catch {
+                // Playback can continue even if opportunistic offline caching fails.
+              }
+            }
+          }
           // Server-side chapters/transcript still available — fire and forget.
           Task {
             await loadPlaybackMetadata(playback: playbackAudio, resumeID: resumeID, client: client)
@@ -1517,6 +1521,7 @@ struct PodibleLibraryView: View {
     localDownloadingBookIDs.insert(book.podibleId)
     localDownloadProgressByBookID[book.podibleId] = 0
     downloadErrorMessage = nil
+    let bookID = book.podibleId
 
     let audioStatus = parseAudioStatus(from: book)
     guard let playbackAudio = playback(from: book.playbackJSON)?.audio else {
@@ -1533,29 +1538,21 @@ struct PodibleLibraryView: View {
       fileRecord.bytesDownloaded = 0
 
       do {
-        let tempURL = try await client.downloadAudiobook(playback: playbackAudio) { value in
+        let streamURL = try client.audiobookStreamURL(playback: playbackAudio)
+        let cache = try StreamingAudioCache(
+          sourceURL: streamURL,
+          suggestedFilename: audiobookFilename(
+            title: book.title,
+            playback: playbackAudio,
+            sourceURL: streamURL
+          )
+        )
+        let completed = try await cache.fillAll(accessToken: podibleAuth.accessToken) { value in
           Task { @MainActor in
-            localDownloadProgressByBookID[book.podibleId] = value
+            localDownloadProgressByBookID[bookID] = value
           }
         }
-        let stored = try LibraryStorage().storeDownloadedFile(
-          tempURL,
-          for: book,
-          suggestedFilename: tempURL.lastPathComponent
-        )
-        let fileSize = stored.fileSizeBytes ?? 0
-        fileRecord.filename = stored.filename
-        fileRecord.localRelativePath = stored.relativePath
-        fileRecord.sizeBytes = fileSize
-        fileRecord.bytesDownloaded = fileSize
-        fileRecord.format = BookFileFormat.fromFilename(stored.filename)
-        fileRecord.downloadStatus = .completed
-
-        let localState = ensureLocalState(for: book)
-        localState.isDownloaded = true
-        localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
-
-        try modelContext.save()
+        try storeCompletedAudiobook(completed, for: book, fileRecord: fileRecord)
         try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.podibleId)
       } catch {
         fileRecord.downloadStatus = .failed
@@ -1574,6 +1571,70 @@ struct PodibleLibraryView: View {
   private func startLocalDownload(for item: PodibleLibraryItem, client: RemoteLibraryServing) {
     let book = ensureLocalBook(for: item)
     startLocalDownload(for: book, client: client)
+  }
+
+  @MainActor
+  private func completeCachedStreamingDownload(
+    _ completed: StreamingAudioCache.CompletedFile,
+    forBookID bookID: String
+  ) {
+    guard let book = localBooksById[bookID] else { return }
+    let fileRecord = ensureFileRecord(for: book)
+    guard fileRecord.downloadStatus != .completed else { return }
+    do {
+      try storeCompletedAudiobook(completed, for: book, fileRecord: fileRecord)
+      try LocalAudiobookCache().enforceLimit(modelContext: modelContext, keeping: book.podibleId)
+    } catch {
+      fileRecord.downloadStatus = .failed
+      fileRecord.lastError = error.localizedDescription
+      try? modelContext.save()
+    }
+  }
+
+  @MainActor
+  private func storeCompletedAudiobook(
+    _ completed: StreamingAudioCache.CompletedFile,
+    for book: LibraryBook,
+    fileRecord: LibraryBookFile
+  ) throws {
+    let stored = try LibraryStorage().storeCopiedFile(
+      completed.url,
+      for: book,
+      suggestedFilename: completed.suggestedFilename
+    )
+    let fileSize = stored.fileSizeBytes ?? completed.fileSizeBytes
+    fileRecord.filename = stored.filename
+    fileRecord.localRelativePath = stored.relativePath
+    fileRecord.sizeBytes = fileSize
+    fileRecord.bytesDownloaded = fileSize
+    fileRecord.format = BookFileFormat.fromFilename(stored.filename)
+    fileRecord.downloadStatus = .completed
+    fileRecord.lastError = nil
+
+    let localState = ensureLocalState(for: book)
+    localState.isDownloaded = true
+    localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
+
+    try modelContext.save()
+  }
+
+  private func audiobookFilename(
+    title: String,
+    playback: PodiblePlaybackAudio,
+    sourceURL: URL
+  ) -> String {
+    let base = sanitizeFilename(title)
+    let ext: String
+    if sourceURL.pathExtension.isEmpty == false {
+      ext = sourceURL.pathExtension
+    } else if playback.mimeType == "audio/mpeg" {
+      ext = "mp3"
+    } else if playback.mimeType == "audio/mp4" || playback.mimeType == "audio/x-m4b" {
+      ext = "m4b"
+    } else {
+      ext = "audio"
+    }
+    return "\(base).\(ext)"
   }
 
   private func audioStatus(

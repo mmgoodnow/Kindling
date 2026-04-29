@@ -380,8 +380,6 @@ protocol PodibleLibraryServing {
   func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker]
   func downloadEpub(playback: PodiblePlaybackEbook, progress: @escaping (Double) -> Void)
     async throws -> URL
-  func downloadAudiobook(playback: PodiblePlaybackAudio, progress: @escaping (Double) -> Void)
-    async throws -> URL
   /// Returns the opaque streaming URL Podible exposed for this manifestation.
   func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL
 }
@@ -407,10 +405,6 @@ extension PodibleLibraryServing {
 
   func downloadEpub(playback: PodiblePlaybackEbook) async throws -> URL {
     try await downloadEpub(playback: playback, progress: { _ in })
-  }
-
-  func downloadAudiobook(playback: PodiblePlaybackAudio) async throws -> URL {
-    try await downloadAudiobook(playback: playback, progress: { _ in })
   }
 
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws {
@@ -1120,21 +1114,6 @@ final actor PodibleMockClient: PodibleLibraryServing {
     return destination
   }
 
-  func downloadAudiobook(
-    playback: PodiblePlaybackAudio,
-    progress: @escaping (Double) -> Void
-  ) async throws -> URL {
-    let fm = FileManager.default
-    let folder = fm.temporaryDirectory.appendingPathComponent("lazy-librarian", isDirectory: true)
-    try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-    let destination = folder.appendingPathComponent("audio-\(playback.manifestationId)-mock")
-      .appendingPathExtension("m4b")
-    let data = Data("mock-audio-\(playback.manifestationId)".utf8)
-    try data.write(to: destination, options: .atomic)
-    progress(1.0)
-    return destination
-  }
-
   func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
     PodibleTranscript(
       version: "mock",
@@ -1703,17 +1682,6 @@ struct PodibleClient: PodibleLibraryServing {
     } catch let error as PodibleHTTPError where error.statusCode == 404 {
       return []
     }
-  }
-
-  func downloadAudiobook(
-    playback: PodiblePlaybackAudio,
-    progress: @escaping (Double) -> Void
-  ) async throws -> URL {
-    let ext = fileExtensionForAudioMime(playback.mimeType) ?? "mp3"
-    let fallbackFilename = "manifestation-\(playback.manifestationId).\(ext)"
-    let url = try playbackURL(from: playback.streamUrl)
-    return try await downloadHTTPFile(
-      url: url, fallbackFilename: fallbackFilename, progress: progress)
   }
 
   func audiobookStreamURL(playback: PodiblePlaybackAudio) throws -> URL {

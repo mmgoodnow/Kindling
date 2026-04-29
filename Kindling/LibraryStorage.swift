@@ -14,6 +14,21 @@ struct LibraryStorage {
   func storeDownloadedFile(_ tempURL: URL, for book: LibraryBook, suggestedFilename: String)
     throws -> StoredFile
   {
+    try storeFile(tempURL, for: book, suggestedFilename: suggestedFilename, shouldMove: true)
+  }
+
+  func storeCopiedFile(_ sourceURL: URL, for book: LibraryBook, suggestedFilename: String)
+    throws -> StoredFile
+  {
+    try storeFile(sourceURL, for: book, suggestedFilename: suggestedFilename, shouldMove: false)
+  }
+
+  private func storeFile(
+    _ sourceURL: URL,
+    for book: LibraryBook,
+    suggestedFilename: String,
+    shouldMove: Bool
+  ) throws -> StoredFile {
     let baseURL = try ensureBaseDirectory()
     let bookFolder = try ensureBookDirectory(baseURL: baseURL, book: book)
     let filename = sanitizeFilename(suggestedFilename)
@@ -23,7 +38,11 @@ struct LibraryStorage {
     if fileManager.fileExists(atPath: destination.path) {
       try fileManager.removeItem(at: destination)
     }
-    try fileManager.moveItem(at: tempURL, to: destination)
+    if shouldMove {
+      try fileManager.moveItem(at: sourceURL, to: destination)
+    } else {
+      try fileManager.copyItem(at: sourceURL, to: destination)
+    }
 
     let relativePath = makeRelativePath(destination, baseURL: baseURL)
     let attributes = try? fileManager.attributesOfItem(atPath: destination.path)

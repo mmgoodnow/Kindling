@@ -137,7 +137,9 @@ final class AudioPlayerController: ObservableObject {
     author: String? = nil,
     description: String? = nil,
     artworkURL: URL? = nil,
-    artworkAccessToken: String? = nil
+    artworkAccessToken: String? = nil,
+    cache: StreamingAudioCache? = nil,
+    onCacheCompleted: (@Sendable (StreamingAudioCache.CompletedFile) -> Void)? = nil
   ) {
     guard let proxyURL = StreamingAssetLoader.proxyURL(for: httpURL) else {
       // Fall back to plain load if we can't construct the custom-scheme URL.
@@ -147,7 +149,12 @@ final class AudioPlayerController: ObservableObject {
       return
     }
 
-    let loader = StreamingAssetLoader(httpURL: httpURL, accessToken: accessToken)
+    let loader = StreamingAssetLoader(
+      httpURL: httpURL,
+      accessToken: accessToken,
+      cache: cache,
+      onCacheCompleted: onCacheCompleted
+    )
     streamingLoader = loader
     prepareForLoad(
       resumeID: resumeID,

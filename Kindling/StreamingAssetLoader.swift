@@ -23,12 +23,21 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
 
   private let httpURL: URL
   private let accessToken: String?
+  private let cache: StreamingAudioCache?
+  private let onCacheCompleted: (@Sendable (StreamingAudioCache.CompletedFile) -> Void)?
   private let workQueue = DispatchQueue(label: "kindling.stream-loader", qos: .userInitiated)
   private var contexts: [ObjectIdentifier: RequestContext] = [:]
 
-  init(httpURL: URL, accessToken: String?) {
+  init(
+    httpURL: URL,
+    accessToken: String?,
+    cache: StreamingAudioCache? = nil,
+    onCacheCompleted: (@Sendable (StreamingAudioCache.CompletedFile) -> Void)? = nil
+  ) {
     self.httpURL = httpURL
     self.accessToken = accessToken
+    self.cache = cache
+    self.onCacheCompleted = onCacheCompleted
     super.init()
   }
 
@@ -50,7 +59,9 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
     let context = RequestContext(
       httpURL: httpURL,
       accessToken: accessToken,
+      cache: cache,
       loadingRequest: loadingRequest,
+      onCacheCompleted: onCacheCompleted,
       onFinish: { [weak self] key in
         self?.workQueue.sync { _ = self?.contexts.removeValue(forKey: key) }
       }
@@ -82,22 +93,30 @@ final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unch
 private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked Sendable {
   private let httpURL: URL
   private let accessToken: String?
+  private let cache: StreamingAudioCache?
   private let loadingRequest: AVAssetResourceLoadingRequest
+  private let onCacheCompleted: (@Sendable (StreamingAudioCache.CompletedFile) -> Void)?
   private let onFinish: (ObjectIdentifier) -> Void
   private let session: URLSession
   private let queue: OperationQueue
   private var task: URLSessionDataTask?
   private var fulfilledContentInformation = false
+  private var nextWriteOffset: Int64?
+  private var activeNetworkRange: StreamingAudioCache.ActiveRange?
 
   init(
     httpURL: URL,
     accessToken: String?,
+    cache: StreamingAudioCache?,
     loadingRequest: AVAssetResourceLoadingRequest,
+    onCacheCompleted: (@Sendable (StreamingAudioCache.CompletedFile) -> Void)?,
     onFinish: @escaping (ObjectIdentifier) -> Void
   ) {
     self.httpURL = httpURL
     self.accessToken = accessToken
+    self.cache = cache
     self.loadingRequest = loadingRequest
+    self.onCacheCompleted = onCacheCompleted
     self.onFinish = onFinish
     self.queue = OperationQueue()
     self.queue.maxConcurrentOperationCount = 1
@@ -110,6 +129,10 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
   }
 
   func start() {
+    if respondFromCacheIfPossible() {
+      return
+    }
+
     var request = URLRequest(url: httpURL)
     request.httpMethod = "GET"
     if let accessToken, accessToken.isEmpty == false {
@@ -120,9 +143,11 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
       let rangeHeader: String
       if dataRequest.requestsAllDataToEndOfResource {
         rangeHeader = "bytes=\(lower)-"
+        activeNetworkRange = cache?.beginNetworkRange(lower: lower, upper: cache?.contentLength)
       } else {
         let upper = lower + Int64(dataRequest.requestedLength) - 1
         rangeHeader = "bytes=\(lower)-\(upper)"
+        activeNetworkRange = cache?.beginNetworkRange(lower: lower, upper: upper + 1)
       }
       request.setValue(rangeHeader, forHTTPHeaderField: "Range")
     }
@@ -197,6 +222,12 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
     dataTask: URLSessionDataTask,
     didReceive data: Data
   ) {
+    if let offset = nextWriteOffset {
+      if let completed = cache?.write(data, at: offset) {
+        onCacheCompleted?(completed)
+      }
+      nextWriteOffset = offset + Int64(data.count)
+    }
     loadingRequest.dataRequest?.respond(with: data)
   }
 
@@ -225,13 +256,29 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
   // MARK: Helpers
 
   private func fulfillContentInformation(from response: HTTPURLResponse) {
+    let cacheInfo = cache?.responseInfo(
+      from: response,
+      requestedOffset: loadingRequest.dataRequest?.requestedOffset ?? 0
+    )
+    if activeNetworkRange == nil,
+      let dataRequest = loadingRequest.dataRequest,
+      dataRequest.requestsAllDataToEndOfResource,
+      let contentLength = cacheInfo?.contentLength
+    {
+      activeNetworkRange = cache?.beginNetworkRange(
+        lower: cacheInfo?.responseStartOffset ?? dataRequest.requestedOffset,
+        upper: contentLength
+      )
+    }
+    nextWriteOffset = cacheInfo?.responseStartOffset ?? loadingRequest.dataRequest?.requestedOffset
     guard let info = loadingRequest.contentInformationRequest, fulfilledContentInformation == false
     else { return }
-    info.contentType = contentType(from: response)
-    info.contentLength = totalLength(from: response) ?? 0
+    info.contentType = contentType(from: response, cacheInfo: cacheInfo)
+    info.contentLength = cacheInfo?.contentLength ?? totalLength(from: response) ?? 0
     info.isByteRangeAccessSupported =
-      response.statusCode == 206
-      || response.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+      cacheInfo?.byteRangeAccessSupported
+      ?? (response.statusCode == 206
+        || response.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes")
     fulfilledContentInformation = true
     #if DEBUG
       NSLog(
@@ -240,6 +287,27 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
         info.contentLength,
         info.isByteRangeAccessSupported ? "yes" : "no")
     #endif
+  }
+
+  private func respondFromCacheIfPossible() -> Bool {
+    guard let cache, let dataRequest = loadingRequest.dataRequest else { return false }
+    guard dataRequest.requestsAllDataToEndOfResource == false else { return false }
+    let requestedLength = Int64(dataRequest.requestedLength)
+    guard
+      let data = cache.cachedData(offset: dataRequest.requestedOffset, length: requestedLength)
+    else { return false }
+
+    if let cacheInfo = cache.contentInformation(),
+      let info = loadingRequest.contentInformationRequest
+    {
+      info.contentType = contentType(from: cacheInfo)
+      info.contentLength = cacheInfo.contentLength ?? 0
+      info.isByteRangeAccessSupported = true
+    }
+    dataRequest.respond(with: data)
+    loadingRequest.finishLoading()
+    finishCleanup()
+    return true
   }
 
   private func finish(with error: Error?) {
@@ -255,6 +323,8 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
   }
 
   private func finishCleanup() {
+    cache?.endNetworkRange(activeNetworkRange)
+    activeNetworkRange = nil
     onFinish(ObjectIdentifier(loadingRequest))
     session.finishTasksAndInvalidate()
   }
@@ -263,8 +333,19 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
   /// a UTI string ("public.mp3"), not a MIME ("audio/mpeg"). Fall back to
   /// guessing from the URL's extension if the response header is missing
   /// or unmappable.
-  private func contentType(from response: HTTPURLResponse) -> String? {
-    let mimeHeader = response.value(forHTTPHeaderField: "Content-Type")
+  private func contentType(
+    from response: HTTPURLResponse,
+    cacheInfo: StreamingAudioCache.ResponseInfo? = nil
+  ) -> String? {
+    let mimeHeader = cacheInfo?.contentType ?? response.value(forHTTPHeaderField: "Content-Type")
+    return contentType(fromMIMEHeader: mimeHeader)
+  }
+
+  private func contentType(from cacheInfo: StreamingAudioCache.ResponseInfo) -> String? {
+    contentType(fromMIMEHeader: cacheInfo.contentType)
+  }
+
+  private func contentType(fromMIMEHeader mimeHeader: String?) -> String? {
     if let mimeHeader {
       let mimeOnly =
         mimeHeader
