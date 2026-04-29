@@ -261,32 +261,78 @@ struct BookDetailView: View {
 
   @ViewBuilder
   private var audioEditionSection: some View {
-    if let audio = item.playback?.audio {
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Audio Edition")
+    let options = audioEditionOptions
+    if options.isEmpty == false {
+      VStack(alignment: .leading, spacing: 10) {
+        Text(options.count == 1 ? "Audio Edition" : "Audio Editions")
           .font(.caption.weight(.semibold))
           .textCase(.uppercase)
           .foregroundStyle(.secondary)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(audio.label?.isEmpty == false ? audio.label! : "Default Audio")
-            .font(.subheadline.weight(.semibold))
-          if let editionNote = audio.editionNote, editionNote.isEmpty == false {
-            Text(editionNote)
-              .font(.footnote)
-              .foregroundStyle(.secondary)
+
+        ForEach(Array(options.enumerated()), id: \.element.manifestationId) { index, audio in
+          VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+              Text(audioEditionTitle(audio, index: index, total: options.count))
+                .font(.subheadline.weight(.semibold))
+              if isDefaultAudioEdition(audio) && options.count > 1 {
+                Text("Default")
+                  .font(.caption2.weight(.semibold))
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 6)
+                  .padding(.vertical, 2)
+                  .background(.quaternary, in: Capsule())
+              }
+            }
+            if let editionNote = audio.editionNote, editionNote.isEmpty == false {
+              Text(editionNote)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+            if audioEditionMetadata(audio).isEmpty == false {
+              Text(audioEditionMetadata(audio))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            }
           }
-          if audioEditionMetadata(audio).isEmpty == false {
-            Text(audioEditionMetadata(audio))
-              .font(.footnote)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
       .padding(12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(.quaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
+  }
+
+  private var audioEditionOptions: [PodiblePlaybackAudio] {
+    guard let playback = item.playback else { return [] }
+    var seen: Set<Int> = []
+    var options: [PodiblePlaybackAudio] = []
+
+    func append(_ audio: PodiblePlaybackAudio?) {
+      guard let audio else { return }
+      guard seen.insert(audio.manifestationId).inserted else { return }
+      options.append(audio)
+    }
+
+    append(playback.audio)
+    playback.audioOptions.forEach { append($0) }
+    return options
+  }
+
+  private func audioEditionTitle(
+    _ audio: PodiblePlaybackAudio,
+    index: Int,
+    total: Int
+  ) -> String {
+    if let label = audio.label, label.isEmpty == false {
+      return label
+    }
+    return total > 1 ? "Audio \(index + 1)" : "Default Audio"
+  }
+
+  private func isDefaultAudioEdition(_ audio: PodiblePlaybackAudio) -> Bool {
+    item.playback?.audio?.manifestationId == audio.manifestationId
   }
 
   private func audioEditionMetadata(_ audio: PodiblePlaybackAudio) -> String {

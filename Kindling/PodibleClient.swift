@@ -257,7 +257,33 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
 
 struct PodiblePlayback: Hashable, Codable {
   let audio: PodiblePlaybackAudio?
+  let audioOptions: [PodiblePlaybackAudio]
   let ebook: PodiblePlaybackEbook?
+
+  init(
+    audio: PodiblePlaybackAudio?,
+    audioOptions: [PodiblePlaybackAudio]? = nil,
+    ebook: PodiblePlaybackEbook?
+  ) {
+    self.audio = audio
+    self.audioOptions = audioOptions ?? audio.map { [$0] } ?? []
+    self.ebook = ebook
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case audio
+    case audioOptions
+    case ebook
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    audio = try container.decodeIfPresent(PodiblePlaybackAudio.self, forKey: .audio)
+    audioOptions =
+      (try? container.decodeIfPresent([PodiblePlaybackAudio].self, forKey: .audioOptions))
+      ?? audio.map { [$0] } ?? []
+    ebook = try container.decodeIfPresent(PodiblePlaybackEbook.self, forKey: .ebook)
+  }
 }
 
 struct PodiblePlaybackAudio: Hashable, Codable {
