@@ -43,6 +43,9 @@ struct KindlingApp: App {
         }
         .task(id: userSettings.podibleRPCURL) {
           await podibleAuth.refreshStoredSession(rpcURLString: userSettings.podibleRPCURL)
+          if audioPlayer.hasLoadedItem == false {
+            _ = audioPlayer.restoreLastSession(accessToken: podibleAuth.accessToken)
+          }
         }
     }
     .modelContainer(sharedModelContainer)

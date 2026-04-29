@@ -22,7 +22,8 @@ final class AudioPlayerController: ObservableObject {
 
   private struct PersistedSession: Codable {
     let resumeID: String
-    let fileRelativePath: String
+    let fileRelativePath: String?
+    let streamingURLString: String?
     let title: String
     let author: String
     let description: String
@@ -61,6 +62,8 @@ final class AudioPlayerController: ObservableObject {
   private var currentFileURL: URL?
   private var loadedRangesObservation: NSKeyValueObservation?
   private var timeControlObservation: NSKeyValueObservation?
+  private var itemStatusObservation: NSKeyValueObservation?
+  private var pendingResumeSeekSeconds: Double?
   private var lastBufferRefreshAt: CFTimeInterval = 0
   private var pendingBufferRefresh: Bool = false
   /// Retained because `AVURLAsset.resourceLoader.setDelegate(_:queue:)`
@@ -221,8 +224,7 @@ final class AudioPlayerController: ObservableObject {
   ) {
     persistSession()
     if savedPosition > 0 {
-      let resumeTime = CMTime(seconds: savedPosition, preferredTimescale: 1_000)
-      player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+      scheduleResumeSeek(to: savedPosition, on: player)
     }
     attachTimeObserver(to: player)
     if observesBuffering {
@@ -241,11 +243,11 @@ final class AudioPlayerController: ObservableObject {
   func play() {
     if shouldRewindOnResume {
       let rewindTarget = max(0, progress.currentTime - Self.resumeRewindSeconds)
-      let rewindTime = CMTime(seconds: rewindTarget, preferredTimescale: 1_000)
-      player?.currentItem?.cancelPendingSeeks()
-      player?.seek(to: rewindTime, toleranceBefore: .zero, toleranceAfter: .zero)
       progress.currentTime = rewindTarget
       persistCurrentPosition()
+      if let player {
+        scheduleResumeSeek(to: rewindTarget, on: player)
+      }
     }
     player?.play()
     player?.rate = Float(playbackRate)
@@ -284,7 +286,13 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func seek(to seconds: Double, recordHistory: Bool = true) {
-    let clampedSeconds = min(max(seconds, 0), max(progress.duration, 0))
+    cancelPendingResumeSeek()
+    let clampedSeconds: Double
+    if progress.duration.isFinite, progress.duration > 0 {
+      clampedSeconds = min(max(seconds, 0), progress.duration)
+    } else {
+      clampedSeconds = max(seconds, 0)
+    }
     if recordHistory {
       rememberSeekOrigin(progress.currentTime)
     }
@@ -358,27 +366,51 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @discardableResult
-  func restoreLastSession() -> Bool {
+  func restoreLastSession(accessToken: String? = nil) -> Bool {
     guard let session = persistedSession() else { return false }
-    guard let url = try? LibraryStorage().url(forRelativePath: session.fileRelativePath) else {
-      clearPersistedSession()
-      clearPersistedPosition(for: session.resumeID)
-      return false
+
+    if let fileRelativePath = session.fileRelativePath {
+      guard let url = try? LibraryStorage().url(forRelativePath: fileRelativePath) else {
+        clearPersistedSession()
+        clearPersistedPosition(for: session.resumeID)
+        return false
+      }
+      guard FileManager.default.fileExists(atPath: url.path) else {
+        clearPersistedSession()
+        clearPersistedPosition(for: session.resumeID)
+        return false
+      }
+
+      load(
+        url: url,
+        resumeID: session.resumeID,
+        title: session.title,
+        author: session.author.isEmpty ? nil : session.author,
+        description: session.description.isEmpty ? nil : session.description,
+        artworkURL: session.artworkURLString.flatMap(URL.init(string:)),
+        artworkAccessToken: nil
+      )
+      return true
     }
-    guard FileManager.default.fileExists(atPath: url.path) else {
+
+    guard let streamingURLString = session.streamingURLString,
+      let streamingURL = URL(string: streamingURLString)
+    else {
       clearPersistedSession()
       clearPersistedPosition(for: session.resumeID)
       return false
     }
 
-    load(
-      url: url,
+    guard accessToken?.isEmpty == false else { return false }
+    loadStreaming(
+      httpURL: streamingURL,
+      accessToken: accessToken,
       resumeID: session.resumeID,
       title: session.title,
       author: session.author.isEmpty ? nil : session.author,
       description: session.description.isEmpty ? nil : session.description,
       artworkURL: session.artworkURLString.flatMap(URL.init(string:)),
-      artworkAccessToken: nil
+      artworkAccessToken: accessToken
     )
     return true
   }
@@ -422,6 +454,11 @@ final class AudioPlayerController: ObservableObject {
       guard let self else { return }
       let seconds = time.seconds
       if seconds.isFinite {
+        if let pendingResumeSeekSeconds,
+          seconds < max(0, pendingResumeSeekSeconds - 1)
+        {
+          return
+        }
         self.progress.currentTime = seconds
         self.persistCurrentPosition()
         #if os(iOS)
@@ -527,6 +564,75 @@ final class AudioPlayerController: ObservableObject {
     }
   }
 
+  private func scheduleResumeSeek(to seconds: Double, on player: AVPlayer) {
+    let target = max(seconds, 0)
+    pendingResumeSeekSeconds = target
+    progress.currentTime = target
+    itemStatusObservation?.invalidate()
+    itemStatusObservation = nil
+
+    guard let item = player.currentItem else {
+      performResumeSeek(to: target, on: player)
+      return
+    }
+
+    switch item.status {
+    case .readyToPlay:
+      performResumeSeek(to: target, on: player)
+    case .failed:
+      pendingResumeSeekSeconds = nil
+    case .unknown:
+      itemStatusObservation = item.observe(\.status, options: [.new, .initial]) {
+        [weak self, weak player] item, _ in
+        guard let self, let player else { return }
+        switch item.status {
+        case .readyToPlay:
+          DispatchQueue.main.async {
+            guard let target = self.pendingResumeSeekSeconds else { return }
+            self.performResumeSeek(to: target, on: player)
+          }
+        case .failed:
+          DispatchQueue.main.async {
+            self.pendingResumeSeekSeconds = nil
+            self.itemStatusObservation?.invalidate()
+            self.itemStatusObservation = nil
+          }
+        case .unknown:
+          break
+        @unknown default:
+          break
+        }
+      }
+    @unknown default:
+      performResumeSeek(to: target, on: player)
+    }
+  }
+
+  private func performResumeSeek(to seconds: Double, on player: AVPlayer) {
+    let target = max(seconds, 0)
+    let time = CMTime(seconds: target, preferredTimescale: 1_000)
+    player.currentItem?.cancelPendingSeeks()
+    player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+      DispatchQueue.main.async {
+        guard let self, finished else { return }
+        self.progress.currentTime = target
+        self.pendingResumeSeekSeconds = nil
+        self.itemStatusObservation?.invalidate()
+        self.itemStatusObservation = nil
+        self.persistCurrentPosition()
+        #if os(iOS)
+          self.updateNowPlayingInfo()
+        #endif
+      }
+    }
+  }
+
+  private func cancelPendingResumeSeek() {
+    pendingResumeSeekSeconds = nil
+    itemStatusObservation?.invalidate()
+    itemStatusObservation = nil
+  }
+
   private func resetObservers() {
     if let timeObserver {
       player?.removeTimeObserver(timeObserver)
@@ -540,12 +646,20 @@ final class AudioPlayerController: ObservableObject {
     loadedRangesObservation = nil
     timeControlObservation?.invalidate()
     timeControlObservation = nil
+    itemStatusObservation?.invalidate()
+    itemStatusObservation = nil
+    pendingResumeSeekSeconds = nil
     isStalled = false
     progress.bufferedSeconds = 0
   }
 
   private func rememberSeekOrigin(_ seconds: Double) {
-    let normalized = min(max(seconds, 0), max(progress.duration, 0))
+    let normalized: Double
+    if progress.duration.isFinite, progress.duration > 0 {
+      normalized = min(max(seconds, 0), progress.duration)
+    } else {
+      normalized = max(seconds, 0)
+    }
     guard seekHistory.last.map({ abs($0 - normalized) < 0.25 }) != true else { return }
     seekHistory.append(normalized)
   }
@@ -570,13 +684,16 @@ final class AudioPlayerController: ObservableObject {
 
   private func persistSession() {
     guard let currentResumeID, let currentFileURL else { return }
-    guard let relativePath = try? LibraryStorage().relativePath(forFileURL: currentFileURL) else {
+    let relativePath = try? LibraryStorage().relativePath(forFileURL: currentFileURL)
+    let streamingURLString = relativePath == nil ? currentFileURL.absoluteString : nil
+    guard relativePath != nil || streamingURLString != nil else {
       return
     }
 
     let session = PersistedSession(
       resumeID: currentResumeID,
       fileRelativePath: relativePath,
+      streamingURLString: streamingURLString,
       title: title,
       author: author,
       description: bookDescription,
