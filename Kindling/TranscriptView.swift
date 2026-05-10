@@ -79,14 +79,64 @@ struct TranscriptView: View {
   }
 
   private var emptyState: some View {
-    VStack {
+    VStack(spacing: 10) {
       Spacer()
-      Text("No transcript available yet.")
-        .font(.body)
-        .foregroundStyle(.secondary)
+      switch player.transcriptLoadState {
+      case .idle:
+        Image(systemName: "text.page")
+          .font(.title2)
+          .foregroundStyle(.secondary)
+        Text("Transcript not loaded yet.")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text("Kindling will check Podible when remote playback starts.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      case .loading:
+        ProgressView()
+          .controlSize(.regular)
+        Text("Loading transcript...")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text("Large transcripts can take a moment the first time.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      case .loaded:
+        Image(systemName: "text.page")
+          .font(.title2)
+          .foregroundStyle(.secondary)
+        Text("Transcript loaded, but it has no displayable text.")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+      case .unavailable(let message):
+        Image(systemName: "text.page.badge.magnifyingglass")
+          .font(.title2)
+          .foregroundStyle(.secondary)
+        Text("No transcript available.")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text(message)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      case .failed(let message):
+        Image(systemName: "exclamationmark.triangle")
+          .font(.title2)
+          .foregroundStyle(.orange)
+        Text("Transcript could not load.")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text(message)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      }
       Spacer()
     }
     .frame(maxWidth: .infinity)
+    .padding(.horizontal, 24)
   }
 
   private func transcriptScroll(segments: [Segment], activeID: Int?) -> some View {

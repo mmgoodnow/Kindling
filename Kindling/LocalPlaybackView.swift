@@ -901,9 +901,16 @@ struct LocalPlaybackView: View {
             selectedContentTab = tab
           } label: {
             VStack(spacing: 6) {
-              Text(tab.rawValue)
-                .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .accent : .secondary)
+              HStack(spacing: 4) {
+                Text(tab.rawValue)
+                  .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                  .foregroundStyle(isSelected ? .accent : .secondary)
+
+                if tab == .transcript {
+                  transcriptTabStatusBadge
+                }
+              }
+              .frame(height: 18)
 
               Rectangle()
                 .fill(isSelected ? Color.accentColor : .clear)
@@ -942,6 +949,31 @@ struct LocalPlaybackView: View {
       isTabActive: selectedContentTab == .transcript
     )
   }
+
+  @ViewBuilder
+  private var transcriptTabStatusBadge: some View {
+    switch player.transcriptLoadState {
+    case .idle:
+      EmptyView()
+    case .loading:
+      ProgressView()
+        .controlSize(.mini)
+        .frame(width: 10, height: 10)
+    case .loaded:
+      Circle()
+        .fill(Color.accentColor)
+        .frame(width: 5, height: 5)
+    case .unavailable:
+      Image(systemName: "minus.circle.fill")
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(.secondary)
+    case .failed:
+      Image(systemName: "exclamationmark.circle.fill")
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(.orange)
+    }
+  }
+
   private var playbackContentHeight: CGFloat {
     #if os(iOS)
       min(activeScreenSize().height * 0.7, 620)

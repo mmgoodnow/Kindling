@@ -39,6 +39,14 @@ final class AudioPlayerController: ObservableObject {
     let duration: Double
   }
 
+  enum TranscriptLoadState: Equatable {
+    case idle
+    case loading
+    case loaded(wordCount: Int)
+    case unavailable(String)
+    case failed(String)
+  }
+
   @Published var isPlaying: Bool = false
   @Published var title: String = ""
   @Published var author: String = ""
@@ -46,6 +54,7 @@ final class AudioPlayerController: ObservableObject {
   @Published var artworkURL: URL?
   @Published var chapters: [Chapter] = []
   @Published var transcript: PodibleTranscript?
+  @Published var transcriptLoadState: TranscriptLoadState = .idle
   @Published var playbackRate: Double = 1.0
   @Published private(set) var seekHistory: [Double] = []
   /// True when AVPlayer wants to play but is waiting on the network (typical
@@ -213,6 +222,7 @@ final class AudioPlayerController: ObservableObject {
     self.isPlaying = false
     self.chapters = []
     self.transcript = nil
+    self.transcriptLoadState = .idle
     self.seekHistory = []
 
     #if os(iOS)
@@ -427,9 +437,35 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @MainActor
+  func beginRemoteTranscriptLoad(for resumeID: String) {
+    guard currentResumeID == resumeID else { return }
+    transcript = nil
+    transcriptLoadState = .loading
+  }
+
+  @MainActor
   func applyRemoteTranscript(_ transcript: PodibleTranscript?, for resumeID: String) {
     guard currentResumeID == resumeID else { return }
     self.transcript = transcript
+    if let transcript {
+      transcriptLoadState = .loaded(wordCount: transcript.words.count)
+    } else {
+      transcriptLoadState = .unavailable("No transcript is available for this audio edition yet.")
+    }
+  }
+
+  @MainActor
+  func applyRemoteTranscriptUnavailable(_ message: String, for resumeID: String) {
+    guard currentResumeID == resumeID else { return }
+    transcript = nil
+    transcriptLoadState = .unavailable(message)
+  }
+
+  @MainActor
+  func applyRemoteTranscriptFailure(_ message: String, for resumeID: String) {
+    guard currentResumeID == resumeID else { return }
+    transcript = nil
+    transcriptLoadState = .failed(message)
   }
 
   @MainActor

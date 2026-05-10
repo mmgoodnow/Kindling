@@ -1477,18 +1477,85 @@ struct PodibleLibraryView: View {
     client: RemoteLibraryServing
   ) async {
     guard let playback else {
-      player.applyRemoteTranscript(nil, for: resumeID)
+      player.applyRemoteTranscriptUnavailable(
+        "No audio edition metadata is available for transcript lookup.",
+        for: resumeID
+      )
       player.applyRemoteChapters([], for: resumeID)
       return
     }
+
+    async let chapters: Void = loadRemoteChapters(
+      playback: playback,
+      resumeID: resumeID,
+      client: client
+    )
+    async let transcript: Void = loadRemoteTranscript(
+      playback: playback,
+      resumeID: resumeID,
+      client: client
+    )
+    _ = await (chapters, transcript)
+  }
+
+  private func loadRemoteTranscript(
+    playback: PodiblePlaybackAudio,
+    resumeID: String,
+    client: RemoteLibraryServing
+  ) async {
+    guard let transcriptURL = playback.transcriptUrl,
+      transcriptURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    else {
+      await MainActor.run {
+        player.applyRemoteTranscriptUnavailable(
+          "Podible did not return a transcript URL for this audio edition.",
+          for: resumeID
+        )
+      }
+      return
+    }
+
+    await MainActor.run {
+      player.beginRemoteTranscriptLoad(for: resumeID)
+    }
+
     do {
-      async let transcript = client.fetchTranscript(playback: playback)
-      async let chapters = client.fetchChapters(playback: playback)
-      let (resolvedTranscript, resolvedChapters) = try await (transcript, chapters)
-      player.applyRemoteTranscript(resolvedTranscript, for: resumeID)
-      player.applyRemoteChapters(resolvedChapters, for: resumeID)
+      if let transcript = try await client.fetchTranscript(playback: playback) {
+        await MainActor.run {
+          player.applyRemoteTranscript(transcript, for: resumeID)
+        }
+      } else {
+        await MainActor.run {
+          player.applyRemoteTranscriptUnavailable(
+            "Podible returned 404 for this transcript URL.",
+            for: resumeID
+          )
+        }
+      }
     } catch {
-      player.applyRemoteTranscript(nil, for: resumeID)
+      await MainActor.run {
+        player.applyRemoteTranscriptFailure(
+          "Transcript download failed: \(error.localizedDescription)",
+          for: resumeID
+        )
+      }
+    }
+  }
+
+  private func loadRemoteChapters(
+    playback: PodiblePlaybackAudio,
+    resumeID: String,
+    client: RemoteLibraryServing
+  ) async {
+    do {
+      let chapters = try await client.fetchChapters(playback: playback)
+      await MainActor.run {
+        player.applyRemoteChapters(chapters, for: resumeID)
+      }
+    } catch {
+      await MainActor.run {
+        player.applyRemoteChapters([], for: resumeID)
+      }
     }
   }
 
