@@ -2,59 +2,22 @@ import SwiftUI
 
 struct TranscriptView: View {
   @ObservedObject var player: AudioPlayerController
-  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
+  let progress: AudioPlayerController.PlaybackProgressState
   let isTabActive: Bool
 
+  @State private var segments: [TranscriptSegment] = []
+  @State private var activeID: Int?
+  @State private var activeStartMs: Int?
   @State private var isAutoFollowing: Bool = true
   @State private var lastScrolledUtteranceID: Int?
   @State private var isUserTouching: Bool = false
 
-  private struct Segment: Identifiable, Equatable {
-    let id: Int
-    let startMs: Int
-    let endMs: Int
-    let text: String
-  }
-
-  private var segments: [Segment] {
-    guard let transcript = player.transcript else { return [] }
-    if let utterances = transcript.utterances, utterances.isEmpty == false {
-      return utterances.map {
-        Segment(id: $0.startMs, startMs: $0.startMs, endMs: $0.endMs, text: $0.text)
-      }
-    }
-    return synthesizedSegments(from: transcript.words)
-  }
-
-  private func currentSegmentID(in segments: [Segment]) -> Int? {
-    let timeMs = Int(progress.currentTime * 1000)
-    guard segments.isEmpty == false else { return nil }
-    if timeMs < segments[0].startMs { return segments[0].id }
-    var lo = 0
-    var hi = segments.count - 1
-    while lo <= hi {
-      let mid = (lo + hi) / 2
-      let s = segments[mid]
-      if timeMs < s.startMs {
-        hi = mid - 1
-      } else if mid + 1 < segments.count, timeMs >= segments[mid + 1].startMs {
-        lo = mid + 1
-      } else {
-        return s.id
-      }
-    }
-    return segments.last?.id
-  }
-
   var body: some View {
-    let segments = segments
-    let activeID = currentSegmentID(in: segments)
-
     ZStack(alignment: .bottomTrailing) {
       if segments.isEmpty {
         emptyState
       } else {
-        transcriptScroll(segments: segments, activeID: activeID)
+        transcriptScroll(segments: segments, activeID: activeID, activeStartMs: activeStartMs)
       }
 
       if isAutoFollowing == false, activeID != nil {
@@ -63,8 +26,21 @@ struct TranscriptView: View {
           .padding(.bottom, 8)
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
+
+      TranscriptProgressFollower(
+        progress: progress,
+        segments: segments,
+        activeID: $activeID,
+        activeStartMs: $activeStartMs
+      )
+      .frame(width: 0, height: 0)
+      .accessibilityHidden(true)
+      .allowsHitTesting(false)
     }
     .animation(.easeInOut(duration: 0.18), value: isAutoFollowing)
+    .onAppear {
+      refreshSegments()
+    }
     .onChange(of: isTabActive) { _, nowActive in
       if nowActive {
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -74,6 +50,7 @@ struct TranscriptView: View {
       }
     }
     .onChange(of: player.transcript) { _, _ in
+      refreshSegments()
       lastScrolledUtteranceID = nil
     }
   }
@@ -139,7 +116,11 @@ struct TranscriptView: View {
     .padding(.horizontal, 24)
   }
 
-  private func transcriptScroll(segments: [Segment], activeID: Int?) -> some View {
+  private func transcriptScroll(
+    segments: [TranscriptSegment],
+    activeID: Int?,
+    activeStartMs: Int?
+  ) -> some View {
     GeometryReader { proxy in
       let topInset = proxy.size.height * 0.32
       let bottomInset = proxy.size.height * 0.5
@@ -152,7 +133,7 @@ struct TranscriptView: View {
               TranscriptSegmentView(
                 text: segment.text,
                 isActive: segment.id == activeID,
-                isPast: activeID.map { segment.endMs <= startMs(of: $0, in: segments) } ?? false
+                isPast: activeStartMs.map { segment.endMs <= $0 } ?? false
               ) {
                 player.seek(to: Double(segment.startMs) / 1000.0)
                 withAnimation(.easeInOut(duration: 0.25)) {
@@ -227,13 +208,26 @@ struct TranscriptView: View {
     .foregroundStyle(.accent)
   }
 
-  private func startMs(of id: Int, in segments: [Segment]) -> Int {
-    segments.first(where: { $0.id == id })?.startMs ?? 0
+  private func refreshSegments() {
+    segments = Self.transcriptSegments(from: player.transcript)
   }
 
-  private func synthesizedSegments(from words: [PodibleTranscript.Word]) -> [Segment] {
+  private static func transcriptSegments(from transcript: PodibleTranscript?) -> [TranscriptSegment]
+  {
+    guard let transcript else { return [] }
+    if let utterances = transcript.utterances, utterances.isEmpty == false {
+      return utterances.map {
+        TranscriptSegment(id: $0.startMs, startMs: $0.startMs, endMs: $0.endMs, text: $0.text)
+      }
+    }
+    return synthesizedSegments(from: transcript.words)
+  }
+
+  private static func synthesizedSegments(from words: [PodibleTranscript.Word])
+    -> [TranscriptSegment]
+  {
     guard words.isEmpty == false else { return [] }
-    var result: [Segment] = []
+    var result: [TranscriptSegment] = []
     var bucket: [PodibleTranscript.Word] = []
     let targetMs = 4000
     var bucketStart = words[0].startMs
@@ -251,11 +245,65 @@ struct TranscriptView: View {
     return result
   }
 
-  private func makeSegment(from words: [PodibleTranscript.Word]) -> Segment {
+  private static func makeSegment(from words: [PodibleTranscript.Word]) -> TranscriptSegment {
     let start = words.first?.startMs ?? 0
     let end = words.last?.endMs ?? start
     let text = words.map(\.text).joined(separator: " ")
-    return Segment(id: start, startMs: start, endMs: end, text: text)
+    return TranscriptSegment(id: start, startMs: start, endMs: end, text: text)
+  }
+}
+
+private struct TranscriptSegment: Identifiable, Equatable {
+  let id: Int
+  let startMs: Int
+  let endMs: Int
+  let text: String
+}
+
+private struct TranscriptProgressFollower: View {
+  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
+  let segments: [TranscriptSegment]
+  @Binding var activeID: Int?
+  @Binding var activeStartMs: Int?
+
+  var body: some View {
+    Color.clear
+      .onAppear {
+        updateActiveSegment()
+      }
+      .onChange(of: progress.currentTime) { _, _ in
+        updateActiveSegment()
+      }
+      .onChange(of: segments) { _, _ in
+        updateActiveSegment()
+      }
+  }
+
+  private func updateActiveSegment() {
+    let segment = currentSegment()
+    guard activeID != segment?.id || activeStartMs != segment?.startMs else { return }
+    activeID = segment?.id
+    activeStartMs = segment?.startMs
+  }
+
+  private func currentSegment() -> TranscriptSegment? {
+    let timeMs = Int(progress.currentTime * 1000)
+    guard segments.isEmpty == false else { return nil }
+    if timeMs < segments[0].startMs { return segments[0] }
+    var lo = 0
+    var hi = segments.count - 1
+    while lo <= hi {
+      let mid = (lo + hi) / 2
+      let segment = segments[mid]
+      if timeMs < segment.startMs {
+        hi = mid - 1
+      } else if mid + 1 < segments.count, timeMs >= segments[mid + 1].startMs {
+        lo = mid + 1
+      } else {
+        return segment
+      }
+    }
+    return segments.last
   }
 }
 
