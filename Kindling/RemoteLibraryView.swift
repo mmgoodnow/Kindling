@@ -334,6 +334,10 @@ struct PodibleLibraryView: View {
         }
       }
     }
+    .task(id: activePlaybackMetadataTaskID(client: client)) {
+      guard let client else { return }
+      await loadMetadataForActivePlaybackIfNeeded(client: client)
+    }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else { return }
       guard let client else { return }
@@ -400,6 +404,11 @@ struct PodibleLibraryView: View {
 
   private var localBooksById: [String: LibraryBook] {
     Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
+  }
+
+  private func activePlaybackMetadataTaskID(client: RemoteLibraryServing?) -> String {
+    guard client != nil, let activeResumeID = player.activeResumeID else { return "none" }
+    return "\(podibleAuth.accessToken ?? "")|\(activeResumeID)|\(localBooks.count)"
   }
 
   private var syncState: LibrarySyncState? {
@@ -1496,6 +1505,19 @@ struct PodibleLibraryView: View {
       client: client
     )
     _ = await (chapters, transcript)
+  }
+
+  @MainActor
+  private func loadMetadataForActivePlaybackIfNeeded(client: RemoteLibraryServing) async {
+    guard player.transcriptLoadState == .idle else { return }
+    guard let activeResumeID = player.activeResumeID else { return }
+    guard
+      let activeBook = localBooks.first(where: { playbackResumeID(for: $0) == activeResumeID })
+    else {
+      return
+    }
+    let playbackAudio = playback(from: activeBook.playbackJSON)?.audio
+    await loadPlaybackMetadata(playback: playbackAudio, resumeID: activeResumeID, client: client)
   }
 
   private func loadRemoteTranscript(

@@ -57,6 +57,7 @@ final class AudioPlayerController: ObservableObject {
   @Published var transcriptLoadState: TranscriptLoadState = .idle
   @Published var playbackRate: Double = 1.0
   @Published private(set) var seekHistory: [Double] = []
+  @Published private(set) var activeResumeID: String?
   /// True when AVPlayer wants to play but is waiting on the network (typical
   /// during initial buffering of streamed content or after a network stall).
   @Published private(set) var isStalled: Bool = false
@@ -211,6 +212,7 @@ final class AudioPlayerController: ObservableObject {
       artworkLoadTask?.cancel()
     #endif
     currentResumeID = resumeID
+    activeResumeID = resumeID
     currentFileURL = url
     self.title = title
     self.author = author ?? ""
@@ -362,6 +364,7 @@ final class AudioPlayerController: ObservableObject {
     chapterLoadTask = nil
     player = nil
     currentFileURL = nil
+    activeResumeID = nil
     progress.duration = 0
     title = ""
     author = ""
