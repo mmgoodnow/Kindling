@@ -68,7 +68,7 @@ struct TranscriptView: View {
         Text("Transcript not loaded yet.")
           .font(.body.weight(.semibold))
           .foregroundStyle(.primary)
-        Text("Kindling will check Podible when remote playback starts.")
+        Text("Start playback to load the transcript from Podible.")
           .font(.footnote)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
