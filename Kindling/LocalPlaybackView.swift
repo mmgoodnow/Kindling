@@ -120,18 +120,8 @@ private func playbackCurrentChapterID(
   chapters: [AudioPlayerController.Chapter],
   totalDuration: Double
 ) -> Int? {
-  guard chapters.isEmpty == false else { return nil }
-
-  let currentTime = max(time, 0)
-  for (index, chapter) in chapters.enumerated() {
-    let nextStart =
-      chapters.indices.contains(index + 1) ? chapters[index + 1].startTime : totalDuration
-    if currentTime >= chapter.startTime, currentTime < max(nextStart, chapter.startTime + 0.01) {
-      return chapter.id
-    }
-  }
-
-  return chapters.last?.id
+  playbackCurrentChapterIndex(time: time, chapters: chapters, totalDuration: totalDuration)
+    .map { chapters[$0].id }
 }
 
 private func playbackCurrentChapterIndex(
@@ -139,13 +129,33 @@ private func playbackCurrentChapterIndex(
   chapters: [AudioPlayerController.Chapter],
   totalDuration: Double
 ) -> Int? {
-  guard
-    let chapterID = playbackCurrentChapterID(
-      time: time, chapters: chapters, totalDuration: totalDuration)
-  else {
-    return nil
+  guard chapters.isEmpty == false else { return nil }
+
+  let currentTime = max(time, 0)
+  if currentTime < chapters[0].startTime {
+    return 0
   }
-  return chapters.firstIndex { $0.id == chapterID }
+
+  var low = 0
+  var high = chapters.count - 1
+  while low <= high {
+    let mid = (low + high) / 2
+    let chapter = chapters[mid]
+    let nextStart =
+      chapters.indices.contains(mid + 1) ? chapters[mid + 1].startTime : totalDuration
+
+    if currentTime < chapter.startTime {
+      high = mid - 1
+    } else if currentTime >= max(nextStart, chapter.startTime + 0.01),
+      mid + 1 < chapters.count
+    {
+      low = mid + 1
+    } else {
+      return mid
+    }
+  }
+
+  return chapters.indices.contains(low) ? low : chapters.indices.last
 }
 
 private func playbackCurrentChapterProgress(
@@ -287,19 +297,20 @@ private struct ChapterListView: View {
       chapters: chapters,
       totalDuration: totalDuration
     )
+    let durations = chapters.enumerated().map { index, chapter in
+      playbackEffectiveDuration(
+        for: chapter,
+        at: index,
+        chapters: chapters,
+        totalDuration: totalDuration
+      )
+    }
 
     LazyVStack(spacing: 6) {
-      ForEach(chapters) { chapter in
+      ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
         ChapterRowView(
           chapter: chapter,
-          durationText: formatPlaybackTime(
-            playbackEffectiveDuration(
-              for: chapter,
-              at: nil,
-              chapters: chapters,
-              totalDuration: totalDuration
-            )
-          ),
+          durationText: formatPlaybackTime(durations[index]),
           isCurrent: currentChapterID == chapter.id,
           activeProgress: currentChapterID == chapter.id ? currentChapterProgress : nil
         ) {

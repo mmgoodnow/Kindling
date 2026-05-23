@@ -73,6 +73,7 @@ final class AudioPlayerController: ObservableObject {
   private var timeControlObservation: NSKeyValueObservation?
   private var itemStatusObservation: NSKeyValueObservation?
   private var pendingResumeSeekSeconds: Double?
+  private var lastPersistedPositionAt: TimeInterval = 0
   private var lastBufferRefreshAt: CFTimeInterval = 0
   private var pendingBufferRefresh: Bool = false
   /// Retained because `AVURLAsset.resourceLoader.setDelegate(_:queue:)`
@@ -83,6 +84,7 @@ final class AudioPlayerController: ObservableObject {
     private var artworkAccessToken: String?
     private var interruptionObserver: NSObjectProtocol?
     private var shouldResumeAfterInterruption = false
+    private var lastNowPlayingInfoUpdateAt: TimeInterval = 0
   #endif
 
   init() {
@@ -219,11 +221,15 @@ final class AudioPlayerController: ObservableObject {
     #endif
     progress.currentTime = persistedPosition(for: resumeID)
     progress.duration = 0
+    lastPersistedPositionAt = 0
     self.isPlaying = false
     self.chapters = []
     self.transcript = nil
     self.transcriptLoadState = .idle
     self.seekHistory = []
+    #if os(iOS)
+      lastNowPlayingInfoUpdateAt = 0
+    #endif
 
     #if os(iOS)
       let session = AVAudioSession.sharedInstance()
@@ -261,7 +267,7 @@ final class AudioPlayerController: ObservableObject {
     if shouldRewindOnResume {
       let rewindTarget = max(0, progress.currentTime - Self.resumeRewindSeconds)
       progress.currentTime = rewindTarget
-      persistCurrentPosition()
+      persistCurrentPosition(force: true)
       if let player {
         scheduleResumeSeek(to: rewindTarget, on: player)
       }
@@ -277,7 +283,7 @@ final class AudioPlayerController: ObservableObject {
   func pause() {
     player?.pause()
     isPlaying = false
-    persistCurrentPosition()
+    persistCurrentPosition(force: true)
     #if os(iOS)
       updateNowPlayingInfo()
     #endif
@@ -314,7 +320,7 @@ final class AudioPlayerController: ObservableObject {
       rememberSeekOrigin(progress.currentTime)
     }
     progress.currentTime = clampedSeconds
-    persistCurrentPosition()
+    persistCurrentPosition(force: true)
 
     let time = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000)
     player?.currentItem?.cancelPendingSeeks()
@@ -341,7 +347,7 @@ final class AudioPlayerController: ObservableObject {
   func stop() {
     player?.pause()
     isPlaying = false
-    persistCurrentPosition()
+    persistCurrentPosition(force: true)
     progress.currentTime = 0
     #if os(iOS)
       updateNowPlayingInfo()
@@ -349,7 +355,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func unload() {
-    persistCurrentPosition()
+    persistCurrentPosition(force: true)
     stop()
     resetObservers()
     chapterLoadTask?.cancel()
@@ -502,16 +508,23 @@ final class AudioPlayerController: ObservableObject {
         {
           return
         }
-        self.progress.currentTime = seconds
+        if abs(self.progress.currentTime - seconds) >= 0.1 {
+          self.progress.currentTime = seconds
+        }
         self.persistCurrentPosition()
         #if os(iOS)
-          self.updateNowPlayingInfo()
+          self.updateNowPlayingInfo(force: false)
         #endif
       }
       if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-        self.progress.duration = duration
+        let durationChanged = abs(self.progress.duration - duration) >= 0.25
+        if durationChanged {
+          self.progress.duration = duration
+        }
         #if os(iOS)
-          self.updateNowPlayingInfo()
+          if durationChanged {
+            self.updateNowPlayingInfo()
+          }
         #endif
       }
       // Only worth tracking buffered ahead while streaming.
@@ -587,7 +600,7 @@ final class AudioPlayerController: ObservableObject {
         // No bridge between playhead and this future island — ignore.
       }
     }
-    if bufferedAhead != progress.bufferedSeconds {
+    if abs(bufferedAhead - progress.bufferedSeconds) >= 0.25 {
       progress.bufferedSeconds = bufferedAhead
     }
   }
@@ -662,7 +675,7 @@ final class AudioPlayerController: ObservableObject {
         self.pendingResumeSeekSeconds = nil
         self.itemStatusObservation?.invalidate()
         self.itemStatusObservation = nil
-        self.persistCurrentPosition()
+        self.persistCurrentPosition(force: true)
         #if os(iOS)
           self.updateNowPlayingInfo()
         #endif
@@ -711,8 +724,11 @@ final class AudioPlayerController: ObservableObject {
     UserDefaults.standard.double(forKey: ResumeStore.keyPrefix + resumeID)
   }
 
-  private func persistCurrentPosition() {
+  private func persistCurrentPosition(force: Bool = false) {
     guard let currentResumeID else { return }
+    let now = Date.timeIntervalSinceReferenceDate
+    guard force || now - lastPersistedPositionAt >= 10 else { return }
+    lastPersistedPositionAt = now
     UserDefaults.standard.set(progress.currentTime, forKey: ResumeStore.keyPrefix + currentResumeID)
   }
 
@@ -883,7 +899,14 @@ final class AudioPlayerController: ObservableObject {
       commandCenter.nextTrackCommand.removeTarget(nil)
     }
 
-    private func updateNowPlayingInfo(artwork: MPMediaItemArtwork? = nil) {
+    private func updateNowPlayingInfo(
+      artwork: MPMediaItemArtwork? = nil,
+      force: Bool = true
+    ) {
+      let now = Date.timeIntervalSinceReferenceDate
+      guard force || now - lastNowPlayingInfoUpdateAt >= 10 else { return }
+      lastNowPlayingInfoUpdateAt = now
+
       var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
       nowPlayingInfo[MPMediaItemPropertyTitle] = title
       nowPlayingInfo[MPMediaItemPropertyArtist] = author

@@ -27,15 +27,17 @@ struct TranscriptView: View {
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
 
-      TranscriptProgressFollower(
-        progress: progress,
-        segments: segments,
-        activeID: $activeID,
-        activeStartMs: $activeStartMs
-      )
-      .frame(width: 0, height: 0)
-      .accessibilityHidden(true)
-      .allowsHitTesting(false)
+      if isTabActive {
+        TranscriptProgressFollower(
+          progress: progress,
+          segments: segments,
+          activeID: $activeID,
+          activeStartMs: $activeStartMs
+        )
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+      }
     }
     .animation(.easeInOut(duration: 0.18), value: isAutoFollowing)
     .onAppear {
