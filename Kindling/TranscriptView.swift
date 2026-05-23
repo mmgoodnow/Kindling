@@ -138,7 +138,23 @@ struct TranscriptView: View {
           }
           .padding(.horizontal, 4)
         }
-        .simultaneousGesture(touchTracker)
+        .onScrollPhaseChange { _, newPhase in
+          switch newPhase {
+          case .tracking, .interacting, .decelerating:
+            if isUserTouching == false {
+              isUserTouching = true
+            }
+            if isAutoFollowing {
+              withAnimation(.easeInOut(duration: 0.18)) {
+                isAutoFollowing = false
+              }
+            }
+          case .idle:
+            isUserTouching = false
+          case .animating:
+            break
+          }
+        }
         .onChange(of: activeID) { _, newID in
           guard let newID, newID != lastScrolledUtteranceID else { return }
           guard isAutoFollowing, isUserTouching == false else { return }
@@ -182,24 +198,6 @@ struct TranscriptView: View {
     }
     .equatable()
     .id(segment.id)
-  }
-
-  private var touchTracker: some Gesture {
-    DragGesture(minimumDistance: 8)
-      .onChanged { value in
-        guard abs(value.translation.height) > abs(value.translation.width) else { return }
-        if isUserTouching == false {
-          isUserTouching = true
-        }
-        if isAutoFollowing {
-          withAnimation(.easeInOut(duration: 0.18)) {
-            isAutoFollowing = false
-          }
-        }
-      }
-      .onEnded { _ in
-        isUserTouching = false
-      }
   }
 
   private var resumeButton: some View {
@@ -331,17 +329,15 @@ private struct TranscriptSegmentView: View, Equatable {
   }
 
   var body: some View {
-    Button(action: onTap) {
-      Text(text)
-        .font(.title3.weight(.semibold))
-        .foregroundStyle(foreground)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
-        .animation(.easeInOut(duration: 0.25), value: isActive)
-    }
-    .buttonStyle(.plain)
-    .contentShape(Rectangle())
+    Text(text)
+      .font(.title3.weight(.semibold))
+      .foregroundStyle(foreground)
+      .multilineTextAlignment(.leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.vertical, 4)
+      .contentShape(Rectangle())
+      .onTapGesture(perform: onTap)
+      .animation(.easeInOut(duration: 0.25), value: isActive)
   }
 
   private var foreground: Color {
