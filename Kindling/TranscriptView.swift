@@ -27,7 +27,7 @@ struct TranscriptView: View {
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
 
-      if isTabActive {
+      if isTabActive, isAutoFollowing {
         TranscriptProgressFollower(
           progress: progress,
           segments: segments,
@@ -132,18 +132,7 @@ struct TranscriptView: View {
           LazyVStack(alignment: .leading, spacing: 18) {
             Color.clear.frame(height: topInset)
             ForEach(segments) { segment in
-              TranscriptSegmentView(
-                text: segment.text,
-                isActive: segment.id == activeID,
-                isPast: activeStartMs.map { segment.endMs <= $0 } ?? false
-              ) {
-                player.seek(to: Double(segment.startMs) / 1000.0)
-                withAnimation(.easeInOut(duration: 0.25)) {
-                  isAutoFollowing = true
-                }
-                lastScrolledUtteranceID = nil
-              }
-              .id(segment.id)
+              transcriptSegmentRow(segment, activeID: activeID, activeStartMs: activeStartMs)
             }
             Color.clear.frame(height: bottomInset)
           }
@@ -173,6 +162,26 @@ struct TranscriptView: View {
         }
       }
     }
+  }
+
+  private func transcriptSegmentRow(
+    _ segment: TranscriptSegment,
+    activeID: Int?,
+    activeStartMs: Int?
+  ) -> some View {
+    TranscriptSegmentView(
+      text: segment.text,
+      isActive: segment.id == activeID,
+      isPast: activeStartMs.map { segment.endMs <= $0 } ?? false
+    ) {
+      player.seek(to: Double(segment.startMs) / 1000.0)
+      withAnimation(.easeInOut(duration: 0.25)) {
+        isAutoFollowing = true
+      }
+      lastScrolledUtteranceID = nil
+    }
+    .equatable()
+    .id(segment.id)
   }
 
   private var touchTracker: some Gesture {
@@ -309,11 +318,17 @@ private struct TranscriptProgressFollower: View {
   }
 }
 
-private struct TranscriptSegmentView: View {
+private struct TranscriptSegmentView: View, Equatable {
   let text: String
   let isActive: Bool
   let isPast: Bool
   let onTap: () -> Void
+
+  static func == (lhs: TranscriptSegmentView, rhs: TranscriptSegmentView) -> Bool {
+    lhs.text == rhs.text
+      && lhs.isActive == rhs.isActive
+      && lhs.isPast == rhs.isPast
+  }
 
   var body: some View {
     Button(action: onTap) {
