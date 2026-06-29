@@ -12,10 +12,18 @@ let package = Package(
     .library(
       name: "KindlingUI",
       targets: ["KindlingUI"]
-    )
+    ),
+    .executable(
+      name: "KindlingUISnapshots",
+      targets: ["KindlingUISnapshots"]
+    ),
   ],
   targets: [
     .target(name: "KindlingUI"),
+    .executableTarget(
+      name: "KindlingUISnapshots",
+      dependencies: ["KindlingUI"]
+    ),
     .testTarget(
       name: "KindlingUITests",
       dependencies: ["KindlingUI"]

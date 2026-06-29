@@ -448,16 +448,27 @@ public struct BookCollectionView: View {
             .padding(.vertical, 12)
           }
         case .list:
-          List(filteredBooks) { book in
-            BookListRowView(
-              book: book,
-              onSelect: { onSelect(book) },
-              onToggleRead: { onToggleRead(book) },
-              onToggleFavorite: { onToggleFavorite(book) }
-            )
-            .listRowSeparator(.hidden)
+          ScrollView {
+            LazyVStack(spacing: 0) {
+              ForEach(filteredBooks) { book in
+                BookListRowView(
+                  book: book,
+                  onSelect: { onSelect(book) },
+                  onToggleRead: { onToggleRead(book) },
+                  onToggleFavorite: { onToggleFavorite(book) }
+                )
+                .padding(.horizontal, 18)
+                .padding(.vertical, 6)
+
+                if book.id != filteredBooks.last?.id {
+                  Divider()
+                    .padding(.leading, 86)
+                    .padding(.trailing, 18)
+                }
+              }
+            }
+            .padding(.vertical, 8)
           }
-          .listStyle(.plain)
         }
       }
     }
@@ -862,6 +873,7 @@ public struct PlayerContentView: View {
         }
       }
       .pickerStyle(.segmented)
+      .labelsHidden()
 
       switch selectedTab {
       case .cover:
@@ -923,7 +935,7 @@ public struct PlayerContentView: View {
         .foregroundStyle(.secondary)
       }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
   private var transportControls: some View {
