@@ -608,6 +608,93 @@ public struct BookListRowView: View {
   }
 }
 
+public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
+  public let book: BookDetailViewData
+  private let artwork: Artwork
+  private let seriesBar: SeriesBar
+
+  public init(
+    book: BookDetailViewData,
+    @ViewBuilder artwork: () -> Artwork,
+    @ViewBuilder seriesBar: () -> SeriesBar
+  ) {
+    self.book = book
+    self.artwork = artwork()
+    self.seriesBar = seriesBar()
+  }
+
+  public var body: some View {
+    VStack(alignment: .center, spacing: 16) {
+      artwork
+        .frame(maxWidth: .infinity, alignment: .center)
+
+      seriesBar
+
+      BookDetailTitleBlockView(book: book)
+    }
+    .padding(.top, 8)
+  }
+}
+
+extension BookDetailHeroView where SeriesBar == EmptyView {
+  public init(
+    book: BookDetailViewData,
+    @ViewBuilder artwork: () -> Artwork
+  ) {
+    self.init(book: book, artwork: artwork) {
+      EmptyView()
+    }
+  }
+}
+
+public struct BookDetailSeriesBarView: View {
+  public let text: String
+  public let palette: ArtworkPalette
+
+  public init(text: String, palette: ArtworkPalette) {
+    self.text = text
+    self.palette = palette
+  }
+
+  public var body: some View {
+    Text(text)
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(palette.foreground)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 6)
+      .background(palette.background, in: RoundedRectangle(cornerRadius: 4))
+  }
+}
+
+public struct BookDetailTitleBlockView: View {
+  public let book: BookDetailViewData
+
+  public init(book: BookDetailViewData) {
+    self.book = book
+  }
+
+  public var body: some View {
+    VStack(alignment: .center, spacing: 4) {
+      Text(book.title)
+        .font(.headline.weight(.bold))
+        .multilineTextAlignment(.center)
+      Text(book.author)
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+
+      if let metadataText = book.metadataText {
+        Text(metadataText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity)
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+}
+
 public struct BookDetailContentView: View {
   public let book: BookDetailViewData
   public let actions: BookActionViewData
@@ -648,45 +735,7 @@ public struct BookDetailContentView: View {
     VStack(spacing: 0) {
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {
-          CoverArtworkView(
-            title: book.title,
-            author: book.author,
-            url: book.artworkURL,
-            cornerRadius: 5
-          )
-          .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
-          .frame(maxWidth: 216)
-          .frame(maxWidth: .infinity)
-
-          if let seriesText = book.seriesText {
-            Button(action: onSeries) {
-              Text(seriesText)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(book.palette.foreground)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(book.palette.background, in: RoundedRectangle(cornerRadius: 4))
-            }
-            .buttonStyle(.plain)
-          }
-
-          VStack(alignment: .center, spacing: 4) {
-            Text(book.title)
-              .font(.headline.weight(.bold))
-              .multilineTextAlignment(.center)
-            Text(book.author)
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-              .multilineTextAlignment(.center)
-          }
-          .frame(maxWidth: .infinity)
-
-          if let metadataText = book.metadataText {
-            Text(metadataText)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .frame(maxWidth: .infinity, alignment: .center)
-          }
+          detailHero
 
           if let description = book.description, description.isEmpty == false {
             Text(description)
@@ -713,6 +762,35 @@ public struct BookDetailContentView: View {
       .padding(.horizontal, 16)
       .padding(.vertical, 10)
     }
+  }
+
+  @ViewBuilder
+  private var detailHero: some View {
+    if let seriesText = book.seriesText {
+      BookDetailHeroView(book: book) {
+        detailArtwork
+      } seriesBar: {
+        Button(action: onSeries) {
+          BookDetailSeriesBarView(text: seriesText, palette: book.palette)
+        }
+        .buttonStyle(.plain)
+      }
+    } else {
+      BookDetailHeroView(book: book) {
+        detailArtwork
+      }
+    }
+  }
+
+  private var detailArtwork: some View {
+    CoverArtworkView(
+      title: book.title,
+      author: book.author,
+      url: book.artworkURL,
+      cornerRadius: 5
+    )
+    .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
+    .frame(maxWidth: 216)
   }
 }
 

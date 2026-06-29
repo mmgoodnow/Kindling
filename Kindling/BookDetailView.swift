@@ -1,3 +1,4 @@
+import KindlingUI
 import SwiftData
 import SwiftUI
 
@@ -137,39 +138,26 @@ struct BookDetailView: View {
 
   // MARK: - Hero
 
+  @ViewBuilder
   private var hero: some View {
-    VStack(alignment: .center, spacing: 16) {
-      heroCover
-        .frame(maxWidth: .infinity, alignment: .center)
-      if let seriesText {
+    if let seriesText {
+      BookDetailHeroView(book: detailViewData) {
+        heroCover
+      } seriesBar: {
         if let seriesRoute {
           NavigationLink(value: seriesRoute) {
-            seriesBar(seriesText)
+            BookDetailSeriesBarView(text: seriesText, palette: detailPalette)
           }
           .buttonStyle(.plain)
         } else {
-          seriesBar(seriesText)
+          BookDetailSeriesBarView(text: seriesText, palette: detailPalette)
         }
       }
-      VStack(spacing: 4) {
-        Text(item.title)
-          .font(.title2.weight(.semibold))
-          .multilineTextAlignment(.center)
-        Text(item.author)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-      }
-      .frame(maxWidth: .infinity)
-      if let metadataText {
-        Text(metadataText)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-          .frame(maxWidth: .infinity)
+    } else {
+      BookDetailHeroView(book: detailViewData) {
+        heroCover
       }
     }
-    .padding(.top, 8)
   }
 
   private var currentCoverImagePath: String? {
@@ -287,14 +275,45 @@ struct BookDetailView: View {
     return nil
   }
 
-  private var seriesText: String? {
-    let title = item.seriesTitle ?? localBook?.series?.title
-    guard let title, title.isEmpty == false else { return nil }
-    let position = item.seriesPosition ?? localBook?.seriesIndex
-    if let position {
-      return "\(seriesPositionText(position)) in \(title)"
+  private var detailViewData: BookDetailViewData {
+    BookDetailViewData(
+      id: item.id,
+      title: item.title,
+      author: item.author,
+      artworkURL: remoteLibraryAssetURL(
+        baseURLString: userSettings.podibleRPCURL,
+        path: currentCoverImagePath,
+        versionToken: currentCoverVersionToken
+      ),
+      palette: detailPalette,
+      durationText: metricsText,
+      seriesTitle: item.seriesTitle ?? localBook?.series?.title,
+      seriesPosition: item.seriesPosition ?? localBook?.seriesIndex,
+      narrator: item.narrator ?? localBook?.narrator,
+      publishedYear: item.publishedYear ?? localBook?.publishedYear,
+      description: displaySummary
+    )
+  }
+
+  private var detailPalette: ArtworkPalette {
+    let palettes = [
+      ArtworkPalette(red: 0.24, green: 0.45, blue: 0.72),
+      ArtworkPalette(red: 0.55, green: 0.22, blue: 0.30),
+      ArtworkPalette(red: 0.18, green: 0.46, blue: 0.38),
+      ArtworkPalette(red: 0.62, green: 0.34, blue: 0.16),
+      ArtworkPalette(red: 0.35, green: 0.32, blue: 0.62),
+      ArtworkPalette(red: 0.25, green: 0.50, blue: 0.58),
+    ]
+    let seed = currentCoverImagePath ?? "\(item.title)|\(item.author)"
+    var hash = 5381
+    for scalar in seed.unicodeScalars {
+      hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
     }
-    return title
+    return palettes[abs(hash) % palettes.count]
+  }
+
+  private var seriesText: String? {
+    detailViewData.seriesText
   }
 
   private var seriesRoute: BookSeriesRoute? {
@@ -302,30 +321,6 @@ struct BookDetailView: View {
     guard let title, title.isEmpty == false else { return nil }
     let id = item.seriesKey ?? localBook?.series?.podibleId ?? title
     return BookSeriesRoute(id: id, title: title)
-  }
-
-  private func seriesBar(_ text: String) -> some View {
-    Text(text)
-      .font(.caption.weight(.semibold))
-      .foregroundStyle(.tint)
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 6)
-      .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-  }
-
-  private var metadataText: String? {
-    let parts = [
-      (item.narrator ?? localBook?.narrator).map { "Narrated by \($0)" },
-      (item.publishedYear ?? localBook?.publishedYear).map(String.init),
-    ].compactMap { $0 }
-    return parts.isEmpty ? nil : parts.joined(separator: "    ")
-  }
-
-  private func seriesPositionText(_ value: Double) -> String {
-    if value.rounded() == value {
-      return "#\(Int(value))"
-    }
-    return "#\(String(format: "%.1f", value))"
   }
 
   @ViewBuilder
