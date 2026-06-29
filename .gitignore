@@ -31,6 +31,7 @@ docker-compose.yml
 separarr.db.json
 
 DerivedData
+**/.build/
 llapi
 SourcePackages
 *.xcuserstate
