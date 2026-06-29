@@ -1,7 +1,25 @@
 import Foundation
+import KindlingUI
 import Kingfisher
 import SwiftData
 import SwiftUI
+
+enum PodibleLibraryScreenMode {
+  case library
+  case favorites
+  case search
+
+  var title: String {
+    switch self {
+    case .library:
+      "Library"
+    case .favorites:
+      "Favorites"
+    case .search:
+      "Search"
+    }
+  }
+}
 
 struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
@@ -37,11 +55,22 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
+  @State private var selectedDetailItem: PodibleLibraryItem?
+  @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
+    BookCollectionFilter.all.rawValue
+  @AppStorage("library.collectionLayout") private var collectionLayoutRawValue =
+    BookCollectionLayout.grid.rawValue
 
+  let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
   @Binding var isShowingPlayer: Bool
 
-  init(client: RemoteLibraryServing? = nil, isShowingPlayer: Binding<Bool> = .constant(false)) {
+  init(
+    mode: PodibleLibraryScreenMode = .library,
+    client: RemoteLibraryServing? = nil,
+    isShowingPlayer: Binding<Bool> = .constant(false)
+  ) {
+    self.mode = mode
     self.clientOverride = client
     self._isShowingPlayer = isShowingPlayer
   }
@@ -90,17 +119,44 @@ struct PodibleLibraryView: View {
     content(client: configuredClient)
       .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
       .navigationDestination(for: PodibleLibraryItem.self) { item in
-        BookDetailView(
-          item: item,
-          localBook: localBooksById[item.id],
-          actions: detailActions(item: item, client: configuredClient),
-          isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
-          isShowingPlayer: $isShowingPlayer
-        )
+        bookDetailView(for: item)
       }
+      .background(detailNavigationLink)
       .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
         markFinishedPlaybackRead($0)
       }
+  }
+
+  private func bookDetailView(for item: PodibleLibraryItem) -> some View {
+    BookDetailView(
+      item: item,
+      localBook: localBooksById[item.id],
+      actions: detailActions(item: item, client: configuredClient),
+      isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
+      isShowingPlayer: $isShowingPlayer
+    )
+  }
+
+  private var detailNavigationLink: some View {
+    NavigationLink(
+      isActive: Binding(
+        get: { selectedDetailItem != nil },
+        set: { isActive in
+          if isActive == false {
+            selectedDetailItem = nil
+          }
+        }
+      )
+    ) {
+      if let selectedDetailItem {
+        bookDetailView(for: selectedDetailItem)
+      } else {
+        EmptyView()
+      }
+    } label: {
+      EmptyView()
+    }
+    .hidden()
   }
 
   private func detailActions(
@@ -260,48 +316,53 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func content(client: RemoteLibraryServing?) -> some View {
-    List {
-      if client == nil && localBooks.isEmpty == false && isWaitingForStoredPodibleSession == false {
-        podibleConnectionBanner
-      }
+    Group {
+      switch mode {
+      case .library, .favorites:
+        collectionContent(client: client)
+      case .search:
+        List {
+          if client == nil && localBooks.isEmpty == false
+            && isWaitingForStoredPodibleSession == false
+          {
+            podibleConnectionBanner
+          }
 
-      if let error = viewModel.errorMessage {
-        Text(error)
-          .foregroundStyle(.red)
-          .font(.caption)
-      }
+          if let error = viewModel.errorMessage {
+            Text(error)
+              .foregroundStyle(.red)
+              .font(.caption)
+          }
 
-      if let downloadError = downloadErrorMessage {
-        Text(downloadError)
-          .foregroundStyle(.red)
-          .font(.caption)
-      }
+          if let downloadError = downloadErrorMessage {
+            Text(downloadError)
+              .foregroundStyle(.red)
+              .font(.caption)
+          }
 
-      if let syncErrorMessage {
-        Text(syncErrorMessage)
-          .foregroundStyle(.red)
-          .font(.caption)
-      }
+          if let syncErrorMessage {
+            Text(syncErrorMessage)
+              .foregroundStyle(.red)
+              .font(.caption)
+          }
 
-      let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmedQuery.isEmpty {
-        libraryListing(client: client)
-      } else {
-        searchListing(query: trimmedQuery, client: client)
-      }
+          let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
+          searchListing(query: trimmedQuery, client: client)
 
-      if let syncFooterText {
-        HStack {
-          Spacer(minLength: 0)
-          Text(syncFooterText)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-          Spacer(minLength: 0)
+          if let syncFooterText {
+            HStack {
+              Spacer(minLength: 0)
+              Text(syncFooterText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+              Spacer(minLength: 0)
+            }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+          }
         }
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
       }
     }
     #if os(iOS)
@@ -309,7 +370,7 @@ struct PodibleLibraryView: View {
       .scrollContentBackground(.hidden)
       .background(listBackgroundColor)
     #endif
-    .navigationTitle("Library")
+    .navigationTitle(mode.title)
     .toolbar {
       #if os(macOS)
         ToolbarItem {
@@ -407,8 +468,205 @@ struct PodibleLibraryView: View {
     )
   }
 
+  private var collectionFilter: BookCollectionFilter {
+    BookCollectionFilter(rawValue: collectionFilterRawValue) ?? .all
+  }
+
+  private var collectionLayout: BookCollectionLayout {
+    BookCollectionLayout(rawValue: collectionLayoutRawValue) ?? .grid
+  }
+
+  private var collectionFilterBinding: Binding<BookCollectionFilter> {
+    Binding(
+      get: { collectionFilter },
+      set: { collectionFilterRawValue = $0.rawValue }
+    )
+  }
+
+  private var collectionLayoutBinding: Binding<BookCollectionLayout> {
+    Binding(
+      get: { collectionLayout },
+      set: { collectionLayoutRawValue = $0.rawValue }
+    )
+  }
+
+  private var collectionBooks: [LibraryBook] {
+    switch mode {
+    case .library, .search:
+      localBooks
+    case .favorites:
+      localBooks.filter { $0.localState?.isFavorite == true }
+    }
+  }
+
+  private var collectionTiles: [BookTileViewData] {
+    collectionBooks.map(bookTileViewData(for:))
+  }
+
+  @ViewBuilder
+  private func collectionContent(client: RemoteLibraryServing?) -> some View {
+    VStack(spacing: 0) {
+      collectionStatusMessages(client: client)
+
+      if collectionBooks.isEmpty {
+        collectionEmptyState(client: client)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        collectionControls
+        BookCollectionView(
+          books: collectionTiles,
+          layout: collectionLayout,
+          filter: collectionFilter,
+          onSelect: selectCollectionBook(_:),
+          onToggleRead: toggleRead(_:),
+          onToggleFavorite: toggleFavorite(_:)
+        )
+      }
+
+      if let syncFooterText {
+        Text(syncFooterText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .padding(.horizontal, 16)
+          .padding(.vertical, 8)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  @ViewBuilder
+  private func collectionStatusMessages(client: RemoteLibraryServing?) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      if client == nil && localBooks.isEmpty == false && isWaitingForStoredPodibleSession == false {
+        podibleConnectionBanner
+      }
+      if let error = viewModel.errorMessage {
+        Text(error)
+          .foregroundStyle(.red)
+          .font(.caption)
+      }
+      if let downloadError = downloadErrorMessage {
+        Text(downloadError)
+          .foregroundStyle(.red)
+          .font(.caption)
+      }
+      if let syncErrorMessage {
+        Text(syncErrorMessage)
+          .foregroundStyle(.red)
+          .font(.caption)
+      }
+    }
+    .padding(.horizontal, 16)
+  }
+
+  @ViewBuilder
+  private func collectionEmptyState(client: RemoteLibraryServing?) -> some View {
+    if mode == .favorites {
+      ContentUnavailableView("No Favorites", systemImage: "heart")
+    } else if isWaitingForStoredPodibleSession {
+      ProgressView()
+    } else if client == nil {
+      podibleOnboardingCard
+    } else {
+      ContentUnavailableView(
+        "No Books",
+        systemImage: "tray",
+        description: Text("Pull to refresh your Podible library.")
+      )
+    }
+  }
+
+  private var collectionControls: some View {
+    HStack(spacing: 12) {
+      Picker("Read filter", selection: collectionFilterBinding) {
+        ForEach(BookCollectionFilter.allCases) { filter in
+          Text(filter.title).tag(filter)
+        }
+      }
+      .pickerStyle(.segmented)
+
+      Picker("Layout", selection: collectionLayoutBinding) {
+        ForEach(BookCollectionLayout.allCases) { layout in
+          Image(systemName: layout.systemImage).tag(layout)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(width: 96)
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
+  }
+
   private var localBooksById: [String: LibraryBook] {
     Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
+  }
+
+  private func bookTileViewData(for book: LibraryBook) -> BookTileViewData {
+    BookTileViewData(
+      id: book.podibleId,
+      title: book.title,
+      author: book.author?.name ?? "Unknown Author",
+      artworkURL: remoteLibraryAssetURL(
+        baseURLString: remoteAssetBaseURLString,
+        path: book.coverURLString,
+        versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+      ),
+      durationText: book.runtimeSeconds.map(formatRuntime(seconds:)),
+      isRead: book.localState?.isRead == true,
+      isFavorite: book.localState?.isFavorite == true,
+      palette: artworkPalette(for: book),
+      seriesKey: book.series?.podibleId,
+      seriesTitle: book.series?.title,
+      seriesPosition: book.seriesIndex,
+      publishedYear: book.publishedYear,
+      narrator: book.narrator,
+      description: book.summary
+    )
+  }
+
+  private func artworkPalette(for book: LibraryBook) -> ArtworkPalette {
+    let palettes = [
+      ArtworkPalette(red: 0.24, green: 0.45, blue: 0.72),
+      ArtworkPalette(red: 0.55, green: 0.22, blue: 0.30),
+      ArtworkPalette(red: 0.18, green: 0.46, blue: 0.38),
+      ArtworkPalette(red: 0.62, green: 0.34, blue: 0.16),
+      ArtworkPalette(red: 0.35, green: 0.32, blue: 0.62),
+      ArtworkPalette(red: 0.25, green: 0.50, blue: 0.58),
+    ]
+    var hash = 5381
+    for scalar in (book.coverURLString ?? "\(book.title)|\(book.author?.name ?? "")").unicodeScalars
+    {
+      hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
+    }
+    return palettes[abs(hash) % palettes.count]
+  }
+
+  @MainActor
+  private func selectCollectionBook(_ book: BookTileViewData) {
+    guard let localBook = localBooksById[book.id] else { return }
+    selectedDetailItem = localProxyItem(for: localBook)
+  }
+
+  @MainActor
+  private func toggleRead(_ book: BookTileViewData) {
+    guard let localBook = localBooksById[book.id] else { return }
+    let state = ensureLocalState(for: localBook)
+    state.isRead.toggle()
+    if modelContext.hasChanges {
+      saveModelContext()
+    }
+  }
+
+  @MainActor
+  private func toggleFavorite(_ book: BookTileViewData) {
+    guard let localBook = localBooksById[book.id] else { return }
+    let state = ensureLocalState(for: localBook)
+    state.isFavorite.toggle()
+    if modelContext.hasChanges {
+      saveModelContext()
+    }
   }
 
   @MainActor
@@ -515,29 +773,35 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func searchListing(query: String, client: RemoteLibraryServing?) -> some View {
-    let localMatches = filteredLocalBooks(query: query)
-    let localIds = Set(localMatches.map(\.podibleId))
-    let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
-
-    if localMatches.isEmpty && remoteResults.isEmpty {
+    if query.isEmpty {
       centeredListEmptyState {
-        ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+        ContentUnavailableView("Search Books", systemImage: "magnifyingglass")
       }
     } else {
-      ForEach(localMatches) { book in
-        localLibraryRow(book, client: client)
-      }
-      if let client {
-        ForEach(remoteResults) { book in
-          PodibleSearchResultRow(
-            viewModel: viewModel,
-            book: book,
-            client: client,
-            onRequested: { requested in
-              persistRequestedBook(requested)
-            },
-            pendingItemIDs: $pendingSearchItemIDs
-          )
+      let localMatches = filteredLocalBooks(query: query)
+      let localIds = Set(localMatches.map(\.podibleId))
+      let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
+
+      if localMatches.isEmpty && remoteResults.isEmpty {
+        centeredListEmptyState {
+          ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+        }
+      } else {
+        ForEach(localMatches) { book in
+          localLibraryRow(book, client: client)
+        }
+        if let client {
+          ForEach(remoteResults) { book in
+            PodibleSearchResultRow(
+              viewModel: viewModel,
+              book: book,
+              client: client,
+              onRequested: { requested in
+                persistRequestedBook(requested)
+              },
+              pendingItemIDs: $pendingSearchItemIDs
+            )
+          }
         }
       }
     }
