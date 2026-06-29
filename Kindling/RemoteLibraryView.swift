@@ -121,6 +121,9 @@ struct PodibleLibraryView: View {
       .navigationDestination(for: PodibleLibraryItem.self) { item in
         bookDetailView(for: item)
       }
+      .navigationDestination(for: BookSeriesRoute.self) { route in
+        seriesContent(for: route)
+      }
       .background(detailNavigationLink)
       .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
         markFinishedPlaybackRead($0)
@@ -603,6 +606,31 @@ struct PodibleLibraryView: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
+  }
+
+  private func seriesContent(for route: BookSeriesRoute) -> some View {
+    VStack(spacing: 0) {
+      collectionControls
+      SeriesContentView(
+        series: SeriesViewData(
+          id: route.id,
+          title: route.title,
+          books: seriesBooks(for: route).map(bookTileViewData(for:))
+        ),
+        layout: collectionLayout,
+        filter: collectionFilter,
+        onSelect: selectCollectionBook(_:),
+        onToggleRead: toggleRead(_:),
+        onToggleFavorite: toggleFavorite(_:)
+      )
+    }
+    .navigationTitle(route.title)
+  }
+
+  private func seriesBooks(for route: BookSeriesRoute) -> [LibraryBook] {
+    localBooks.filter { book in
+      book.series?.podibleId == route.id || book.series?.title == route.title
+    }
   }
 
   private var localBooksById: [String: LibraryBook] {

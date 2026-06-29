@@ -9,6 +9,11 @@ enum AudioDownloadState {
   case inProgress(Double?)  // nil = indeterminate, otherwise 0...1
 }
 
+struct BookSeriesRoute: Hashable {
+  let id: String
+  let title: String
+}
+
 struct BookDetailActions {
   var isFavorite: Bool = false
   var isRead: Bool = false
@@ -137,12 +142,14 @@ struct BookDetailView: View {
       heroCover
         .frame(maxWidth: .infinity, alignment: .center)
       if let seriesText {
-        Text(seriesText)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.tint)
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 6)
-          .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+        if let seriesRoute {
+          NavigationLink(value: seriesRoute) {
+            seriesBar(seriesText)
+          }
+          .buttonStyle(.plain)
+        } else {
+          seriesBar(seriesText)
+        }
       }
       VStack(spacing: 4) {
         Text(item.title)
@@ -288,6 +295,22 @@ struct BookDetailView: View {
       return "\(seriesPositionText(position)) in \(title)"
     }
     return title
+  }
+
+  private var seriesRoute: BookSeriesRoute? {
+    let title = item.seriesTitle ?? localBook?.series?.title
+    guard let title, title.isEmpty == false else { return nil }
+    let id = item.seriesKey ?? localBook?.series?.podibleId ?? title
+    return BookSeriesRoute(id: id, title: title)
+  }
+
+  private func seriesBar(_ text: String) -> some View {
+    Text(text)
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(.tint)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 6)
+      .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
   }
 
   private var metadataText: String? {
