@@ -30,6 +30,7 @@
 		51792FD32C962848004B6E71 /* EBookDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51792FC42C93CF90004B6E71 /* EBookDownloader.swift */; };
 		51929E1F2C9A531400D77429 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 51929E1E2C9A531400D77429 /* ZIPFoundation */; };
 		51929E212C9A532700D77429 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 51929E202C9A532700D77429 /* ZIPFoundation */; };
+		51A1B0012F10000000123456 /* KindlingUI in Frameworks */ = {isa = PBXBuildFile; productRef = 51A1B0032F10000000123456 /* KindlingUI */; };
 		51929E242C9A5F3A00D77429 /* SearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E222C9A5F3A00D77429 /* SearchResult.swift */; };
 		51929E2A2CA0072600D77429 /* MailComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E292CA0072600D77429 /* MailComposerView.swift */; };
 		51929E2C2CA007BC00D77429 /* MailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51929E2B2CA007BC00D77429 /* MailView.swift */; };
@@ -140,6 +141,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				51F36E2D2EF733F2004A31B1 /* Kingfisher in Frameworks */,
+				51A1B0012F10000000123456 /* KindlingUI in Frameworks */,
 				51929E1F2C9A531400D77429 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -287,6 +289,7 @@
 			name = Kindling;
 			packageProductDependencies = (
 				51F36E2E2EF733F2004A31B1 /* Kingfisher */,
+				51A1B0032F10000000123456 /* KindlingUI */,
 				51929E1E2C9A531400D77429 /* ZIPFoundation */,
 			);
 			productName = Kindling;
@@ -388,6 +391,7 @@
 				51792FBE2C902162004B6E71 /* XCRemoteSwiftPackageReference "swift-format" */,
 				51929E1D2C9A531400D77429 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				51F36E2C2EF733F2004A31B1 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				51A1B0022F10000000123456 /* XCLocalSwiftPackageReference "KindlingUI" */,
 			);
 			productRefGroup = 51792F8E2C900EEA004B6E71 /* Products */;
 			projectDirPath = "";
@@ -865,6 +869,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		51A1B0022F10000000123456 /* XCLocalSwiftPackageReference "KindlingUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = KindlingUI;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		51792FBE2C902162004B6E71 /* XCRemoteSwiftPackageReference "swift-format" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -907,6 +918,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 51F36E2C2EF733F2004A31B1 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
+		};
+		51A1B0032F10000000123456 /* KindlingUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 51A1B0022F10000000123456 /* XCLocalSwiftPackageReference "KindlingUI" */;
+			productName = KindlingUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
