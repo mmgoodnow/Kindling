@@ -7,7 +7,6 @@ import SwiftUI
 enum PodibleLibraryScreenMode {
   case library
   case favorites
-  case search
 
   var title: String {
     switch self {
@@ -15,8 +14,6 @@ enum PodibleLibraryScreenMode {
       "Library"
     case .favorites:
       "Favorites"
-    case .search:
-      "Search"
     }
   }
 }
@@ -326,51 +323,14 @@ struct PodibleLibraryView: View {
   @ViewBuilder
   private func content(client: RemoteLibraryServing?) -> some View {
     Group {
-      switch mode {
-      case .library, .favorites:
+      let query = trimmedSearchQuery
+      if query.isEmpty {
         collectionContent(client: client)
-      case .search:
+      } else {
         List {
-          if client == nil && localBooks.isEmpty == false
-            && isWaitingForStoredPodibleSession == false
-          {
-            podibleConnectionBanner
-          }
-
-          if let error = viewModel.errorMessage {
-            Text(error)
-              .foregroundStyle(.red)
-              .font(.caption)
-          }
-
-          if let downloadError = downloadErrorMessage {
-            Text(downloadError)
-              .foregroundStyle(.red)
-              .font(.caption)
-          }
-
-          if let syncErrorMessage {
-            Text(syncErrorMessage)
-              .foregroundStyle(.red)
-              .font(.caption)
-          }
-
-          let trimmedQuery = viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
-          searchListing(query: trimmedQuery, client: client)
-
-          if let syncFooterText {
-            HStack {
-              Spacer(minLength: 0)
-              Text(syncFooterText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-              Spacer(minLength: 0)
-            }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-          }
+          searchStatusRows(client: client)
+          searchListing(query: query, client: client)
+          searchFooterRow
         }
       }
     }
@@ -427,6 +387,7 @@ struct PodibleLibraryView: View {
     .searchable(text: $viewModel.query, prompt: "Search")
     #if os(macOS)
       .onSubmit(of: .search) {
+        guard mode == .library else { return }
         guard let client else { return }
         Task {
           await viewModel.search(using: client)
@@ -434,6 +395,7 @@ struct PodibleLibraryView: View {
       }
     #else
       .onSubmit(of: .search) {
+        guard mode == .library else { return }
         guard let client else { return }
         Task {
           await viewModel.search(using: client)
@@ -444,6 +406,11 @@ struct PodibleLibraryView: View {
       searchTask?.cancel()
       let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
       if trimmed.isEmpty {
+        viewModel.searchResults = []
+        pendingSearchItemIDs.removeAll()
+        return
+      }
+      guard mode == .library else {
         viewModel.searchResults = []
         pendingSearchItemIDs.removeAll()
         return
@@ -501,11 +468,15 @@ struct PodibleLibraryView: View {
 
   private var collectionBooks: [LibraryBook] {
     switch mode {
-    case .library, .search:
+    case .library:
       localBooks
     case .favorites:
       localBooks.filter { $0.localState?.isFavorite == true }
     }
+  }
+
+  private var trimmedSearchQuery: String {
+    viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private var collectionTiles: [BookTileViewData] {
@@ -822,9 +793,12 @@ struct PodibleLibraryView: View {
         ContentUnavailableView("Search Books", systemImage: "magnifyingglass")
       }
     } else {
-      let localMatches = filteredLocalBooks(query: query)
+      let localMatches = filteredCollectionBooks(query: query)
       let localIds = Set(localMatches.map(\.podibleId))
-      let remoteResults = viewModel.searchResults.filter { localIds.contains($0.id) == false }
+      let remoteResults =
+        mode == .library
+        ? viewModel.searchResults.filter { localIds.contains($0.id) == false }
+        : []
 
       if localMatches.isEmpty && remoteResults.isEmpty {
         centeredListEmptyState {
@@ -834,7 +808,7 @@ struct PodibleLibraryView: View {
         ForEach(localMatches) { book in
           localLibraryRow(book, client: client)
         }
-        if let client {
+        if mode == .library, let client {
           ForEach(remoteResults) { book in
             PodibleSearchResultRow(
               viewModel: viewModel,
@@ -851,13 +825,56 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private func filteredLocalBooks(query: String) -> [LibraryBook] {
+  @ViewBuilder
+  private func searchStatusRows(client: RemoteLibraryServing?) -> some View {
+    if client == nil && localBooks.isEmpty == false && isWaitingForStoredPodibleSession == false {
+      podibleConnectionBanner
+    }
+
+    if let error = viewModel.errorMessage {
+      Text(error)
+        .foregroundStyle(.red)
+        .font(.caption)
+    }
+
+    if let downloadError = downloadErrorMessage {
+      Text(downloadError)
+        .foregroundStyle(.red)
+        .font(.caption)
+    }
+
+    if let syncErrorMessage {
+      Text(syncErrorMessage)
+        .foregroundStyle(.red)
+        .font(.caption)
+    }
+  }
+
+  @ViewBuilder
+  private var searchFooterRow: some View {
+    if let syncFooterText {
+      HStack {
+        Spacer(minLength: 0)
+        Text(syncFooterText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+        Spacer(minLength: 0)
+      }
+      .listRowSeparator(.hidden)
+      .listRowBackground(Color.clear)
+    }
+  }
+
+  private func filteredCollectionBooks(query: String) -> [LibraryBook] {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard trimmed.isEmpty == false else { return localBooks }
+    guard trimmed.isEmpty == false else { return collectionBooks }
     let needle = trimmed.lowercased()
-    return localBooks.filter { book in
+    return collectionBooks.filter { book in
       book.title.lowercased().contains(needle)
         || (book.author?.name.lowercased().contains(needle) ?? false)
+        || (book.series?.title.lowercased().contains(needle) ?? false)
     }
   }
 

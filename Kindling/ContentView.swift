@@ -8,7 +8,6 @@ struct ContentView: View {
     case library
     case favorites
     case player
-    case search
   }
 
   private var playerTabBinding: Binding<Bool> {
@@ -47,15 +46,6 @@ struct ContentView: View {
           Label("Player", systemImage: "play.fill")
         }
         .tag(AppTab.player)
-
-      NavigationStack {
-        RemoteLibraryView(mode: .search, isShowingPlayer: playerTabBinding)
-          .toolbar { settingsToolbar }
-      }
-      .tabItem {
-        Label("Search", systemImage: "magnifyingglass")
-      }
-      .tag(AppTab.search)
     }
   }
 
