@@ -84,6 +84,23 @@ final class KindlingUITests: XCTestCase {
     XCTAssertEqual(KindlingUIFormatters.seriesPositionText(2.5), "#2.5")
   }
 
+  func testDetailMetadataFormatting() {
+    let detail = BookDetailViewData(
+      id: "detail",
+      title: "Detail",
+      author: "Author",
+      seriesTitle: "Series",
+      seriesPosition: 3,
+      narrator: "Narrator",
+      publishedYear: 2026
+    )
+
+    XCTAssertEqual(detail.metadataText, "Narrated by Narrator    2026")
+    XCTAssertEqual(detail.seriesText, "#3 in Series")
+    XCTAssertNil(
+      BookDetailViewData(id: "missing", title: "Missing", author: "Author").metadataText)
+  }
+
   func testAutoReadThreshold() {
     XCTAssertFalse(ReadProgressPolicy.shouldMarkRead(currentTime: 994, duration: 1_000))
     XCTAssertTrue(ReadProgressPolicy.shouldMarkRead(currentTime: 995, duration: 1_000))
