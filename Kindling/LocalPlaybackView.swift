@@ -1,4 +1,5 @@
 import AVKit
+import KindlingUI
 import Kingfisher
 import SwiftUI
 
@@ -200,125 +201,42 @@ private func formatPlaybackTime(_ seconds: Double) -> String {
   return String(format: "%d:%02d", minutes, remainingSeconds)
 }
 
-private struct ChapterRowView: View, Equatable {
-  let chapter: AudioPlayerController.Chapter
-  let durationText: String
-  let isCurrent: Bool
-  let isCompleted: Bool
-  let activeProgress: Double?
-  let onSelect: () -> Void
-
-  static func == (lhs: ChapterRowView, rhs: ChapterRowView) -> Bool {
-    lhs.chapter == rhs.chapter
-      && lhs.durationText == rhs.durationText
-      && lhs.isCurrent == rhs.isCurrent
-      && lhs.isCompleted == rhs.isCompleted
-      && lhs.activeProgress == rhs.activeProgress
-  }
-
-  var body: some View {
-    Button(action: onSelect) {
-      HStack(spacing: 12) {
-        Text(chapter.title)
-          .font(.body.weight(isCurrent ? .semibold : .regular))
-          .foregroundStyle(.primary)
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        Text(durationText)
-          .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
-
-        if isCurrent {
-          Image(systemName: "speaker.wave.2.fill")
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
-        }
-      }
-      .padding(.horizontal, 14)
-      .padding(.vertical, 9)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(chapterRowBackground)
-    }
-    .buttonStyle(.plain)
-  }
-
-  @ViewBuilder
-  private var chapterRowBackground: some View {
-    #if os(iOS)
-      if isCurrent {
-        GeometryReader { proxy in
-          let progressWidth = max(proxy.size.width * (activeProgress ?? 0), 0)
-          let rowShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-
-          ZStack(alignment: .leading) {
-            rowShape
-              .fill(Color.primary.opacity(0.08))
-
-            Rectangle()
-              .fill(Color.primary.opacity(0.14))
-              .frame(width: progressWidth)
-          }
-          .clipShape(rowShape)
-        }
-      } else if isCompleted {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(Color.primary.opacity(0.08))
-      } else {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(Color.primary.opacity(0.04))
-      }
-    #else
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(
-          isCurrent
-            ? Color.primary.opacity(0.12)
-            : isCompleted ? Color.primary.opacity(0.08) : Color.primary.opacity(0.05))
-    #endif
-  }
-}
-
-private struct ChapterListView: View {
-  let chapters: [AudioPlayerController.Chapter]
-  let totalDuration: Double
-  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
-  let onSelectChapter: (AudioPlayerController.Chapter) -> Void
-
-  var body: some View {
-    let currentChapterID = playbackCurrentChapterID(
-      time: progress.currentTime,
+private func playbackChapterRows(
+  chapters: [AudioPlayerController.Chapter],
+  currentTime: Double,
+  totalDuration: Double
+) -> [KindlingUI.ChapterRowViewData] {
+  let currentChapterID = playbackCurrentChapterID(
+    time: currentTime,
+    chapters: chapters,
+    totalDuration: totalDuration
+  )
+  let currentChapterProgress = playbackCurrentChapterProgress(
+    time: currentTime,
+    chapters: chapters,
+    totalDuration: totalDuration
+  )
+  let durations = chapters.enumerated().map { index, chapter in
+    playbackEffectiveDuration(
+      for: chapter,
+      at: index,
       chapters: chapters,
       totalDuration: totalDuration
     )
-    let currentChapterProgress = playbackCurrentChapterProgress(
-      time: progress.currentTime,
-      chapters: chapters,
-      totalDuration: totalDuration
-    )
-    let durations = chapters.enumerated().map { index, chapter in
-      playbackEffectiveDuration(
-        for: chapter,
-        at: index,
-        chapters: chapters,
-        totalDuration: totalDuration
-      )
-    }
+  }
 
-    LazyVStack(spacing: 6) {
-      ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
-        ChapterRowView(
-          chapter: chapter,
-          durationText: formatPlaybackTime(durations[index]),
-          isCurrent: currentChapterID == chapter.id,
-          isCompleted: chapter.startTime + durations[index] <= progress.currentTime
-            && currentChapterID != chapter.id,
-          activeProgress: currentChapterID == chapter.id ? currentChapterProgress : nil
-        ) {
-          onSelectChapter(chapter)
-        }
-        .equatable()
-      }
-    }
+  return chapters.enumerated().map { index, chapter in
+    let isCurrent = currentChapterID == chapter.id
+    let isCompleted = chapter.startTime + durations[index] <= currentTime && isCurrent == false
+
+    return KindlingUI.ChapterRowViewData(
+      id: chapter.id,
+      title: chapter.title,
+      durationText: formatPlaybackTime(durations[index]),
+      progress: isCurrent ? currentChapterProgress : 0,
+      isCompleted: isCompleted,
+      isCurrent: isCurrent
+    )
   }
 }
 
@@ -831,35 +749,38 @@ struct LocalPlaybackView: View {
     .buttonStyle(.plain)
   }
 
-  private var chapterListContent: some View {
-    ChapterListView(
+  private var chapterRows: [KindlingUI.ChapterRowViewData] {
+    playbackChapterRows(
       chapters: player.chapters,
-      totalDuration: player.duration,
-      progress: player.progress
-    ) { chapter in
+      currentTime: player.progress.currentTime,
+      totalDuration: player.duration
+    )
+  }
+
+  private var chapterListContent: some View {
+    KindlingUI.ChapterListView(chapters: chapterRows) { row in
+      guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
       player.seek(to: chapter.startTime)
     }
   }
 
   private var chaptersSection: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Chapters")
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Chapters")
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.secondary)
 
-        if player.chapters.isEmpty {
-          Text("No chapters available yet.")
-            .font(.body)
-            .foregroundStyle(.secondary)
-        } else {
-          chapterListContent
-        }
+      if player.chapters.isEmpty {
+        Text("No chapters available yet.")
+          .font(.body)
+          .foregroundStyle(.secondary)
+      } else {
+        chapterListContent
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.top, 8)
-      .padding(.bottom, 16)
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.top, 8)
+    .padding(.bottom, 16)
   }
 
   private var artworkSection: some View {
