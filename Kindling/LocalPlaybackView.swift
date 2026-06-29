@@ -3,102 +3,6 @@ import KindlingUI
 import Kingfisher
 import SwiftUI
 
-private struct MarqueeText: View {
-  let text: String
-  let font: Font
-  let textColor: Color
-
-  private let gap: CGFloat = 28
-  private let pointsPerSecond: CGFloat = 36
-
-  @State private var containerWidth: CGFloat = 0
-  @State private var textWidth: CGFloat = 0
-  @State private var xOffset: CGFloat = 0
-
-  var body: some View {
-    GeometryReader { proxy in
-      Group {
-        if shouldScroll {
-          scrollingContent
-        } else {
-          Text(text)
-            .font(font)
-            .foregroundStyle(textColor)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-      .clipped()
-      .onAppear {
-        containerWidth = proxy.size.width
-        restartAnimationIfNeeded()
-      }
-      .onChange(of: proxy.size.width) { _, newValue in
-        containerWidth = newValue
-        restartAnimationIfNeeded()
-      }
-    }
-    .frame(height: 20)
-    .background(
-      Text(text)
-        .font(font)
-        .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
-        .hidden()
-        .background(
-          GeometryReader { proxy in
-            Color.clear
-              .onAppear {
-                textWidth = proxy.size.width
-                restartAnimationIfNeeded()
-              }
-              .onChange(of: proxy.size.width) { _, newValue in
-                textWidth = newValue
-                restartAnimationIfNeeded()
-              }
-          }
-        )
-    )
-  }
-
-  private var shouldScroll: Bool {
-    textWidth > containerWidth && containerWidth > 0
-  }
-
-  private var scrollingContent: some View {
-    HStack(spacing: gap) {
-      marqueeLabel
-      marqueeLabel
-    }
-    .offset(x: xOffset)
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  private var marqueeLabel: some View {
-    Text(text)
-      .font(font)
-      .foregroundStyle(textColor)
-      .lineLimit(1)
-      .fixedSize(horizontal: true, vertical: false)
-  }
-
-  private func restartAnimationIfNeeded() {
-    guard shouldScroll else {
-      xOffset = 0
-      return
-    }
-
-    let travelDistance = textWidth + gap
-    let duration = max(Double(travelDistance / pointsPerSecond), 6)
-
-    xOffset = 0
-    withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
-      xOffset = -travelDistance
-    }
-  }
-}
-
 private func playbackEffectiveDuration(
   for chapter: AudioPlayerController.Chapter,
   at index: Int?,
@@ -240,198 +144,6 @@ private func playbackChapterRows(
   }
 }
 
-private struct PlaybackBookProgressSectionView: View {
-  let player: AudioPlayerController
-  @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
-
-  var body: some View {
-    let chapters = player.chapters
-    let currentTime = progress.currentTime
-    let totalDuration = progress.duration
-    let currentChapterIndex = playbackCurrentChapterIndex(
-      time: currentTime,
-      chapters: chapters,
-      totalDuration: totalDuration
-    )
-    let currentChapter = currentChapterIndex.flatMap {
-      chapters.indices.contains($0) ? chapters[$0] : nil
-    }
-    let bookProgress = playbackBookProgress(time: currentTime, totalDuration: totalDuration)
-
-    VStack(spacing: 8) {
-      GeometryReader { proxy in
-        let spacing: CGFloat = 1
-        let totalSpacing = spacing * CGFloat(max(chapters.count - 1, 0))
-        let availableWidth = max(proxy.size.width - totalSpacing, 0)
-        let minimumSegmentWidth: CGFloat = 1
-        let minimumRequiredWidth =
-          CGFloat(chapters.count) * minimumSegmentWidth
-          + CGFloat(max(chapters.count - 1, 0)) * spacing
-        let extraSegmentWidth = max(
-          availableWidth - CGFloat(chapters.count) * minimumSegmentWidth,
-          0
-        )
-        let durations = chapters.enumerated().map { index, chapter in
-          playbackEffectiveDuration(
-            for: chapter,
-            at: index,
-            chapters: chapters,
-            totalDuration: totalDuration
-          )
-        }
-        let durationTotal = max(durations.reduce(0, +), 1)
-        let segmentWidths = chapterSegmentWidths(
-          durations: durations,
-          totalDuration: durationTotal,
-          extraSegmentWidth: extraSegmentWidth,
-          minimumSegmentWidth: minimumSegmentWidth
-        )
-        let shouldUsePlainProgressBar = minimumRequiredWidth > proxy.size.width
-
-        Group {
-          if shouldUsePlainProgressBar {
-            ZStack(alignment: .leading) {
-              Capsule(style: .continuous)
-                .fill(Color.primary.opacity(0.10))
-
-              if totalDuration > 0, progress.bufferedSeconds > 0 {
-                let bufferedFraction = min(
-                  max((currentTime + progress.bufferedSeconds) / totalDuration, 0),
-                  1
-                )
-                Capsule(style: .continuous)
-                  .fill(Color.primary.opacity(0.20))
-                  .frame(width: max(proxy.size.width * bufferedFraction, 0))
-              }
-
-              Capsule(style: .continuous)
-                .fill(Color.primary)
-                .frame(width: max(proxy.size.width * bookProgress, 10))
-            }
-          } else {
-            VStack(spacing: 3) {
-              HStack(spacing: spacing) {
-                ForEach(Array(chapters.enumerated()), id: \.element.id) { index, _ in
-                  chapterSegmentShape(for: index, count: chapters.count)
-                    .fill(
-                      chapterSegmentFill(for: index, currentChapterIndex: currentChapterIndex)
-                    )
-                    .frame(
-                      width: chapterSegmentWidth(
-                        for: index,
-                        segmentWidths: segmentWidths,
-                        minimumSegmentWidth: minimumSegmentWidth
-                      ),
-                      height: 10
-                    )
-                }
-              }
-              if totalDuration > 0, progress.bufferedSeconds > 0 {
-                let bufferedFraction = min(
-                  max((currentTime + progress.bufferedSeconds) / totalDuration, 0),
-                  1
-                )
-                ZStack(alignment: .leading) {
-                  Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-                  Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.20))
-                    .frame(width: max(proxy.size.width * bufferedFraction, 0))
-                }
-                .frame(height: 2)
-              }
-            }
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      .frame(height: progress.bufferedSeconds > 0 ? 15 : 10)
-
-      if let currentChapter {
-        MarqueeText(
-          text:
-            "\(playbackBookProgressPercent(time: currentTime, totalDuration: totalDuration))% of book completed",
-          font: .subheadline.weight(.semibold),
-          textColor: .secondary
-        )
-      }
-    }
-  }
-
-  private func chapterSegmentShape(for index: Int, count: Int) -> AnyShape {
-    let radius: CGFloat = 4
-    if count == 1 {
-      return AnyShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-    } else if index == 0 {
-      return AnyShape(
-        UnevenRoundedRectangle(
-          cornerRadii: .init(topLeading: radius, bottomLeading: radius),
-          style: .continuous
-        )
-      )
-    } else if index == count - 1 {
-      return AnyShape(
-        UnevenRoundedRectangle(
-          cornerRadii: .init(bottomTrailing: radius, topTrailing: radius),
-          style: .continuous
-        )
-      )
-    } else {
-      return AnyShape(Rectangle())
-    }
-  }
-
-  private func chapterSegmentFill(for index: Int, currentChapterIndex: Int?) -> Color {
-    guard let currentChapterIndex else { return Color.primary.opacity(0.08) }
-    if index == currentChapterIndex {
-      return .primary
-    }
-    return Color.primary.opacity(index < currentChapterIndex ? 0.28 : 0.08)
-  }
-
-  private func chapterSegmentWidth(
-    for index: Int,
-    segmentWidths: [CGFloat],
-    minimumSegmentWidth: CGFloat
-  ) -> CGFloat {
-    guard segmentWidths.indices.contains(index) else { return minimumSegmentWidth }
-    return segmentWidths[index]
-  }
-
-  private func chapterSegmentWidths(
-    durations: [Double],
-    totalDuration: Double,
-    extraSegmentWidth: CGFloat,
-    minimumSegmentWidth: CGFloat
-  ) -> [CGFloat] {
-    guard durations.isEmpty == false else { return [] }
-
-    var widths: [CGFloat] = []
-    widths.reserveCapacity(durations.count)
-
-    var accumulatedExtraWidth: CGFloat = 0
-    var allocatedExtraWidth: CGFloat = 0
-
-    for (index, duration) in durations.enumerated() {
-      let fraction = CGFloat(duration / max(totalDuration, 1))
-      accumulatedExtraWidth += fraction * extraSegmentWidth
-
-      let roundedAccumulatedWidth: CGFloat
-      if index == durations.count - 1 {
-        roundedAccumulatedWidth = extraSegmentWidth
-      } else {
-        roundedAccumulatedWidth = accumulatedExtraWidth.rounded(.toNearestOrAwayFromZero)
-      }
-
-      let roundedExtraWidth = max(roundedAccumulatedWidth - allocatedExtraWidth, 0)
-      allocatedExtraWidth += roundedExtraWidth
-      widths.append(minimumSegmentWidth + roundedExtraWidth)
-    }
-
-    return widths
-  }
-}
-
 private struct ChapterPlaybackProgressSectionView: View {
   let player: AudioPlayerController
   @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
@@ -558,8 +270,7 @@ private struct ChapterPlaybackProgressSectionView: View {
 
 struct LocalPlaybackView: View {
   private static let playbackTabBarHeight: CGFloat = 34
-  private static let playbackBookProgressSectionHeight: CGFloat = 38
-  private static let playbackTabSectionSpacing: CGFloat = 18
+  private static let playbackTabSectionSpacing: CGFloat = 12
 
   @AppStorage("localPlayback.selectedContentTab") private var selectedContentTabRawValue =
     ContentTab.artwork.rawValue
@@ -757,6 +468,53 @@ struct LocalPlaybackView: View {
     )
   }
 
+  private var playerCoverViewData: PlayerViewData {
+    let chapters = player.chapters
+    let currentTime = player.progress.currentTime
+    let totalDuration = player.progress.duration
+    let currentChapterIndex = playbackCurrentChapterIndex(
+      time: currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    )
+    let currentChapter = currentChapterIndex.flatMap {
+      chapters.indices.contains($0) ? chapters[$0] : nil
+    }
+    let currentChapterDuration =
+      currentChapter.flatMap { chapter in
+        playbackEffectiveDuration(
+          for: chapter,
+          at: currentChapterIndex,
+          chapters: chapters,
+          totalDuration: totalDuration
+        )
+      } ?? max(totalDuration, 1)
+    let currentChapterElapsed =
+      currentChapter.map { max(0, currentTime - $0.startTime) }
+      ?? min(currentTime, max(totalDuration, 0))
+    let currentChapterRemaining = max(currentChapterDuration - currentChapterElapsed, 0)
+    let currentChapterProgress = min(
+      max(currentChapterElapsed / max(currentChapterDuration, 1), 0),
+      1
+    )
+
+    return PlayerViewData(
+      artworkURL: player.artworkURL,
+      bookCompletionPercent: playbackBookProgressPercent(
+        time: currentTime,
+        totalDuration: totalDuration
+      ),
+      bookProgress: playbackBookProgress(time: currentTime, totalDuration: totalDuration),
+      currentChapterTitle: currentChapter?.title,
+      currentChapterProgress: currentChapterProgress,
+      currentChapterElapsedText: formatPlaybackTime(currentChapterElapsed),
+      currentChapterRemainingText: "-\(formatPlaybackTime(currentChapterRemaining))",
+      isPlaying: player.isPlaying,
+      playbackRateText: formatPlaybackRate(player.playbackRate),
+      chapters: chapterRows
+    )
+  }
+
   private var chapterListContent: some View {
     KindlingUI.ChapterListView(chapters: chapterRows) { row in
       guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
@@ -785,9 +543,12 @@ struct LocalPlaybackView: View {
 
   private var artworkSection: some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 22) {
+      PlayerCoverContentView(
+        player: playerCoverViewData,
+        artworkMaxWidth: nil,
+        showsChapterProgress: false
+      ) {
         heroSection
-          .frame(maxWidth: .infinity)
       }
       .padding(.top, 4)
       .padding(.bottom, 8)
@@ -797,8 +558,6 @@ struct LocalPlaybackView: View {
   @ViewBuilder
   private var playbackContentSection: some View {
     VStack(spacing: 12) {
-      PlaybackBookProgressSectionView(player: player, progress: player.progress)
-
       HStack(spacing: 18) {
         ForEach([ContentTab.artwork, .chapters, .transcript]) { tab in
           let isSelected = selectedContentTab == tab
@@ -890,9 +649,8 @@ struct LocalPlaybackView: View {
   private var playbackPageBodyHeight: CGFloat {
     max(
       playbackContentHeight
-        - Self.playbackBookProgressSectionHeight
         - Self.playbackTabBarHeight
-        - (Self.playbackTabSectionSpacing * 2),
+        - Self.playbackTabSectionSpacing,
       120
     )
   }

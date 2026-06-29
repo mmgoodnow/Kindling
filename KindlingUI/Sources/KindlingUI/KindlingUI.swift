@@ -916,6 +916,72 @@ public enum PlayerContentTab: String, CaseIterable, Identifiable, Sendable {
   public var id: String { rawValue }
 }
 
+public struct PlayerCoverContentView<Artwork: View>: View {
+  public let player: PlayerViewData
+  public let artworkMaxWidth: CGFloat?
+  public let showsChapterProgress: Bool
+  private let artwork: Artwork
+
+  public init(
+    player: PlayerViewData,
+    artworkMaxWidth: CGFloat? = 240,
+    showsChapterProgress: Bool = true,
+    @ViewBuilder artwork: () -> Artwork
+  ) {
+    self.player = player
+    self.artworkMaxWidth = artworkMaxWidth
+    self.showsChapterProgress = showsChapterProgress
+    self.artwork = artwork()
+  }
+
+  public var body: some View {
+    VStack(spacing: 14) {
+      VStack(spacing: 6) {
+        HStack {
+          Text("\(player.bookCompletionPercent)% of book completed")
+            .font(.caption.weight(.semibold))
+          Spacer()
+        }
+        ProgressView(value: player.bookProgress)
+          .tint(.primary)
+      }
+
+      framedArtwork
+
+      if let chapterTitle = player.currentChapterTitle {
+        Text(chapterTitle)
+          .font(.headline)
+          .multilineTextAlignment(.center)
+      }
+
+      if showsChapterProgress {
+        VStack(spacing: 6) {
+          ProgressView(value: player.currentChapterProgress)
+            .tint(.primary)
+          HStack {
+            Text(player.currentChapterElapsedText)
+            Spacer()
+            Text(player.currentChapterRemainingText)
+          }
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+  }
+
+  @ViewBuilder
+  private var framedArtwork: some View {
+    if let artworkMaxWidth {
+      artwork
+        .frame(maxWidth: artworkMaxWidth)
+    } else {
+      artwork
+    }
+  }
+}
+
 public struct PlayerContentView: View {
   public let player: PlayerViewData
   public let selectedTab: PlayerContentTab
@@ -955,7 +1021,15 @@ public struct PlayerContentView: View {
 
       switch selectedTab {
       case .cover:
-        playerCover
+        PlayerCoverContentView(player: player) {
+          CoverArtworkView(
+            title: "",
+            author: "",
+            url: player.artworkURL,
+            cornerRadius: 5
+          )
+          .aspectRatio(1, contentMode: .fit)
+        }
       case .chapters:
         ChapterListView(
           chapters: player.chapters,
@@ -972,48 +1046,6 @@ public struct PlayerContentView: View {
       transportControls
     }
     .padding(16)
-  }
-
-  private var playerCover: some View {
-    VStack(spacing: 14) {
-      VStack(spacing: 6) {
-        HStack {
-          Text("\(player.bookCompletionPercent)% of book completed")
-            .font(.caption.weight(.semibold))
-          Spacer()
-        }
-        ProgressView(value: player.bookProgress)
-          .tint(.primary)
-      }
-
-      CoverArtworkView(
-        title: "",
-        author: "",
-        url: player.artworkURL,
-        cornerRadius: 5
-      )
-      .aspectRatio(1, contentMode: .fit)
-      .frame(maxWidth: 240)
-
-      if let chapterTitle = player.currentChapterTitle {
-        Text(chapterTitle)
-          .font(.headline)
-          .multilineTextAlignment(.center)
-      }
-
-      VStack(spacing: 6) {
-        ProgressView(value: player.currentChapterProgress)
-          .tint(.primary)
-        HStack {
-          Text(player.currentChapterElapsedText)
-          Spacer()
-          Text(player.currentChapterRemainingText)
-        }
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(.secondary)
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
   private var transportControls: some View {
