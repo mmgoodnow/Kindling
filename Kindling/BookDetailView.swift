@@ -10,11 +10,15 @@ enum AudioDownloadState {
 }
 
 struct BookDetailActions {
+  var isFavorite: Bool = false
+  var isRead: Bool = false
   var play: (() -> Void)?
   var canPlayAudioEdition: ((PodiblePlaybackAudio) -> Bool)?
   var playAudioEdition: ((PodiblePlaybackAudio) -> Void)?
   var downloadAudio: (() -> Void)?
   var audioDownload: AudioDownloadState = .idle
+  var toggleFavorite: (() -> Void)?
+  var toggleRead: (() -> Void)?
   var fetchAlternateCovers: (() async throws -> [PodibleAlternateCover])?
   var setAlternateCover: ((PodibleAlternateCover) async throws -> PodibleLibraryItem)?
   var searchReleases: ((PodibleReleaseMedia, String?) async throws -> PodibleReleaseSearch)?
@@ -132,6 +136,14 @@ struct BookDetailView: View {
     VStack(alignment: .center, spacing: 16) {
       heroCover
         .frame(maxWidth: .infinity, alignment: .center)
+      if let seriesText {
+        Text(seriesText)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.tint)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 6)
+          .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+      }
       VStack(spacing: 4) {
         Text(item.title)
           .font(.title2.weight(.semibold))
@@ -142,6 +154,13 @@ struct BookDetailView: View {
           .multilineTextAlignment(.center)
       }
       .frame(maxWidth: .infinity)
+      if let metadataText {
+        Text(metadataText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity)
+      }
     }
     .padding(.top, 8)
   }
@@ -259,6 +278,31 @@ struct BookDetailView: View {
       return summary
     }
     return nil
+  }
+
+  private var seriesText: String? {
+    let title = item.seriesTitle ?? localBook?.series?.title
+    guard let title, title.isEmpty == false else { return nil }
+    let position = item.seriesPosition ?? localBook?.seriesIndex
+    if let position {
+      return "\(seriesPositionText(position)) in \(title)"
+    }
+    return title
+  }
+
+  private var metadataText: String? {
+    let parts = [
+      (item.narrator ?? localBook?.narrator).map { "Narrated by \($0)" },
+      (item.publishedYear ?? localBook?.publishedYear).map(String.init),
+    ].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: "    ")
+  }
+
+  private func seriesPositionText(_ value: Double) -> String {
+    if value.rounded() == value {
+      return "#\(Int(value))"
+    }
+    return "#\(String(format: "%.1f", value))"
   }
 
   @ViewBuilder
@@ -382,27 +426,32 @@ struct BookDetailView: View {
 
   private var dockButtons: some View {
     HStack(spacing: 12) {
-      if let shareEbook = actions.shareEbook {
-        secondaryGlassButton(
-          systemImage: "square.and.arrow.up",
-          accessibilityLabel: "Share eBook",
-          action: shareEbook)
-      }
       if let emailToKindle = actions.emailToKindle {
         secondaryGlassButton(
           systemImage: "paperplane",
           accessibilityLabel: "Send to Kindle",
           action: emailToKindle)
       }
-      // Standalone "save offline" affordance — only when the user could
-      // also play (= is currently streaming). When there's no play action
-      // (audio not available), don't surface a lone download here — the
-      // primaryButton already collapses to the download state.
-      if actions.play != nil, let downloadAudio = actions.downloadAudio {
+      if let toggleFavorite = actions.toggleFavorite {
         secondaryGlassButton(
-          systemImage: "arrow.down.circle",
-          accessibilityLabel: "Download for Offline",
-          action: downloadAudio)
+          systemImage: actions.isFavorite ? "heart.fill" : "heart",
+          accessibilityLabel: actions.isFavorite ? "Unfavorite" : "Favorite",
+          action: toggleFavorite)
+      }
+      if let toggleRead = actions.toggleRead {
+        secondaryGlassButton(
+          systemImage: actions.isRead ? "checkmark.circle.fill" : "circle",
+          accessibilityLabel: actions.isRead ? "Mark as unread" : "Mark as read",
+          action: toggleRead)
+      }
+      if let shareEbook = actions.shareEbook {
+        secondaryGlassButton(
+          systemImage: "square.and.arrow.up",
+          accessibilityLabel: "Share eBook",
+          action: shareEbook)
+      }
+      if hasMenuActions {
+        overflowMenu
       }
       primaryButton
     }
@@ -524,6 +573,7 @@ struct BookDetailView: View {
       || canSearchReleases
       || actions.fetchAlternateCovers != nil
       || actions.setAlternateCover != nil
+      || actions.downloadAudio != nil
       || actions.shareEbook != nil
       || actions.emailToKindle != nil
       || actions.reportAudioIssue != nil
@@ -558,6 +608,11 @@ struct BookDetailView: View {
           isShowingCoverPicker = true
         } label: {
           Label("Change Cover", systemImage: "photo.badge.plus")
+        }
+      }
+      if let downloadAudio = actions.downloadAudio {
+        Button(action: downloadAudio) {
+          Label("Download Audiobook", systemImage: "arrow.down.circle")
         }
       }
       if let shareEbook = actions.shareEbook {

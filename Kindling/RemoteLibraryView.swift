@@ -184,6 +184,12 @@ struct PodibleLibraryView: View {
       && isLocalDownloading == false
 
     var actions = BookDetailActions()
+    actions.isFavorite = localBook?.localState?.isFavorite == true
+    actions.isRead = localBook?.localState?.isRead == true
+    if localBook != nil {
+      actions.toggleFavorite = { toggleFavorite(bookID: item.id) }
+      actions.toggleRead = { toggleRead(bookID: item.id) }
+    }
 
     if isLocalDownloading {
       let key = localBook?.podibleId ?? item.id
@@ -651,7 +657,17 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func toggleRead(_ book: BookTileViewData) {
-    guard let localBook = localBooksById[book.id] else { return }
+    toggleRead(bookID: book.id)
+  }
+
+  @MainActor
+  private func toggleFavorite(_ book: BookTileViewData) {
+    toggleFavorite(bookID: book.id)
+  }
+
+  @MainActor
+  private func toggleRead(bookID: String) {
+    guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
     state.isRead.toggle()
     if modelContext.hasChanges {
@@ -660,8 +676,8 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
-  private func toggleFavorite(_ book: BookTileViewData) {
-    guard let localBook = localBooksById[book.id] else { return }
+  private func toggleFavorite(bookID: String) {
+    guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
     state.isFavorite.toggle()
     if modelContext.hasChanges {
