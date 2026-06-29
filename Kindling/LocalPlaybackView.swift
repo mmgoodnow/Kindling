@@ -188,16 +188,6 @@ private func playbackBookProgressPercent(time: Double, totalDuration: Double) ->
   Int((playbackBookProgress(time: time, totalDuration: totalDuration) * 100).rounded())
 }
 
-private func playbackChapterPositionLabel(
-  for chapter: AudioPlayerController.Chapter,
-  chapters: [AudioPlayerController.Chapter]
-) -> String {
-  guard let index = chapters.firstIndex(where: { $0.id == chapter.id }) else {
-    return chapter.title
-  }
-  return "\(index + 1)/\(chapters.count) chapters"
-}
-
 private func formatPlaybackTime(_ seconds: Double) -> String {
   let totalSeconds = Int(seconds.rounded())
   let hours = totalSeconds / 3600
@@ -214,6 +204,7 @@ private struct ChapterRowView: View, Equatable {
   let chapter: AudioPlayerController.Chapter
   let durationText: String
   let isCurrent: Bool
+  let isCompleted: Bool
   let activeProgress: Double?
   let onSelect: () -> Void
 
@@ -221,6 +212,7 @@ private struct ChapterRowView: View, Equatable {
     lhs.chapter == rhs.chapter
       && lhs.durationText == rhs.durationText
       && lhs.isCurrent == rhs.isCurrent
+      && lhs.isCompleted == rhs.isCompleted
       && lhs.activeProgress == rhs.activeProgress
   }
 
@@ -264,18 +256,24 @@ private struct ChapterRowView: View, Equatable {
               .fill(Color.primary.opacity(0.08))
 
             Rectangle()
-              .fill(Color.accentColor.opacity(0.14))
+              .fill(Color.primary.opacity(0.14))
               .frame(width: progressWidth)
           }
           .clipShape(rowShape)
         }
+      } else if isCompleted {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(Color.primary.opacity(0.08))
       } else {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
           .fill(Color.primary.opacity(0.04))
       }
     #else
       RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(isCurrent ? Color.primary.opacity(0.10) : Color.primary.opacity(0.05))
+        .fill(
+          isCurrent
+            ? Color.primary.opacity(0.12)
+            : isCompleted ? Color.primary.opacity(0.08) : Color.primary.opacity(0.05))
     #endif
   }
 }
@@ -312,6 +310,8 @@ private struct ChapterListView: View {
           chapter: chapter,
           durationText: formatPlaybackTime(durations[index]),
           isCurrent: currentChapterID == chapter.id,
+          isCompleted: chapter.startTime + durations[index] <= progress.currentTime
+            && currentChapterID != chapter.id,
           activeProgress: currentChapterID == chapter.id ? currentChapterProgress : nil
         ) {
           onSelectChapter(chapter)
@@ -374,7 +374,7 @@ private struct PlaybackBookProgressSectionView: View {
           if shouldUsePlainProgressBar {
             ZStack(alignment: .leading) {
               Capsule(style: .continuous)
-                .fill(Color.accentColor.opacity(0.14))
+                .fill(Color.primary.opacity(0.10))
 
               if totalDuration > 0, progress.bufferedSeconds > 0 {
                 let bufferedFraction = min(
@@ -382,12 +382,12 @@ private struct PlaybackBookProgressSectionView: View {
                   1
                 )
                 Capsule(style: .continuous)
-                  .fill(Color.accentColor.opacity(0.32))
+                  .fill(Color.primary.opacity(0.20))
                   .frame(width: max(proxy.size.width * bufferedFraction, 0))
               }
 
               Capsule(style: .continuous)
-                .fill(Color.accentColor)
+                .fill(Color.primary)
                 .frame(width: max(proxy.size.width * bookProgress, 10))
             }
           } else {
@@ -415,9 +415,9 @@ private struct PlaybackBookProgressSectionView: View {
                 )
                 ZStack(alignment: .leading) {
                   Capsule(style: .continuous)
-                    .fill(Color.accentColor.opacity(0.10))
+                    .fill(Color.primary.opacity(0.08))
                   Capsule(style: .continuous)
-                    .fill(Color.accentColor.opacity(0.45))
+                    .fill(Color.primary.opacity(0.20))
                     .frame(width: max(proxy.size.width * bufferedFraction, 0))
                 }
                 .frame(height: 2)
@@ -432,7 +432,7 @@ private struct PlaybackBookProgressSectionView: View {
       if let currentChapter {
         MarqueeText(
           text:
-            "\(player.title) • \(playbackChapterPositionLabel(for: currentChapter, chapters: chapters)) • \(playbackBookProgressPercent(time: currentTime, totalDuration: totalDuration))% through book",
+            "\(playbackBookProgressPercent(time: currentTime, totalDuration: totalDuration))% of book completed",
           font: .subheadline.weight(.semibold),
           textColor: .secondary
         )
@@ -464,11 +464,11 @@ private struct PlaybackBookProgressSectionView: View {
   }
 
   private func chapterSegmentFill(for index: Int, currentChapterIndex: Int?) -> Color {
-    guard let currentChapterIndex else { return Color.accentColor.opacity(0.14) }
+    guard let currentChapterIndex else { return Color.primary.opacity(0.08) }
     if index == currentChapterIndex {
-      return .accentColor
+      return .primary
     }
-    return Color.accentColor.opacity(index < currentChapterIndex ? 0.34 : 0.10)
+    return Color.primary.opacity(index < currentChapterIndex ? 0.28 : 0.08)
   }
 
   private func chapterSegmentWidth(
@@ -568,10 +568,10 @@ private struct ChapterPlaybackProgressSectionView: View {
         GeometryReader { proxy in
           ZStack(alignment: .leading) {
             Capsule(style: .continuous)
-              .fill(Color.accentColor.opacity(0.14))
+              .fill(Color.primary.opacity(0.10))
 
             Capsule(style: .continuous)
-              .fill(Color.accentColor)
+              .fill(Color.primary)
               .frame(width: max(proxy.size.width * currentChapterProgress, 10))
           }
           .frame(height: 8)
@@ -621,7 +621,7 @@ private struct ChapterPlaybackProgressSectionView: View {
               .frame(width: 28, height: 28)
           }
           .buttonStyle(.plain)
-          .foregroundStyle(.accent)
+          .foregroundStyle(.primary)
         }
       }
 
@@ -647,7 +647,7 @@ struct LocalPlaybackView: View {
     ContentTab.artwork.rawValue
 
   private enum ContentTab: String, CaseIterable, Identifiable {
-    case artwork = "Artwork"
+    case artwork = "Cover"
     case chapters = "Chapters"
     case transcript = "Transcript"
 
@@ -734,7 +734,7 @@ struct LocalPlaybackView: View {
             if player.isStalled {
               ProgressView()
                 .controlSize(.large)
-                .tint(.accent)
+                .tint(.primary)
             }
           }
           .frame(width: 68, height: 68)
@@ -747,7 +747,7 @@ struct LocalPlaybackView: View {
 
         playbackSpeedButton
       }
-      .foregroundStyle(.accent)
+      .foregroundStyle(.primary)
     }
     .padding(.horizontal, 14)
     .padding(.top, 8)
@@ -778,21 +778,6 @@ struct LocalPlaybackView: View {
         .padding(.horizontal, -16)
       #endif
       .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
-
-      VStack(spacing: 8) {
-        Text(player.title)
-          .font(.title2.weight(.bold))
-          .multilineTextAlignment(.center)
-          .lineLimit(3)
-        if player.author.isEmpty == false {
-          Text(player.author)
-            .font(.headline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .lineLimit(2)
-        }
-      }
-      .padding(.top, 28)
 
     }
   }
@@ -882,18 +867,6 @@ struct LocalPlaybackView: View {
       VStack(alignment: .leading, spacing: 22) {
         heroSection
           .frame(maxWidth: .infinity)
-
-        Group {
-          if player.bookDescription.isEmpty {
-            Text("No description available.")
-          } else {
-            Text(player.bookDescription)
-          }
-        }
-        .font(.body)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .padding(.top, 4)
       .padding(.bottom, 8)
@@ -915,7 +888,7 @@ struct LocalPlaybackView: View {
               HStack(spacing: 4) {
                 Text(tab.rawValue)
                   .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                  .foregroundStyle(isSelected ? .accent : .secondary)
+                  .foregroundStyle(isSelected ? .primary : .secondary)
 
                 if tab == .transcript {
                   transcriptTabStatusBadge
@@ -924,7 +897,7 @@ struct LocalPlaybackView: View {
               .frame(height: 18)
 
               Rectangle()
-                .fill(isSelected ? Color.accentColor : .clear)
+                .fill(isSelected ? Color.primary : .clear)
                 .frame(height: 2)
             }
             .frame(width: 84, alignment: .center)
@@ -1065,16 +1038,16 @@ extension View {
   private struct AirPlayRouteButton: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
       let view = AVRoutePickerView()
-      view.activeTintColor = UIColor(Color.accentColor)
-      view.tintColor = UIColor(Color.accentColor)
+      view.activeTintColor = .label
+      view.tintColor = .label
       view.prioritizesVideoDevices = false
       view.backgroundColor = .clear
       return view
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
-      uiView.activeTintColor = UIColor(Color.accentColor)
-      uiView.tintColor = UIColor(Color.accentColor)
+      uiView.activeTintColor = .label
+      uiView.tintColor = .label
     }
   }
 #endif
