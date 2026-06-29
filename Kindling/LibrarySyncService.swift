@@ -15,11 +15,13 @@ struct LibrarySyncService {
   {
     let items = try await client.fetchLibraryItems()
     let existingAuthors = try modelContext.fetch(FetchDescriptor<Author>())
+    let existingSeries = try modelContext.fetch(FetchDescriptor<Series>())
     let existingBooks = try modelContext.fetch(FetchDescriptor<LibraryBook>())
     let remoteIDs = Set(items.map(\.id))
 
     var authorsById = Dictionary(
       uniqueKeysWithValues: existingAuthors.map { ($0.podibleId, $0) })
+    var seriesById = Dictionary(uniqueKeysWithValues: existingSeries.map { ($0.podibleId, $0) })
     var booksById = Dictionary(uniqueKeysWithValues: existingBooks.map { ($0.podibleId, $0) })
     var booksByOpenLibraryWorkID: [String: LibraryBook] = [:]
     var booksByIdentity: [String: LibraryBook] = [:]
@@ -54,11 +56,12 @@ struct LibrarySyncService {
         author = created
         insertedAuthors += 1
       }
+      let series = series(for: item, seriesById: &seriesById, modelContext: modelContext)
 
       let book: LibraryBook
       if let existing = booksById[item.id] {
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author)
+        updatedBooks += updateBook(book, with: item, author: author, series: series)
       } else if let workID = item.openLibraryWorkID,
         let existing = booksByOpenLibraryWorkID[workID]
       {
@@ -66,7 +69,7 @@ struct LibrarySyncService {
         existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author)
+        updatedBooks += updateBook(book, with: item, author: author, series: series)
       } else if let identityKey = bookIdentityKey(title: item.title, author: item.author),
         let existing = booksByIdentity[identityKey]
       {
@@ -74,7 +77,7 @@ struct LibrarySyncService {
         existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author)
+        updatedBooks += updateBook(book, with: item, author: author, series: series)
       } else {
         let created = LibraryBook(
           podibleId: item.id,
@@ -84,14 +87,16 @@ struct LibrarySyncService {
           coverURLString: item.bookImagePath,
           runtimeSeconds: item.runtimeSeconds,
           wordCount: item.wordCount,
+          publishedYear: item.publishedYear,
+          narrator: item.narrator,
           addedAt: item.bookAdded,
           updatedAt: latestLibraryDate(for: item),
-          seriesIndex: nil,
+          seriesIndex: item.seriesPosition,
           bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
           audioStatusRaw: item.audioStatus?.rawValue,
           playbackJSON: playbackData(for: item.playback),
           author: author,
-          series: nil
+          series: series
         )
         modelContext.insert(created)
         booksById[item.id] = created
@@ -116,6 +121,9 @@ struct LibrarySyncService {
 
     for author in existingAuthors where author.books.isEmpty {
       modelContext.delete(author)
+    }
+    for series in existingSeries where series.books.isEmpty {
+      modelContext.delete(series)
     }
 
     if modelContext.hasChanges {
@@ -143,14 +151,57 @@ struct LibrarySyncService {
     return "\(normalizeAuthorKey(author))::\(normalizeBookKey(title))"
   }
 
+  private func series(
+    for item: PodibleLibraryItem,
+    seriesById: inout [String: Series],
+    modelContext: ModelContext
+  ) -> Series? {
+    guard let key = seriesKey(for: item) else { return nil }
+    let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let displayTitle = title?.isEmpty == false ? title! : key
+    if let existing = seriesById[key] {
+      if existing.title != displayTitle {
+        existing.title = displayTitle
+      }
+      return existing
+    }
+    let created = Series(podibleId: key, title: displayTitle)
+    modelContext.insert(created)
+    seriesById[key] = created
+    return created
+  }
+
+  private func seriesKey(for item: PodibleLibraryItem) -> String? {
+    if let raw = item.seriesKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+      raw.isEmpty == false
+    {
+      return raw
+    }
+    guard let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+      title.isEmpty == false
+    else {
+      return nil
+    }
+    return title.lowercased()
+  }
+
   private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
     item.updatedAt
   }
 
-  private func updateBook(_ book: LibraryBook, with item: PodibleLibraryItem, author: Author)
+  private func updateBook(
+    _ book: LibraryBook,
+    with item: PodibleLibraryItem,
+    author: Author,
+    series: Series?
+  )
     -> Int
   {
     var updated = 0
+    if let localState = book.localState, localState.bookPodibleId != item.id {
+      localState.bookPodibleId = item.id
+      updated += 1
+    }
     if book.openLibraryWorkID != item.openLibraryWorkID {
       book.openLibraryWorkID = item.openLibraryWorkID
       updated += 1
@@ -175,6 +226,14 @@ struct LibrarySyncService {
       book.wordCount = item.wordCount
       updated += 1
     }
+    if book.publishedYear != item.publishedYear {
+      book.publishedYear = item.publishedYear
+      updated += 1
+    }
+    if book.narrator != item.narrator {
+      book.narrator = item.narrator
+      updated += 1
+    }
     let nextAddedAt = item.bookAdded
     if book.addedAt != nextAddedAt {
       book.addedAt = nextAddedAt
@@ -187,6 +246,14 @@ struct LibrarySyncService {
     }
     if book.author !== author {
       book.author = author
+      updated += 1
+    }
+    if book.series !== series {
+      book.series = series
+      updated += 1
+    }
+    if book.seriesIndex != item.seriesPosition {
+      book.seriesIndex = item.seriesPosition
       updated += 1
     }
     let ebookRaw = (item.ebookStatus ?? item.status).rawValue
@@ -215,6 +282,9 @@ struct LibrarySyncService {
 
   private func shouldDeleteLocalMirror(_ book: LibraryBook) -> Bool {
     if let localState = book.localState, localState.isDownloaded {
+      return false
+    }
+    if let localState = book.localState, localState.isFavorite || localState.isRead {
       return false
     }
     for file in book.files {

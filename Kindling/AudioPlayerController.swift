@@ -6,6 +6,10 @@ import Foundation
   import UIKit
 #endif
 
+extension Notification.Name {
+  static let audioPlayerDidFinishItem = Notification.Name("AudioPlayerController.didFinishItem")
+}
+
 final class AudioPlayerController: ObservableObject {
   final class PlaybackProgressState: ObservableObject {
     @Published var currentTime: Double = 0
@@ -614,11 +618,19 @@ final class AudioPlayerController: ObservableObject {
       object: player.currentItem,
       queue: .main
     ) { [weak self] _ in
-      self?.isPlaying = false
-      self?.progress.currentTime = self?.progress.duration ?? 0
-      self?.clearPersistedPosition()
+      guard let self else { return }
+      isPlaying = false
+      progress.currentTime = progress.duration
+      if let currentResumeID {
+        NotificationCenter.default.post(
+          name: .audioPlayerDidFinishItem,
+          object: self,
+          userInfo: ["resumeID": currentResumeID]
+        )
+      }
+      clearPersistedPosition()
       #if os(iOS)
-        self?.updateNowPlayingInfo()
+        updateNowPlayingInfo()
       #endif
     }
   }

@@ -151,6 +151,11 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let bookImagePath: String?
   let wordCount: Int?
   let runtimeSeconds: Int?
+  let publishedYear: Int?
+  let narrator: String?
+  let seriesKey: String?
+  let seriesTitle: String?
+  let seriesPosition: Double?
   let playback: PodiblePlayback?
 
   init(
@@ -168,6 +173,11 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     bookImagePath: String? = nil,
     wordCount: Int? = nil,
     runtimeSeconds: Int? = nil,
+    publishedYear: Int? = nil,
+    narrator: String? = nil,
+    seriesKey: String? = nil,
+    seriesTitle: String? = nil,
+    seriesPosition: Double? = nil,
     playback: PodiblePlayback? = nil
   ) {
     self.id = id
@@ -184,6 +194,11 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.bookImagePath = bookImagePath
     self.wordCount = wordCount
     self.runtimeSeconds = runtimeSeconds
+    self.publishedYear = publishedYear
+    self.narrator = narrator
+    self.seriesKey = seriesKey
+    self.seriesTitle = seriesTitle
+    self.seriesPosition = seriesPosition
     self.playback = playback
   }
 
@@ -207,6 +222,17 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case fullPseudoProgress = "fullPseudoProgress"
     case bookImageUpper = "BookImg"
     case bookImageLower = "bookimg"
+    case publishedYear
+    case firstPublishYear
+    case narrator
+    case narratedBy
+    case seriesKey
+    case seriesId
+    case seriesID
+    case seriesTitle
+    case series
+    case seriesPosition
+    case seriesIndex
     case playback
   }
 
@@ -251,6 +277,30 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     }
     wordCount = nil
     runtimeSeconds = nil
+    publishedYear =
+      (try? container.decodeIfPresent(Int.self, forKey: .publishedYear))
+      ?? (try? container.decodeIfPresent(Int.self, forKey: .firstPublishYear))
+    narrator =
+      (try? container.decodeIfPresent(String.self, forKey: .narrator))
+      ?? (try? container.decodeIfPresent(String.self, forKey: .narratedBy))
+    seriesKey =
+      (try? container.decodeIfPresent(String.self, forKey: .seriesKey))
+      ?? (try? container.decodeIfPresent(String.self, forKey: .seriesId))
+      ?? (try? container.decodeIfPresent(String.self, forKey: .seriesID))
+    seriesTitle =
+      (try? container.decodeIfPresent(String.self, forKey: .seriesTitle))
+      ?? (try? container.decodeIfPresent(String.self, forKey: .series))
+    if let value = try? container.decodeIfPresent(Double.self, forKey: .seriesPosition) {
+      seriesPosition = value
+    } else if let value = try? container.decodeIfPresent(Int.self, forKey: .seriesPosition) {
+      seriesPosition = Double(value)
+    } else if let value = try? container.decodeIfPresent(Double.self, forKey: .seriesIndex) {
+      seriesPosition = value
+    } else if let value = try? container.decodeIfPresent(Int.self, forKey: .seriesIndex) {
+      seriesPosition = Double(value)
+    } else {
+      seriesPosition = nil
+    }
     playback = try? container.decodeIfPresent(PodiblePlayback.self, forKey: .playback)
   }
 }
@@ -780,6 +830,8 @@ final actor PodibleMockClient: PodibleLibraryServing {
       id: "1", title: "Project Hail Mary", author: "Andy Weir", status: .downloaded,
       bookAdded: Date().addingTimeInterval(-86_400 * 3),
       runtimeSeconds: 59_400,
+      publishedYear: 2021,
+      narrator: "Ray Porter",
       playback: PodiblePlayback(
         audio: PodiblePlaybackAudio(
           manifestationId: 101,
@@ -929,6 +981,11 @@ final actor PodibleMockClient: PodibleLibraryServing {
       bookImagePath: "https://covers.openlibrary.org/b/id/\(coverID)-L.jpg",
       wordCount: existing.wordCount,
       runtimeSeconds: existing.runtimeSeconds,
+      publishedYear: existing.publishedYear,
+      narrator: existing.narrator,
+      seriesKey: existing.seriesKey,
+      seriesTitle: existing.seriesTitle,
+      seriesPosition: existing.seriesPosition,
       playback: existing.playback
     )
     libraryItems[index] = updated
@@ -1043,6 +1100,11 @@ final actor PodibleMockClient: PodibleLibraryServing {
       bookImagePath: existing.bookImagePath,
       wordCount: existing.wordCount,
       runtimeSeconds: existing.runtimeSeconds,
+      publishedYear: existing.publishedYear,
+      narrator: existing.narrator,
+      seriesKey: existing.seriesKey,
+      seriesTitle: existing.seriesTitle,
+      seriesPosition: existing.seriesPosition,
       playback: playback
     )
     return PodibleCreateManifestationResult(
@@ -1065,8 +1127,10 @@ final actor PodibleMockClient: PodibleLibraryServing {
       let combined = min(100, Int(((Double(ebook) + Double(audio)) / 2).rounded()))
       let next = PodibleLibraryItem(
         id: existing.id,
+        openLibraryWorkID: existing.openLibraryWorkID,
         title: existing.title,
         author: existing.author,
+        summary: existing.summary,
         status: combined >= 100 ? .have : .requested,
         ebookStatus: ebook >= 100 ? .have : .requested,
         audioStatus: audio >= 100 ? .have : .requested,
@@ -1076,6 +1140,11 @@ final actor PodibleMockClient: PodibleLibraryServing {
         bookImagePath: existing.bookImagePath,
         wordCount: existing.wordCount,
         runtimeSeconds: existing.runtimeSeconds,
+        publishedYear: existing.publishedYear,
+        narrator: existing.narrator,
+        seriesKey: existing.seriesKey,
+        seriesTitle: existing.seriesTitle,
+        seriesPosition: existing.seriesPosition,
         playback: existing.playback
       )
       libraryItems[index] = next
@@ -1263,6 +1332,17 @@ private struct PodibleLibraryBook: Decodable {
   let addedAt: String
   let updatedAt: String
   let publishedAt: String?
+  let publishedYear: Int?
+  let firstPublishYear: Int?
+  let narrator: String?
+  let narratedBy: String?
+  let seriesKey: String?
+  let seriesId: String?
+  let seriesID: String?
+  let seriesTitle: String?
+  let series: String?
+  let seriesPosition: Double?
+  let seriesIndex: Double?
   let audioStatus: String
   let ebookStatus: String
   let status: String
@@ -1743,8 +1823,21 @@ struct PodibleClient: PodibleLibraryServing {
       runtimeSeconds: (book.durationMs ?? book.playback?.audio?.durationMs).map {
         Int(($0 + 500) / 1000)
       },
+      publishedYear: book.publishedYear ?? book.firstPublishYear ?? year(from: book.publishedAt),
+      narrator: book.narrator ?? book.narratedBy,
+      seriesKey: book.seriesKey ?? book.seriesId ?? book.seriesID,
+      seriesTitle: book.seriesTitle ?? book.series,
+      seriesPosition: book.seriesPosition ?? book.seriesIndex,
       playback: book.playback
     )
+  }
+
+  private func year(from raw: String?) -> Int? {
+    guard let raw else { return nil }
+    guard let match = raw.range(of: #"\b\d{4}\b"#, options: .regularExpression) else {
+      return nil
+    }
+    return Int(raw[match])
   }
 
   private func mapPodibleStatus(_ raw: String) -> PodibleLibraryItemStatus {

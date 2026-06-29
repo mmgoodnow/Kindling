@@ -98,6 +98,9 @@ struct PodibleLibraryView: View {
           isShowingPlayer: $isShowingPlayer
         )
       }
+      .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
+        markFinishedPlaybackRead($0)
+      }
   }
 
   private func detailActions(
@@ -237,7 +240,8 @@ struct PodibleLibraryView: View {
 
     let book = ensureLocalBook(for: item)
     let author = fetchOrCreateAuthor(name: item.author)
-    updateLocalBook(book, with: item, author: author)
+    let series = fetchOrCreateSeries(for: item)
+    updateLocalBook(book, with: item, author: author, series: series)
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -247,7 +251,8 @@ struct PodibleLibraryView: View {
   private func persistRequestedBook(_ item: PodibleLibraryItem) {
     let book = ensureLocalBook(for: item)
     let author = fetchOrCreateAuthor(name: item.author)
-    updateLocalBook(book, with: item, author: author)
+    let series = fetchOrCreateSeries(for: item)
+    updateLocalBook(book, with: item, author: author, series: series)
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -404,6 +409,20 @@ struct PodibleLibraryView: View {
 
   private var localBooksById: [String: LibraryBook] {
     Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
+  }
+
+  @MainActor
+  private func markFinishedPlaybackRead(_ notification: Notification) {
+    guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
+    guard let book = localBooks.first(where: { playbackResumeID(for: $0) == resumeID }) else {
+      return
+    }
+    let state = ensureLocalState(for: book)
+    guard state.isRead == false else { return }
+    state.isRead = true
+    if modelContext.hasChanges {
+      saveModelContext()
+    }
   }
 
   private func activePlaybackMetadataTaskID(client: RemoteLibraryServing?) -> String {
@@ -1261,6 +1280,11 @@ struct PodibleLibraryView: View {
       bookImagePath: book.coverURLString,
       wordCount: book.wordCount,
       runtimeSeconds: book.runtimeSeconds,
+      publishedYear: book.publishedYear,
+      narrator: book.narrator,
+      seriesKey: book.series?.podibleId,
+      seriesTitle: book.series?.title,
+      seriesPosition: book.seriesIndex,
       playback: playback(from: book.playbackJSON)
     )
   }
@@ -1826,11 +1850,13 @@ struct PodibleLibraryView: View {
   private func ensureLocalBook(for item: PodibleLibraryItem) -> LibraryBook {
     if let existing = localBooksById[item.id] {
       let author = fetchOrCreateAuthor(name: item.author)
-      updateLocalBook(existing, with: item, author: author)
+      let series = fetchOrCreateSeries(for: item)
+      updateLocalBook(existing, with: item, author: author, series: series)
       return existing
     }
 
     let author = fetchOrCreateAuthor(name: item.author)
+    let series = fetchOrCreateSeries(for: item)
     let book = LibraryBook(
       podibleId: item.id,
       openLibraryWorkID: item.openLibraryWorkID,
@@ -1839,14 +1865,16 @@ struct PodibleLibraryView: View {
       coverURLString: item.bookImagePath,
       runtimeSeconds: item.runtimeSeconds,
       wordCount: item.wordCount,
+      publishedYear: item.publishedYear,
+      narrator: item.narrator,
       addedAt: item.bookAdded,
       updatedAt: latestLibraryDate(for: item),
-      seriesIndex: nil,
+      seriesIndex: item.seriesPosition,
       bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
       audioStatusRaw: item.audioStatus?.rawValue,
       playbackJSON: playbackData(for: item.playback),
       author: author,
-      series: nil
+      series: series
     )
     modelContext.insert(book)
     if modelContext.hasChanges {
@@ -1873,12 +1901,36 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
+  private func fetchOrCreateSeries(for item: PodibleLibraryItem) -> Series? {
+    guard let key = seriesKey(for: item) else { return nil }
+    let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let displayTitle = title?.isEmpty == false ? title! : key
+    let descriptor = FetchDescriptor<Series>(
+      predicate: #Predicate { $0.podibleId == key }
+    )
+    if let existing = (try? modelContext.fetch(descriptor))?.first {
+      if existing.title != displayTitle {
+        existing.title = displayTitle
+      }
+      return existing
+    }
+    let series = Series(podibleId: key, title: displayTitle)
+    modelContext.insert(series)
+    return series
+  }
+
+  @MainActor
   private func updateLocalBook(
     _ book: LibraryBook,
     with item: PodibleLibraryItem,
-    author: Author
+    author: Author,
+    series: Series?
   ) {
     var updated = false
+    if let localState = book.localState, localState.bookPodibleId != item.id {
+      localState.bookPodibleId = item.id
+      updated = true
+    }
     if book.openLibraryWorkID != item.openLibraryWorkID {
       book.openLibraryWorkID = item.openLibraryWorkID
       updated = true
@@ -1903,6 +1955,14 @@ struct PodibleLibraryView: View {
       book.wordCount = item.wordCount
       updated = true
     }
+    if book.publishedYear != item.publishedYear {
+      book.publishedYear = item.publishedYear
+      updated = true
+    }
+    if book.narrator != item.narrator {
+      book.narrator = item.narrator
+      updated = true
+    }
     let nextAddedAt = item.bookAdded
     if book.addedAt != nextAddedAt {
       book.addedAt = nextAddedAt
@@ -1915,6 +1975,14 @@ struct PodibleLibraryView: View {
     }
     if book.author !== author {
       book.author = author
+      updated = true
+    }
+    if book.series !== series {
+      book.series = series
+      updated = true
+    }
+    if book.seriesIndex != item.seriesPosition {
+      book.seriesIndex = item.seriesPosition
       updated = true
     }
     let ebookRaw = (item.ebookStatus ?? item.status).rawValue
@@ -1959,6 +2027,20 @@ struct PodibleLibraryView: View {
 
   private func normalizeAuthorKey(_ name: String) -> String {
     name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func seriesKey(for item: PodibleLibraryItem) -> String? {
+    if let raw = item.seriesKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+      raw.isEmpty == false
+    {
+      return raw
+    }
+    guard let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+      title.isEmpty == false
+    else {
+      return nil
+    }
+    return title.lowercased()
   }
 
   private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {

@@ -76,6 +76,8 @@ final class LibraryBook {
   var coverURLString: String?
   var runtimeSeconds: Int?
   var wordCount: Int?
+  var publishedYear: Int?
+  var narrator: String?
   var addedAt: Date?
   var updatedAt: Date?
   var seriesIndex: Double?
@@ -98,6 +100,8 @@ final class LibraryBook {
     coverURLString: String? = nil,
     runtimeSeconds: Int? = nil,
     wordCount: Int? = nil,
+    publishedYear: Int? = nil,
+    narrator: String? = nil,
     addedAt: Date? = nil,
     updatedAt: Date? = nil,
     seriesIndex: Double? = nil,
@@ -115,6 +119,8 @@ final class LibraryBook {
     self.coverURLString = coverURLString
     self.runtimeSeconds = runtimeSeconds
     self.wordCount = wordCount
+    self.publishedYear = publishedYear
+    self.narrator = narrator
     self.addedAt = addedAt
     self.updatedAt = updatedAt
     self.seriesIndex = seriesIndex
@@ -175,6 +181,8 @@ final class LibraryBookFile {
 final class LocalBookState {
   @Attribute(.unique, originalName: "bookLlId") var bookPodibleId: String
   var isDownloaded: Bool
+  var isFavorite: Bool = false
+  var isRead: Bool = false
   var progressSeconds: Double
   var lastPlayedAt: Date?
   var playbackRate: Double
@@ -184,6 +192,8 @@ final class LocalBookState {
   init(
     bookPodibleId: String,
     isDownloaded: Bool = false,
+    isFavorite: Bool = false,
+    isRead: Bool = false,
     progressSeconds: Double = 0,
     lastPlayedAt: Date? = nil,
     playbackRate: Double = 1.0,
@@ -191,6 +201,8 @@ final class LocalBookState {
   ) {
     self.bookPodibleId = bookPodibleId
     self.isDownloaded = isDownloaded
+    self.isFavorite = isFavorite
+    self.isRead = isRead
     self.progressSeconds = progressSeconds
     self.lastPlayedAt = lastPlayedAt
     self.playbackRate = playbackRate
