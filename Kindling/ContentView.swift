@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
   @State private var selectedTab: AppTab = .library
+  @State private var searchQuery = ""
 
   private enum AppTab: Hashable {
     case library
@@ -52,11 +53,11 @@ struct ContentView: View {
         }
       }
 
-      Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
+      Tab(value: AppTab.search, role: .search) {
         NavigationStack {
           RemoteLibraryView(
             mode: .library,
-            isSearchEnabled: true,
+            searchQuery: $searchQuery,
             isShowingPlayer: playerTabBinding
           )
           .toolbar { settingsToolbar }
@@ -64,6 +65,7 @@ struct ContentView: View {
       }
       .tabPlacement(.pinned)
     }
+    .searchable(text: $searchQuery, prompt: "Search")
     .tabViewSearchActivation(.searchTabSelection)
     .onChange(of: player.hasLoadedItem) { _, hasLoadedItem in
       if hasLoadedItem == false, selectedTab == .player {

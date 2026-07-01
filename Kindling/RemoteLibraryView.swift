@@ -61,18 +61,18 @@ struct PodibleLibraryView: View {
 
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
-  let isSearchEnabled: Bool
+  let searchQuery: Binding<String>?
   @Binding var isShowingPlayer: Bool
 
   init(
     mode: PodibleLibraryScreenMode = .library,
     client: RemoteLibraryServing? = nil,
-    isSearchEnabled: Bool = false,
+    searchQuery: Binding<String>? = nil,
     isShowingPlayer: Binding<Bool> = .constant(false)
   ) {
     self.mode = mode
     self.clientOverride = client
-    self.isSearchEnabled = isSearchEnabled
+    self.searchQuery = searchQuery
     self._isShowingPlayer = isShowingPlayer
   }
 
@@ -391,10 +391,9 @@ struct PodibleLibraryView: View {
       await refresh(using: client)
     }
     .modifier(
-      RemoteLibrarySearchModifier(
-        isEnabled: isSearchEnabled,
+      RemoteLibrarySearchBindingModifier(
+        searchQuery: searchQuery,
         viewModel: viewModel,
-        onSubmit: { submitSearch(client: client) },
         onChange: { handleSearchQueryChange($0, client: client) }
       )
     )
@@ -465,14 +464,6 @@ struct PodibleLibraryView: View {
 
   private func collectionContentTopPadding(client: RemoteLibraryServing?) -> CGFloat {
     floatingControlsTopPadding + (hasCollectionStatusMessages(client: client) ? 58 : 0)
-  }
-
-  private func submitSearch(client: RemoteLibraryServing?) {
-    guard mode == .library else { return }
-    guard let client else { return }
-    Task {
-      await viewModel.search(using: client)
-    }
   }
 
   private func handleSearchQueryChange(
@@ -2886,36 +2877,35 @@ struct ActivityShareSheet: View {
   }
 }
 
-private struct RemoteLibrarySearchModifier: ViewModifier {
-  let isEnabled: Bool
+private struct RemoteLibrarySearchBindingModifier: ViewModifier {
+  let searchQuery: Binding<String>?
   @ObservedObject var viewModel: RemoteLibraryViewModel
-  let onSubmit: () -> Void
   let onChange: (String) -> Void
-  @State private var isSearchPresented = true
-  @FocusState private var isSearchFocused: Bool
 
   @ViewBuilder
   func body(content: Content) -> some View {
-    if isEnabled {
+    if let searchQuery {
       content
-        .searchable(text: $viewModel.query, isPresented: $isSearchPresented, prompt: "Search")
-        .searchFocused($isSearchFocused)
-        .onSubmit(of: .search, onSubmit)
-        .onChange(of: viewModel.query) { _, newValue in
-          onChange(newValue)
+        .onAppear {
+          syncSearchQuery(searchQuery.wrappedValue)
         }
-        .onAppear(perform: activateSearch)
-        .onChange(of: isSearchPresented) { _, isPresented in
-          isSearchFocused = isPresented
+        .onChange(of: searchQuery.wrappedValue) { _, newValue in
+          syncSearchQuery(newValue)
+        }
+        .onChange(of: viewModel.query) { _, newValue in
+          guard searchQuery.wrappedValue != newValue else { return }
+          searchQuery.wrappedValue = newValue
         }
     } else {
       content
     }
   }
 
-  private func activateSearch() {
-    isSearchPresented = true
-    isSearchFocused = true
+  private func syncSearchQuery(_ query: String) {
+    if viewModel.query != query {
+      viewModel.query = query
+    }
+    onChange(query)
   }
 }
 
