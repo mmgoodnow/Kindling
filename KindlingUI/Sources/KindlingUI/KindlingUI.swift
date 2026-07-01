@@ -1014,11 +1014,9 @@ public struct PlayerCoverContentView<Artwork: View>: View {
   public var body: some View {
     VStack(spacing: 14) {
       VStack(spacing: 6) {
-        HStack {
-          Text("\(player.bookCompletionPercent)% of book completed")
-            .font(.caption.weight(.semibold))
-          Spacer()
-        }
+        Text("\(player.bookCompletionPercent)% of book completed")
+          .font(.caption.weight(.semibold))
+          .frame(maxWidth: .infinity, alignment: .center)
         ProgressView(value: player.bookProgress)
           .tint(.primary)
       }
