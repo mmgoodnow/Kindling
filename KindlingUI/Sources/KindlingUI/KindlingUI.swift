@@ -526,17 +526,7 @@ public struct BookGridTileView: View {
       VStack(alignment: .leading, spacing: 6) {
         statusStrip
         artworkView
-        Text(book.title)
-          .font(.caption.weight(.bold))
-          .foregroundStyle(.primary)
-          .lineLimit(2, reservesSpace: true)
-          .multilineTextAlignment(.center)
-          .frame(maxWidth: .infinity)
-        Text(book.author)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(1, reservesSpace: true)
-          .frame(maxWidth: .infinity)
+        metadata
       }
       .contentShape(Rectangle())
     }
@@ -562,6 +552,25 @@ public struct BookGridTileView: View {
     .padding(.horizontal, 7)
     .padding(.vertical, 4)
     .background(book.palette.background, in: RoundedRectangle(cornerRadius: 3))
+  }
+
+  private var metadata: some View {
+    VStack(spacing: 2) {
+      Text(book.title)
+        .font(.caption.weight(.bold))
+        .foregroundStyle(.primary)
+        .lineLimit(2)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+      Text(book.author)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+    }
+    .frame(maxWidth: .infinity)
+    .frame(height: 46, alignment: .top)
   }
 
   @ViewBuilder
