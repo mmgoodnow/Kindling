@@ -642,21 +642,11 @@ struct PodibleLibraryView: View {
 
   private var floatingCollectionControls: some View {
     #if os(iOS)
-      Group {
-        if #available(iOS 26.0, *) {
-          GlassEffectContainer(spacing: 12) {
-            collectionControlContent
-              .padding(.horizontal, 10)
-              .padding(.vertical, 8)
-              .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-          }
-        } else {
-          collectionControlContent
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-            .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
-        }
+      GlassEffectContainer(spacing: 12) {
+        collectionControlContent
+          .padding(.horizontal, 10)
+          .padding(.vertical, 8)
+          .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
       }
       .padding(.horizontal, 16)
       .padding(.top, 8)

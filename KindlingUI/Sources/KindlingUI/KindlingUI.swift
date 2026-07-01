@@ -566,19 +566,28 @@ public struct BookGridTileView: View {
 
   @ViewBuilder
   private var artworkView: some View {
+    CoverCropFrame(cornerRadius: 4) {
+      artworkContent(cornerRadius: 4)
+    }
+    .aspectRatio(artworkAspectRatio, contentMode: .fit)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var artworkAspectRatio: CGFloat {
+    book.usesSquareArtwork ? 1 : 2 / 3
+  }
+
+  @ViewBuilder
+  private func artworkContent(cornerRadius: CGFloat) -> some View {
     if let artwork {
-      artwork(4)
-        .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
-        .frame(maxWidth: .infinity)
+      artwork(cornerRadius)
     } else {
       CoverArtworkView(
         title: book.title,
         author: book.author,
         url: book.artworkURL,
-        cornerRadius: 4
+        cornerRadius: cornerRadius
       )
-      .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
-      .frame(maxWidth: .infinity)
     }
   }
 }
@@ -607,8 +616,10 @@ public struct BookListRowView: View {
   public var body: some View {
     Button(action: onSelect) {
       HStack(spacing: 12) {
-        listArtwork
-          .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
+        CoverCropFrame(cornerRadius: 5) {
+          artworkContent(cornerRadius: 5)
+        }
+        .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(book.title)
@@ -641,15 +652,15 @@ public struct BookListRowView: View {
   }
 
   @ViewBuilder
-  private var listArtwork: some View {
+  private func artworkContent(cornerRadius: CGFloat) -> some View {
     if let artwork {
-      artwork(5)
+      artwork(cornerRadius)
     } else {
       CoverArtworkView(
         title: book.title,
         author: book.author,
         url: book.artworkURL,
-        cornerRadius: 5
+        cornerRadius: cornerRadius
       )
     }
   }
@@ -830,12 +841,14 @@ public struct BookDetailContentView: View {
   }
 
   private var detailArtwork: some View {
-    CoverArtworkView(
-      title: book.title,
-      author: book.author,
-      url: book.artworkURL,
-      cornerRadius: 5
-    )
+    CoverCropFrame(cornerRadius: 5) {
+      CoverArtworkView(
+        title: book.title,
+        author: book.author,
+        url: book.artworkURL,
+        cornerRadius: 5
+      )
+    }
     .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
     .frame(maxWidth: 216)
   }
@@ -1077,12 +1090,14 @@ public struct PlayerContentView: View {
       switch selectedTab {
       case .cover:
         PlayerCoverContentView(player: player) {
-          CoverArtworkView(
-            title: "",
-            author: "",
-            url: player.artworkURL,
-            cornerRadius: 5
-          )
+          CoverCropFrame(cornerRadius: 5) {
+            CoverArtworkView(
+              title: "",
+              author: "",
+              url: player.artworkURL,
+              cornerRadius: 5
+            )
+          }
           .aspectRatio(1, contentMode: .fit)
         }
       case .chapters:
@@ -1244,5 +1259,24 @@ private struct CoverArtworkView: View {
       .padding(10)
       .foregroundStyle(.secondary)
     }
+  }
+}
+
+private struct CoverCropFrame<Artwork: View>: View {
+  let cornerRadius: CGFloat
+  private let artwork: Artwork
+
+  init(cornerRadius: CGFloat, @ViewBuilder artwork: () -> Artwork) {
+    self.cornerRadius = cornerRadius
+    self.artwork = artwork()
+  }
+
+  var body: some View {
+    GeometryReader { proxy in
+      artwork
+        .frame(width: proxy.size.width, height: proxy.size.height)
+        .clipped()
+    }
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
   }
 }
