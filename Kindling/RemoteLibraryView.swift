@@ -55,6 +55,7 @@ struct PodibleLibraryView: View {
   @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
   @State private var selectedDetailItem: PodibleLibraryItem?
   @State private var isCollectionHeaderCollapsed = false
+  @State private var isShowingSettings = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
     BookCollectionFilter.all.rawValue
   @AppStorage("library.collectionLayout") private var collectionLayoutRawValue =
@@ -124,6 +125,9 @@ struct PodibleLibraryView: View {
       }
       .navigationDestination(for: BookSeriesRoute.self) { route in
         seriesContent(for: route)
+      }
+      .navigationDestination(isPresented: $isShowingSettings) {
+        SettingsView()
       }
       .background(detailNavigationLink)
       .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
@@ -328,7 +332,7 @@ struct PodibleLibraryView: View {
   private func content(client: RemoteLibraryServing?) -> some View {
     Group {
       let query = trimmedSearchQuery
-      if query.isEmpty {
+      if query.isEmpty && searchQuery == nil {
         collectionContent(client: client)
       } else {
         List {
@@ -343,7 +347,7 @@ struct PodibleLibraryView: View {
       .scrollContentBackground(.hidden)
       .background(listBackgroundColor)
     #endif
-    .navigationTitle(mode.title)
+    .navigationTitle(navigationTitle)
     .toolbar {
       #if os(iOS)
         ToolbarItem(placement: .principal) {
@@ -351,18 +355,16 @@ struct PodibleLibraryView: View {
             compactCollectionHeader
           }
         }
+        ToolbarItem(placement: .topBarTrailing) {
+          collectionOptionsMenu
+        }
       #endif
       #if os(macOS)
         ToolbarItem {
-          Button(action: { startSync(using: client) }) {
-            if isSyncSpinnerVisible {
-              ProgressView()
-            } else {
-              Image(systemName: "arrow.triangle.2.circlepath")
-            }
-          }
-          .disabled(client == nil || isSyncing)
-          .help("Sync from backend")
+          syncButton(client: client)
+        }
+        ToolbarItem {
+          collectionOptionsMenu
         }
       #endif
     }
@@ -433,6 +435,10 @@ struct PodibleLibraryView: View {
 
   private var collectionLayout: BookCollectionLayout {
     BookCollectionLayout(rawValue: collectionLayoutRawValue) ?? .grid
+  }
+
+  private var navigationTitle: String {
+    searchQuery == nil ? mode.title : "Search"
   }
 
   private var collectionFilterBinding: Binding<BookCollectionFilter> {
@@ -641,35 +647,51 @@ struct PodibleLibraryView: View {
   }
 
   private var compactCollectionHeader: some View {
-    HStack(spacing: 8) {
-      Text(mode.title)
-        .font(.headline.weight(.semibold))
-        .lineLimit(1)
-
-      compactCollectionControlContent
-    }
-    .frame(maxWidth: .infinity)
-    .transition(.opacity)
+    Text(navigationTitle)
+      .font(.headline.weight(.semibold))
+      .lineLimit(1)
+      .frame(maxWidth: .infinity)
+      .transition(.opacity)
   }
 
-  private var compactCollectionControlContent: some View {
-    HStack(spacing: 7) {
+  private var collectionOptionsMenu: some View {
+    Menu {
       Picker("Read filter", selection: collectionFilterBinding) {
         ForEach(BookCollectionFilter.allCases) { filter in
           Text(filter.title).tag(filter)
         }
       }
-      .pickerStyle(.segmented)
-      .frame(width: 150)
 
       Picker("Layout", selection: collectionLayoutBinding) {
         ForEach(BookCollectionLayout.allCases) { layout in
-          Image(systemName: layout.systemImage).tag(layout)
+          Label(layout.title, systemImage: layout.systemImage).tag(layout)
         }
       }
-      .pickerStyle(.segmented)
-      .frame(width: 76)
+
+      Divider()
+
+      Button {
+        isShowingSettings = true
+      } label: {
+        Label("Settings", systemImage: "gear")
+      }
+    } label: {
+      Image(systemName: "ellipsis")
+        .imageScale(.large)
     }
+    .accessibilityLabel("Library options")
+  }
+
+  private func syncButton(client: RemoteLibraryServing?) -> some View {
+    Button(action: { startSync(using: client) }) {
+      if isSyncSpinnerVisible {
+        ProgressView()
+      } else {
+        Image(systemName: "arrow.triangle.2.circlepath")
+      }
+    }
+    .disabled(client == nil || isSyncing)
+    .help("Sync from backend")
   }
 
   private var floatingCollectionControls: some View {
@@ -2936,6 +2958,10 @@ private struct RemoteLibrarySearchBindingModifier: ViewModifier {
   func body(content: Content) -> some View {
     if let searchQuery {
       content
+        .searchable(
+          text: searchQuery,
+          prompt: "Search by title, author, or series"
+        )
         .onAppear {
           syncSearchQuery(searchQuery.wrappedValue)
         }

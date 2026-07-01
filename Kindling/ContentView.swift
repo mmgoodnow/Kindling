@@ -3,11 +3,13 @@ import SwiftUI
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
   @State private var selectedTab: AppTab = .library
+  @State private var searchQuery = ""
 
   private enum AppTab: Hashable {
     case library
     case favorites
     case player
+    case search
   }
 
   private var playerTabBinding: Binding<Bool> {
@@ -29,7 +31,6 @@ struct ContentView: View {
             mode: .library,
             isShowingPlayer: playerTabBinding
           )
-          .toolbar { settingsToolbar }
         }
       }
 
@@ -39,7 +40,6 @@ struct ContentView: View {
             mode: .favorites,
             isShowingPlayer: playerTabBinding
           )
-          .toolbar { settingsToolbar }
         }
       }
 
@@ -51,19 +51,19 @@ struct ContentView: View {
         }
       }
 
+      Tab("Search", systemImage: "magnifyingglass", value: AppTab.search) {
+        NavigationStack {
+          RemoteLibraryView(
+            mode: .library,
+            searchQuery: $searchQuery,
+            isShowingPlayer: playerTabBinding
+          )
+        }
+      }
     }
     .onChange(of: player.hasLoadedItem) { _, hasLoadedItem in
       if hasLoadedItem == false, selectedTab == .player {
         selectedTab = .library
-      }
-    }
-  }
-
-  @ToolbarContentBuilder
-  private var settingsToolbar: some ToolbarContent {
-    ToolbarItem {
-      NavigationLink(destination: SettingsView()) {
-        Image(systemName: "gear")
       }
     }
   }
