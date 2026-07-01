@@ -2891,19 +2891,31 @@ private struct RemoteLibrarySearchModifier: ViewModifier {
   @ObservedObject var viewModel: RemoteLibraryViewModel
   let onSubmit: () -> Void
   let onChange: (String) -> Void
+  @State private var isSearchPresented = true
+  @FocusState private var isSearchFocused: Bool
 
   @ViewBuilder
   func body(content: Content) -> some View {
     if isEnabled {
       content
-        .searchable(text: $viewModel.query, prompt: "Search")
+        .searchable(text: $viewModel.query, isPresented: $isSearchPresented, prompt: "Search")
+        .searchFocused($isSearchFocused)
         .onSubmit(of: .search, onSubmit)
         .onChange(of: viewModel.query) { _, newValue in
           onChange(newValue)
         }
+        .onAppear(perform: activateSearch)
+        .onChange(of: isSearchPresented) { _, isPresented in
+          isSearchFocused = isPresented
+        }
     } else {
       content
     }
+  }
+
+  private func activateSearch() {
+    isSearchPresented = true
+    isSearchFocused = true
   }
 }
 

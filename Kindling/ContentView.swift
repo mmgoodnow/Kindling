@@ -15,7 +15,7 @@ struct ContentView: View {
     Binding(
       get: { selectedTab == .player },
       set: { isShowing in
-        if isShowing {
+        if isShowing, player.hasLoadedItem {
           selectedTab = .player
         }
       }
@@ -44,10 +44,12 @@ struct ContentView: View {
         }
       }
 
-      Tab(
-        "Player", systemImage: player.isPlaying ? "pause.fill" : "play.fill", value: AppTab.player
-      ) {
-        LocalPlaybackView(player: player)
+      if player.hasLoadedItem {
+        Tab(
+          "Player", systemImage: player.isPlaying ? "pause.fill" : "play.fill", value: AppTab.player
+        ) {
+          LocalPlaybackView(player: player)
+        }
       }
 
       Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
@@ -63,6 +65,11 @@ struct ContentView: View {
       .tabPlacement(.pinned)
     }
     .tabViewSearchActivation(.searchTabSelection)
+    .onChange(of: player.hasLoadedItem) { _, hasLoadedItem in
+      if hasLoadedItem == false, selectedTab == .player {
+        selectedTab = .library
+      }
+    }
   }
 
   @ToolbarContentBuilder
