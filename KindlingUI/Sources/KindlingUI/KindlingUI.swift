@@ -403,6 +403,7 @@ public struct BookCollectionView: View {
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
+  public let onScrolledPastHeader: (Bool) -> Void
   private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
 
   public init(
@@ -413,7 +414,8 @@ public struct BookCollectionView: View {
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
-    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
+    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in },
+    onScrolledPastHeader: @escaping (Bool) -> Void = { _ in }
   ) {
     self.books = books
     self.layout = layout
@@ -423,6 +425,7 @@ public struct BookCollectionView: View {
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
+    self.onScrolledPastHeader = onScrolledPastHeader
   }
 
   public var body: some View {
@@ -455,6 +458,13 @@ public struct BookCollectionView: View {
             .padding(.top, contentTopPadding + 12)
             .padding(.bottom, 12)
           }
+          .onScrollGeometryChange(
+            for: Bool.self,
+            of: { $0.contentOffset.y > 44 },
+            action: { _, isScrolledPastHeader in
+              onScrolledPastHeader(isScrolledPastHeader)
+            }
+          )
         case .list:
           ScrollView {
             LazyVStack(spacing: 0) {
@@ -479,6 +489,13 @@ public struct BookCollectionView: View {
             .padding(.top, contentTopPadding + 8)
             .padding(.bottom, 8)
           }
+          .onScrollGeometryChange(
+            for: Bool.self,
+            of: { $0.contentOffset.y > 44 },
+            action: { _, isScrolledPastHeader in
+              onScrolledPastHeader(isScrolledPastHeader)
+            }
+          )
         }
       }
     }

@@ -54,6 +54,7 @@ struct PodibleLibraryView: View {
   @State private var localDownloadingBookIDs: Set<String> = []
   @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
   @State private var selectedDetailItem: PodibleLibraryItem?
+  @State private var isCollectionHeaderCollapsed = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
     BookCollectionFilter.all.rawValue
   @AppStorage("library.collectionLayout") private var collectionLayoutRawValue =
@@ -344,6 +345,13 @@ struct PodibleLibraryView: View {
     #endif
     .navigationTitle(mode.title)
     .toolbar {
+      #if os(iOS)
+        ToolbarItem(placement: .principal) {
+          if isCollectionHeaderCollapsed {
+            compactCollectionHeader
+          }
+        }
+      #endif
       #if os(macOS)
         ToolbarItem {
           Button(action: { startSync(using: client) }) {
@@ -514,7 +522,8 @@ struct PodibleLibraryView: View {
             artwork: collectionArtwork(for:cornerRadius:),
             onSelect: selectCollectionBook(_:),
             onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:)
+            onToggleFavorite: toggleFavorite(_:),
+            onScrolledPastHeader: setCollectionHeaderCollapsed(_:)
           )
 
           VStack(spacing: 6) {
@@ -631,6 +640,38 @@ struct PodibleLibraryView: View {
     }
   }
 
+  private var compactCollectionHeader: some View {
+    HStack(spacing: 8) {
+      Text(mode.title)
+        .font(.headline.weight(.semibold))
+        .lineLimit(1)
+
+      compactCollectionControlContent
+    }
+    .frame(maxWidth: .infinity)
+    .transition(.opacity)
+  }
+
+  private var compactCollectionControlContent: some View {
+    HStack(spacing: 7) {
+      Picker("Read filter", selection: collectionFilterBinding) {
+        ForEach(BookCollectionFilter.allCases) { filter in
+          Text(filter.title).tag(filter)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(width: 150)
+
+      Picker("Layout", selection: collectionLayoutBinding) {
+        ForEach(BookCollectionLayout.allCases) { layout in
+          Image(systemName: layout.systemImage).tag(layout)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(width: 76)
+    }
+  }
+
   private var floatingCollectionControls: some View {
     #if os(iOS)
       GlassEffectContainer(spacing: 12) {
@@ -641,9 +682,18 @@ struct PodibleLibraryView: View {
       }
       .padding(.horizontal, 16)
       .padding(.top, 8)
+      .opacity(isCollectionHeaderCollapsed ? 0 : 1)
+      .allowsHitTesting(isCollectionHeaderCollapsed == false)
     #else
       collectionControls
     #endif
+  }
+
+  private func setCollectionHeaderCollapsed(_ isCollapsed: Bool) {
+    guard isCollectionHeaderCollapsed != isCollapsed else { return }
+    withAnimation(.snappy(duration: 0.18)) {
+      isCollectionHeaderCollapsed = isCollapsed
+    }
   }
 
   private func seriesContent(for route: BookSeriesRoute) -> some View {

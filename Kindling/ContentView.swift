@@ -3,13 +3,11 @@ import SwiftUI
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
   @State private var selectedTab: AppTab = .library
-  @State private var searchQuery = ""
 
   private enum AppTab: Hashable {
     case library
     case favorites
     case player
-    case search
   }
 
   private var playerTabBinding: Binding<Bool> {
@@ -53,20 +51,7 @@ struct ContentView: View {
         }
       }
 
-      Tab(value: AppTab.search, role: .search) {
-        NavigationStack {
-          RemoteLibraryView(
-            mode: .library,
-            searchQuery: $searchQuery,
-            isShowingPlayer: playerTabBinding
-          )
-          .toolbar { settingsToolbar }
-        }
-      }
-      .tabPlacement(.pinned)
     }
-    .searchable(text: $searchQuery, prompt: "Search")
-    .tabViewSearchActivation(.searchTabSelection)
     .onChange(of: player.hasLoadedItem) { _, hasLoadedItem in
       if hasLoadedItem == false, selectedTab == .player {
         selectedTab = .library
