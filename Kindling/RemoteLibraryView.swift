@@ -455,6 +455,18 @@ struct PodibleLibraryView: View {
     viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  private var floatingControlsTopPadding: CGFloat {
+    #if os(iOS)
+      64
+    #else
+      0
+    #endif
+  }
+
+  private func collectionContentTopPadding(client: RemoteLibraryServing?) -> CGFloat {
+    floatingControlsTopPadding + (hasCollectionStatusMessages(client: client) ? 58 : 0)
+  }
+
   private func submitSearch(client: RemoteLibraryServing?) {
     guard mode == .library else { return }
     guard let client else { return }
@@ -493,36 +505,72 @@ struct PodibleLibraryView: View {
 
   @ViewBuilder
   private func collectionContent(client: RemoteLibraryServing?) -> some View {
-    VStack(spacing: 0) {
-      collectionStatusMessages(client: client)
-
-      if collectionBooks.isEmpty {
+    if collectionBooks.isEmpty {
+      VStack(spacing: 0) {
+        collectionStatusMessages(client: client)
         collectionEmptyState(client: client)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        collectionControls
-        BookCollectionView(
-          books: collectionTiles,
-          layout: collectionLayout,
-          filter: collectionFilter,
-          artwork: collectionArtwork(for:cornerRadius:),
-          onSelect: selectCollectionBook(_:),
-          onToggleRead: toggleRead(_:),
-          onToggleFavorite: toggleFavorite(_:)
-        )
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      #if os(iOS)
+        ZStack(alignment: .top) {
+          BookCollectionView(
+            books: collectionTiles,
+            layout: collectionLayout,
+            filter: collectionFilter,
+            contentTopPadding: collectionContentTopPadding(client: client),
+            artwork: collectionArtwork(for:cornerRadius:),
+            onSelect: selectCollectionBook(_:),
+            onToggleRead: toggleRead(_:),
+            onToggleFavorite: toggleFavorite(_:)
+          )
 
-      if let syncFooterText {
-        Text(syncFooterText)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-          .padding(.horizontal, 16)
-          .padding(.vertical, 8)
-      }
+          VStack(spacing: 6) {
+            floatingCollectionControls
+            collectionStatusMessages(client: client)
+          }
+        }
+        .overlay(alignment: .bottom) {
+          syncFooter
+        }
+      #else
+        VStack(spacing: 0) {
+          collectionStatusMessages(client: client)
+          collectionControls
+          BookCollectionView(
+            books: collectionTiles,
+            layout: collectionLayout,
+            filter: collectionFilter,
+            artwork: collectionArtwork(for:cornerRadius:),
+            onSelect: selectCollectionBook(_:),
+            onToggleRead: toggleRead(_:),
+            onToggleFavorite: toggleFavorite(_:)
+          )
+          syncFooter
+        }
+      #endif
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  @ViewBuilder
+  private var syncFooter: some View {
+    if let syncFooterText {
+      Text(syncFooterText)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+  }
+
+  private func hasCollectionStatusMessages(client: RemoteLibraryServing?) -> Bool {
+    (client == nil && localBooks.isEmpty == false && isWaitingForStoredPodibleSession == false)
+      || viewModel.errorMessage != nil
+      || downloadErrorMessage != nil
+      || syncErrorMessage != nil
   }
 
   @ViewBuilder
@@ -568,6 +616,12 @@ struct PodibleLibraryView: View {
   }
 
   private var collectionControls: some View {
+    collectionControlContent
+      .padding(.horizontal, 16)
+      .padding(.vertical, 10)
+  }
+
+  private var collectionControlContent: some View {
     HStack(spacing: 12) {
       Picker("Read filter", selection: collectionFilterBinding) {
         ForEach(BookCollectionFilter.allCases) { filter in
@@ -584,26 +638,72 @@ struct PodibleLibraryView: View {
       .pickerStyle(.segmented)
       .frame(width: 96)
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 10)
+  }
+
+  private var floatingCollectionControls: some View {
+    #if os(iOS)
+      Group {
+        if #available(iOS 26.0, *) {
+          GlassEffectContainer(spacing: 12) {
+            collectionControlContent
+              .padding(.horizontal, 10)
+              .padding(.vertical, 8)
+              .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+          }
+        } else {
+          collectionControlContent
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.top, 8)
+    #else
+      collectionControls
+    #endif
   }
 
   private func seriesContent(for route: BookSeriesRoute) -> some View {
-    VStack(spacing: 0) {
-      collectionControls
-      SeriesContentView(
-        series: SeriesViewData(
-          id: route.id,
-          title: route.title,
-          books: seriesBooks(for: route).map(bookTileViewData(for:))
-        ),
-        layout: collectionLayout,
-        filter: collectionFilter,
-        artwork: collectionArtwork(for:cornerRadius:),
-        onSelect: selectCollectionBook(_:),
-        onToggleRead: toggleRead(_:),
-        onToggleFavorite: toggleFavorite(_:)
-      )
+    Group {
+      #if os(iOS)
+        ZStack(alignment: .top) {
+          SeriesContentView(
+            series: SeriesViewData(
+              id: route.id,
+              title: route.title,
+              books: seriesBooks(for: route).map(bookTileViewData(for:))
+            ),
+            layout: collectionLayout,
+            filter: collectionFilter,
+            contentTopPadding: floatingControlsTopPadding,
+            artwork: collectionArtwork(for:cornerRadius:),
+            onSelect: selectCollectionBook(_:),
+            onToggleRead: toggleRead(_:),
+            onToggleFavorite: toggleFavorite(_:)
+          )
+
+          floatingCollectionControls
+        }
+      #else
+        VStack(spacing: 0) {
+          collectionControls
+          SeriesContentView(
+            series: SeriesViewData(
+              id: route.id,
+              title: route.title,
+              books: seriesBooks(for: route).map(bookTileViewData(for:))
+            ),
+            layout: collectionLayout,
+            filter: collectionFilter,
+            artwork: collectionArtwork(for:cornerRadius:),
+            onSelect: selectCollectionBook(_:),
+            onToggleRead: toggleRead(_:),
+            onToggleFavorite: toggleFavorite(_:)
+          )
+        }
+      #endif
     }
     .navigationTitle(route.title)
   }

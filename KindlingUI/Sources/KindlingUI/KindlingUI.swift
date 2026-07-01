@@ -399,6 +399,7 @@ public struct BookCollectionView: View {
   public let books: [BookTileViewData]
   public let layout: BookCollectionLayout
   public let filter: BookCollectionFilter
+  public let contentTopPadding: CGFloat
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
@@ -408,6 +409,7 @@ public struct BookCollectionView: View {
     books: [BookTileViewData],
     layout: BookCollectionLayout,
     filter: BookCollectionFilter,
+    contentTopPadding: CGFloat = 0,
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
@@ -416,6 +418,7 @@ public struct BookCollectionView: View {
     self.books = books
     self.layout = layout
     self.filter = filter
+    self.contentTopPadding = contentTopPadding
     self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
@@ -449,7 +452,8 @@ public struct BookCollectionView: View {
               }
             }
             .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .padding(.top, contentTopPadding + 12)
+            .padding(.bottom, 12)
           }
         case .list:
           ScrollView {
@@ -472,7 +476,8 @@ public struct BookCollectionView: View {
                 }
               }
             }
-            .padding(.vertical, 8)
+            .padding(.top, contentTopPadding + 8)
+            .padding(.bottom, 8)
           }
         }
       }
@@ -917,6 +922,7 @@ public struct SeriesContentView: View {
   public let series: SeriesViewData
   public let layout: BookCollectionLayout
   public let filter: BookCollectionFilter
+  public let contentTopPadding: CGFloat
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
@@ -926,6 +932,7 @@ public struct SeriesContentView: View {
     series: SeriesViewData,
     layout: BookCollectionLayout,
     filter: BookCollectionFilter,
+    contentTopPadding: CGFloat = 0,
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
@@ -934,6 +941,7 @@ public struct SeriesContentView: View {
     self.series = series
     self.layout = layout
     self.filter = filter
+    self.contentTopPadding = contentTopPadding
     self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
@@ -945,6 +953,7 @@ public struct SeriesContentView: View {
       books: series.books,
       layout: layout,
       filter: filter,
+      contentTopPadding: contentTopPadding,
       artwork: artwork,
       onSelect: onSelect,
       onToggleRead: onToggleRead,
