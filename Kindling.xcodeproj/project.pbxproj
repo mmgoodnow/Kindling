@@ -40,6 +40,7 @@
 		51A0C0102DCB12F800123456 /* RemoteLibrarySearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0202DCB12F800123456 /* RemoteLibrarySearchResultsView.swift */; };
 		51A0C0212EEFAAAA00123456 /* PodibleAuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0222EEFAAAA00123456 /* PodibleAuthController.swift */; };
 		51A0C0232EEFAAAA00123456 /* AuthenticatedRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0242EEFAAAA00123456 /* AuthenticatedRemoteImage.swift */; };
+		51A0C0252FF0000000123456 /* ArtworkPaletteExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C0262FF0000000123456 /* ArtworkPaletteExtractor.swift */; };
 		51F36E2D2EF733F2004A31B1 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 51F36E2E2EF733F2004A31B1 /* Kingfisher */; };
 		51A0C1002F00000000123456 /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1012F00000000123456 /* TranscriptView.swift */; };
 		51A0C1022F00000000123456 /* PodibleTranscriptCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1032F00000000123456 /* PodibleTranscriptCache.swift */; };
@@ -133,6 +134,7 @@
 		51A0C0202DCB12F800123456 /* RemoteLibrarySearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteLibrarySearchResultsView.swift; sourceTree = "<group>"; };
 		51A0C0222EEFAAAA00123456 /* PodibleAuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodibleAuthController.swift; sourceTree = "<group>"; };
 		51A0C0242EEFAAAA00123456 /* AuthenticatedRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedRemoteImage.swift; sourceTree = "<group>"; };
+		51A0C0262FF0000000123456 /* ArtworkPaletteExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkPaletteExtractor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -232,6 +234,7 @@
 				51A0C0112DCB12F800123456 /* PodibleClient.swift */,
 				51A0C0222EEFAAAA00123456 /* PodibleAuthController.swift */,
 				51A0C0242EEFAAAA00123456 /* AuthenticatedRemoteImage.swift */,
+				51A0C0262FF0000000123456 /* ArtworkPaletteExtractor.swift */,
 				51A0C0122DCB12F800123456 /* RemoteLibraryViewModel.swift */,
 			);
 			path = Kindling;
@@ -459,6 +462,7 @@
 				51A0C0012DCB12F800123456 /* PodibleClient.swift in Sources */,
 				51A0C0212EEFAAAA00123456 /* PodibleAuthController.swift in Sources */,
 				51A0C0232EEFAAAA00123456 /* AuthenticatedRemoteImage.swift in Sources */,
+				51A0C0252FF0000000123456 /* ArtworkPaletteExtractor.swift in Sources */,
 				51A0C0022DCB12F800123456 /* RemoteLibraryViewModel.swift in Sources */,
 				514A16C42CB19C2300B6F94E /* ExportViewModifier.swift in Sources */,
 			);

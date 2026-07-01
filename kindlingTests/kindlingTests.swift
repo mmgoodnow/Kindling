@@ -1,35 +1,63 @@
-//
-//  kindlingTests.swift
-//  kindlingTests
-//
-//  Created by Michael Goodnow on 9/9/24.
-//
-
+import CoreGraphics
+import Foundation
+import KindlingUI
 import XCTest
 
+@testable import Kindling
+
 final class kindlingTests: XCTestCase {
+  func testArtworkPaletteSamplerReadsDominantColor() throws {
+    let image = try solidImage(red: 204, green: 34, blue: 17)
+    let palette = try XCTUnwrap(ArtworkPaletteSampler.palette(from: image))
 
-  override func setUpWithError() throws {
-    // Put setup code here. This method is called before the invocation of each test method in the class.
+    XCTAssertEqual(palette.red, 0.80, accuracy: 0.02)
+    XCTAssertEqual(palette.green, 0.13, accuracy: 0.02)
+    XCTAssertEqual(palette.blue, 0.07, accuracy: 0.02)
   }
 
-  override func tearDownWithError() throws {
-    // Put teardown code here. This method is called after the invocation of each test method in the class.
+  func testArtworkPaletteSamplerFallsBackToNeutralArtAverage() throws {
+    let image = try solidImage(red: 180, green: 180, blue: 180)
+    let palette = try XCTUnwrap(ArtworkPaletteSampler.palette(from: image))
+
+    XCTAssertEqual(palette.red, 0.71, accuracy: 0.02)
+    XCTAssertEqual(palette.green, 0.71, accuracy: 0.02)
+    XCTAssertEqual(palette.blue, 0.71, accuracy: 0.02)
   }
 
-  func testExample() throws {
-    // This is an example of a functional test case.
-    // Use XCTAssert and related functions to verify your tests produce the correct results.
-    // Any test you write for XCTest can be annotated as throws and async.
-    // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-    // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-  }
+  private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {
+    let width = 8
+    let height = 8
+    let bytesPerPixel = 4
+    let bytesPerRow = width * bytesPerPixel
+    var pixels = [UInt8](repeating: 0, count: height * bytesPerRow)
 
-  func testPerformanceExample() throws {
-    // This is an example of a performance test case.
-    measure {
-      // Put the code you want to measure the time of here.
+    for offset in stride(from: 0, to: pixels.count, by: bytesPerPixel) {
+      pixels[offset] = red
+      pixels[offset + 1] = green
+      pixels[offset + 2] = blue
+      pixels[offset + 3] = 255
     }
-  }
 
+    let data = Data(pixels) as CFData
+    let provider = try XCTUnwrap(CGDataProvider(data: data))
+    let bitmapInfo = CGBitmapInfo(
+      rawValue: CGImageAlphaInfo.premultipliedLast.rawValue
+        | CGBitmapInfo.byteOrder32Big.rawValue
+    )
+    return try XCTUnwrap(
+      CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: 32,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: bitmapInfo,
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: false,
+        intent: .defaultIntent
+      )
+    )
+  }
 }

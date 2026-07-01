@@ -22,19 +22,37 @@ struct AuthenticatedRemoteImage<Placeholder: View>: View {
       .cancelOnDisappear(true)
       .resizable()
 
-    guard let accessToken, accessToken.isEmpty == false else {
-      return image
-    }
-    guard shouldAuthorize(url: url) else {
+    guard
+      let modifier = AuthenticatedRemoteImageRequest.modifier(
+        for: url,
+        rpcURLString: rpcURLString,
+        accessToken: accessToken
+      )
+    else {
       return image
     }
 
-    return image.requestModifier { request in
+    return image.requestModifier(modifier)
+  }
+}
+
+enum AuthenticatedRemoteImageRequest {
+  static func modifier(
+    for url: URL,
+    rpcURLString: String,
+    accessToken: String?
+  ) -> AnyModifier? {
+    guard let accessToken, accessToken.isEmpty == false else { return nil }
+    guard shouldAuthorize(url: url, rpcURLString: rpcURLString) else { return nil }
+
+    return AnyModifier { request in
+      var request = request
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+      return request
     }
   }
 
-  private func shouldAuthorize(url: URL) -> Bool {
+  static func shouldAuthorize(url: URL, rpcURLString: String) -> Bool {
     guard let rpcURL = URL(string: rpcURLString) else { return false }
     let normalizedRPCURL = PodibleClient.normalizedRPCURL(from: rpcURL)
     var baseWebURL = normalizedRPCURL

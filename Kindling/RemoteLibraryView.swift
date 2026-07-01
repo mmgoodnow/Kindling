@@ -52,6 +52,7 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
+  @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
   @State private var selectedDetailItem: PodibleLibraryItem?
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
     BookCollectionFilter.all.rawValue
@@ -375,6 +376,9 @@ struct PodibleLibraryView: View {
       guard let client else { return }
       await loadMetadataForActivePlaybackIfNeeded(client: client)
     }
+    .task(id: artworkPaletteTaskID) {
+      await loadArtworkPalettes()
+    }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else { return }
       guard let client else { return }
@@ -615,19 +619,21 @@ struct PodibleLibraryView: View {
   }
 
   private func bookTileViewData(for book: LibraryBook) -> BookTileViewData {
-    BookTileViewData(
+    let artworkURL = remoteLibraryAssetURL(
+      baseURLString: remoteAssetBaseURLString,
+      path: book.coverURLString,
+      versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+    )
+
+    return BookTileViewData(
       id: book.podibleId,
       title: book.title,
       author: book.author?.name ?? "Unknown Author",
-      artworkURL: remoteLibraryAssetURL(
-        baseURLString: remoteAssetBaseURLString,
-        path: book.coverURLString,
-        versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
-      ),
+      artworkURL: artworkURL,
       durationText: book.runtimeSeconds.map(formatRuntime(seconds:)),
       isRead: book.localState?.isRead == true,
       isFavorite: book.localState?.isFavorite == true,
-      palette: artworkPalette(for: book),
+      palette: artworkPalette(for: artworkURL),
       seriesKey: book.series?.podibleId,
       seriesTitle: book.series?.title,
       seriesPosition: book.seriesIndex,
@@ -681,21 +687,48 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private func artworkPalette(for book: LibraryBook) -> ArtworkPalette {
-    let palettes = [
-      ArtworkPalette(red: 0.24, green: 0.45, blue: 0.72),
-      ArtworkPalette(red: 0.55, green: 0.22, blue: 0.30),
-      ArtworkPalette(red: 0.18, green: 0.46, blue: 0.38),
-      ArtworkPalette(red: 0.62, green: 0.34, blue: 0.16),
-      ArtworkPalette(red: 0.35, green: 0.32, blue: 0.62),
-      ArtworkPalette(red: 0.25, green: 0.50, blue: 0.58),
-    ]
-    var hash = 5381
-    for scalar in (book.coverURLString ?? "\(book.title)|\(book.author?.name ?? "")").unicodeScalars
-    {
-      hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
+  private var artworkPaletteTaskID: String {
+    let bookKeys = localBooks.map { book in
+      [
+        book.podibleId,
+        book.coverURLString ?? "",
+        book.updatedAt.map { String(Int($0.timeIntervalSince1970)) } ?? "",
+      ].joined(separator: ":")
     }
-    return palettes[abs(hash) % palettes.count]
+    return ([remoteAssetBaseURLString, podibleAuth.accessToken ?? ""] + bookKeys).joined(
+      separator: "|")
+  }
+
+  private func artworkPalette(for artworkURL: URL?) -> ArtworkPalette {
+    guard let key = artworkURL?.absoluteString else { return .fallback }
+    return artworkPalettesByURL[key] ?? .fallback
+  }
+
+  @MainActor
+  private func loadArtworkPalettes() async {
+    let requests = localBooks.compactMap { book -> URL? in
+      remoteLibraryAssetURL(
+        baseURLString: remoteAssetBaseURLString,
+        path: book.coverURLString,
+        versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+      )
+    }
+    let currentKeys = Set(requests.map(\.absoluteString))
+    artworkPalettesByURL = artworkPalettesByURL.filter { currentKeys.contains($0.key) }
+
+    for url in requests where artworkPalettesByURL[url.absoluteString] == nil {
+      if Task.isCancelled { return }
+      guard
+        let palette = await ArtworkPaletteLoader.palette(
+          for: url,
+          rpcURLString: remoteAssetBaseURLString,
+          accessToken: podibleAuth.accessToken
+        )
+      else {
+        continue
+      }
+      artworkPalettesByURL[url.absoluteString] = palette
+    }
   }
 
   @MainActor

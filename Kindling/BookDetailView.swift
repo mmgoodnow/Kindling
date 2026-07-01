@@ -55,6 +55,7 @@ struct BookDetailView: View {
   @State private var isShowingReleaseSearch = false
   @State private var releaseSearchInitialMedia: PodibleReleaseMedia = .audio
   @State private var coverImagePathOverride: String?
+  @State private var detailPalette: ArtworkPalette = .fallback
 
   var body: some View {
     ScrollView {
@@ -93,6 +94,9 @@ struct BookDetailView: View {
         }
       }
     #endif
+    .task(id: detailPaletteTaskID) {
+      await loadDetailPalette()
+    }
     .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
         .padding(.leading, 20)
@@ -160,18 +164,21 @@ struct BookDetailView: View {
     return date.map { String(Int($0.timeIntervalSince1970)) }
   }
 
-  @ViewBuilder
-  private var heroCover: some View {
-    let url = remoteLibraryAssetURL(
+  private var currentArtworkURL: URL? {
+    remoteLibraryAssetURL(
       baseURLString: userSettings.podibleRPCURL,
       path: currentCoverImagePath,
       versionToken: currentCoverVersionToken
     )
+  }
+
+  @ViewBuilder
+  private var heroCover: some View {
     if canChangeCover {
       Button {
         isShowingCoverPicker = true
       } label: {
-        heroCoverArtwork(url: url)
+        heroCoverArtwork(url: currentArtworkURL)
           .overlay(alignment: .bottomTrailing) {
             Image(systemName: "photo.badge.plus")
               .font(.footnote.weight(.semibold))
@@ -184,7 +191,7 @@ struct BookDetailView: View {
       .buttonStyle(.plain)
       .accessibilityLabel("Change Cover")
     } else {
-      heroCoverArtwork(url: url)
+      heroCoverArtwork(url: currentArtworkURL)
     }
   }
 
@@ -271,11 +278,7 @@ struct BookDetailView: View {
       id: item.id,
       title: item.title,
       author: item.author,
-      artworkURL: remoteLibraryAssetURL(
-        baseURLString: userSettings.podibleRPCURL,
-        path: currentCoverImagePath,
-        versionToken: currentCoverVersionToken
-      ),
+      artworkURL: currentArtworkURL,
       palette: detailPalette,
       durationText: metricsText,
       seriesTitle: item.seriesTitle ?? localBook?.series?.title,
@@ -286,21 +289,33 @@ struct BookDetailView: View {
     )
   }
 
-  private var detailPalette: ArtworkPalette {
-    let palettes = [
-      ArtworkPalette(red: 0.24, green: 0.45, blue: 0.72),
-      ArtworkPalette(red: 0.55, green: 0.22, blue: 0.30),
-      ArtworkPalette(red: 0.18, green: 0.46, blue: 0.38),
-      ArtworkPalette(red: 0.62, green: 0.34, blue: 0.16),
-      ArtworkPalette(red: 0.35, green: 0.32, blue: 0.62),
-      ArtworkPalette(red: 0.25, green: 0.50, blue: 0.58),
-    ]
-    let seed = currentCoverImagePath ?? "\(item.title)|\(item.author)"
-    var hash = 5381
-    for scalar in seed.unicodeScalars {
-      hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
+  private var detailPaletteTaskID: String {
+    [
+      currentArtworkURL?.absoluteString ?? "",
+      userSettings.podibleRPCURL,
+      podibleAuth.accessToken ?? "",
+    ].joined(separator: "|")
+  }
+
+  @MainActor
+  private func loadDetailPalette() async {
+    guard let url = currentArtworkURL else {
+      detailPalette = .fallback
+      return
     }
-    return palettes[abs(hash) % palettes.count]
+
+    guard
+      let palette = await ArtworkPaletteLoader.palette(
+        for: url,
+        rpcURLString: userSettings.podibleRPCURL,
+        accessToken: podibleAuth.accessToken
+      ),
+      Task.isCancelled == false
+    else {
+      detailPalette = .fallback
+      return
+    }
+    detailPalette = palette
   }
 
   private var seriesText: String? {
