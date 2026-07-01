@@ -624,9 +624,7 @@ struct LocalPlaybackView: View {
         .controlSize(.mini)
         .frame(width: 10, height: 10)
     case .loaded:
-      Circle()
-        .fill(Color.accentColor)
-        .frame(width: 5, height: 5)
+      EmptyView()
     case .unavailable:
       Image(systemName: "minus.circle.fill")
         .font(.system(size: 9, weight: .semibold))
