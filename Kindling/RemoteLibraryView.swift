@@ -468,16 +468,8 @@ struct PodibleLibraryView: View {
     viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private var floatingControlsTopPadding: CGFloat {
-    #if os(iOS)
-      64
-    #else
-      0
-    #endif
-  }
-
   private func collectionContentTopPadding(client: RemoteLibraryServing?) -> CGFloat {
-    floatingControlsTopPadding + (hasCollectionStatusMessages(client: client) ? 58 : 0)
+    hasCollectionStatusMessages(client: client) ? 58 : 0
   }
 
   private func handleSearchQueryChange(
@@ -532,10 +524,7 @@ struct PodibleLibraryView: View {
             onScrolledPastHeader: setCollectionHeaderCollapsed(_:)
           )
 
-          VStack(spacing: 6) {
-            floatingCollectionControls
-            collectionStatusMessages(client: client)
-          }
+          collectionStatusMessages(client: client)
         }
         .overlay(alignment: .bottom) {
           syncFooter
@@ -694,23 +683,6 @@ struct PodibleLibraryView: View {
     .help("Sync from backend")
   }
 
-  private var floatingCollectionControls: some View {
-    #if os(iOS)
-      GlassEffectContainer(spacing: 12) {
-        collectionControlContent
-          .padding(.horizontal, 10)
-          .padding(.vertical, 8)
-          .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-      }
-      .padding(.horizontal, 16)
-      .padding(.top, 8)
-      .opacity(isCollectionHeaderCollapsed ? 0 : 1)
-      .allowsHitTesting(isCollectionHeaderCollapsed == false)
-    #else
-      collectionControls
-    #endif
-  }
-
   private func setCollectionHeaderCollapsed(_ isCollapsed: Bool) {
     guard isCollectionHeaderCollapsed != isCollapsed else { return }
     withAnimation(.snappy(duration: 0.18)) {
@@ -721,24 +693,19 @@ struct PodibleLibraryView: View {
   private func seriesContent(for route: BookSeriesRoute) -> some View {
     Group {
       #if os(iOS)
-        ZStack(alignment: .top) {
-          SeriesContentView(
-            series: SeriesViewData(
-              id: route.id,
-              title: route.title,
-              books: seriesBooks(for: route).map(bookTileViewData(for:))
-            ),
-            layout: collectionLayout,
-            filter: collectionFilter,
-            contentTopPadding: floatingControlsTopPadding,
-            artwork: collectionArtwork(for:cornerRadius:),
-            onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:)
-          )
-
-          floatingCollectionControls
-        }
+        SeriesContentView(
+          series: SeriesViewData(
+            id: route.id,
+            title: route.title,
+            books: seriesBooks(for: route).map(bookTileViewData(for:))
+          ),
+          layout: collectionLayout,
+          filter: collectionFilter,
+          artwork: collectionArtwork(for:cornerRadius:),
+          onSelect: selectCollectionBook(_:),
+          onToggleRead: toggleRead(_:),
+          onToggleFavorite: toggleFavorite(_:)
+        )
       #else
         VStack(spacing: 0) {
           collectionControls
