@@ -658,50 +658,6 @@ struct LocalPlaybackView: View {
 }
 
 #if os(iOS)
-  /// Adds a `safeAreaInset(edge: .bottom)` containing the floating mini
-  /// playback bar. Apply on each screen that should host the bar; the bar
-  /// only renders when something is loaded in the player.
-  ///
-  /// Each screen owning its own inset keeps the bar cooperating with
-  /// system bottom UI (`.searchable`, etc.) and lets the screen control
-  /// whether other insets (e.g. a floating dock) sit above or below it.
-  struct MiniPlaybackBarInset: ViewModifier {
-    @ObservedObject var player: AudioPlayerController
-    @Binding var isShowingPlayer: Bool
-
-    func body(content: Content) -> some View {
-      content.safeAreaInset(edge: .bottom, spacing: 0) {
-        if player.hasLoadedItem {
-          MiniPlaybackBar(player: player) {
-            isShowingPlayer = true
-          }
-          .padding(.horizontal, 24)
-          .padding(.top, 10)
-        }
-      }
-    }
-  }
-#endif
-
-extension View {
-  #if os(iOS)
-    func miniPlaybackBarInset(
-      player: AudioPlayerController,
-      isShowingPlayer: Binding<Bool>
-    ) -> some View {
-      modifier(MiniPlaybackBarInset(player: player, isShowingPlayer: isShowingPlayer))
-    }
-  #else
-    func miniPlaybackBarInset(
-      player: AudioPlayerController,
-      isShowingPlayer: Binding<Bool>
-    ) -> some View {
-      self
-    }
-  #endif
-}
-
-#if os(iOS)
   /// Replacement for `UIScreen.main.bounds.size`, deprecated in iOS 26.
   /// Walks the foreground active scenes for the first window scene's screen
   /// dimensions. Falls back to a reasonable default if none is connected.
@@ -727,78 +683,6 @@ extension View {
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
       uiView.activeTintColor = .label
       uiView.tintColor = .label
-    }
-  }
-#endif
-
-#if os(iOS)
-  struct MiniPlaybackBar: View {
-    @ObservedObject var player: AudioPlayerController
-    @EnvironmentObject private var userSettings: UserSettings
-    @EnvironmentObject private var podibleAuth: PodibleAuthController
-    let onExpand: () -> Void
-
-    var body: some View {
-      GlassEffectContainer(spacing: 12) {
-        HStack(spacing: 12) {
-          nowPlayingCapsule
-          playPauseButton
-        }
-      }
-    }
-
-    private var nowPlayingCapsule: some View {
-      Button(action: onExpand) {
-        HStack(spacing: 10) {
-          sharedPlaybackArtwork(
-            size: 32,
-            cornerRadius: 6,
-            player: player,
-            rpcURLString: userSettings.podibleRPCURL,
-            accessToken: podibleAuth.accessToken
-          )
-
-          VStack(alignment: .leading, spacing: 2) {
-            Text(player.title)
-              .font(.subheadline.weight(.semibold))
-              .lineLimit(1)
-            if player.author.isEmpty == false {
-              Text(player.author)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.leading, 12)
-        .padding(.trailing, 18)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Capsule())
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Open Now Playing")
-      .modifier(NowPlayingGlassEffect())
-    }
-
-    private var playPauseButton: some View {
-      Button {
-        player.togglePlayback()
-      } label: {
-        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-          .font(.title3.weight(.semibold))
-          .frame(width: 44, height: 44)
-      }
-      .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-      .buttonStyle(.glass)
-      .buttonBorderShape(.circle)
-    }
-  }
-
-  private struct NowPlayingGlassEffect: ViewModifier {
-    func body(content: Content) -> some View {
-      content.glassEffect(.regular.interactive(), in: Capsule())
     }
   }
 #endif

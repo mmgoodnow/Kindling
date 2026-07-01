@@ -93,20 +93,11 @@ struct BookDetailView: View {
         }
       }
     #endif
-    // Modifier order is outermost-wins: the LAST applied `.safeAreaInset`
-    // sits closest to the screen edge. Mini bar applied first → ends up
-    // ABOVE the dock; dock applied second → hugs the screen edge.
-    .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
-    // `spacing: 8` puts the gap between the dock and whatever sits above it
-    // in the safe-area stack (the mini bar). Localizes the gap so the mini
-    // bar doesn't carry padding it shouldn't on screens without a dock.
     .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
         .padding(.leading, 20)
-        // Slightly more trailing padding than leading: the mini bar's
-        // play/pause glass-circle button carries built-in slop on its right
-        // edge, so the dock's right edge looks misaligned with it without
-        // a small extra nudge here.
+        // Slightly more trailing padding keeps the dock visually centered
+        // against the floating tab bar's right-side optical weight.
         .padding(.trailing, 28)
     }
     .sheet(isPresented: $isShowingCoverPicker) {

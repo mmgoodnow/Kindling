@@ -60,15 +60,18 @@ struct PodibleLibraryView: View {
 
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
+  let isSearchEnabled: Bool
   @Binding var isShowingPlayer: Bool
 
   init(
     mode: PodibleLibraryScreenMode = .library,
     client: RemoteLibraryServing? = nil,
+    isSearchEnabled: Bool = false,
     isShowingPlayer: Binding<Bool> = .constant(false)
   ) {
     self.mode = mode
     self.clientOverride = client
+    self.isSearchEnabled = isSearchEnabled
     self._isShowingPlayer = isShowingPlayer
   }
 
@@ -114,7 +117,6 @@ struct PodibleLibraryView: View {
 
   var body: some View {
     content(client: configuredClient)
-      .miniPlaybackBarInset(player: player, isShowingPlayer: $isShowingPlayer)
       .navigationDestination(for: PodibleLibraryItem.self) { item in
         bookDetailView(for: item)
       }
@@ -384,44 +386,14 @@ struct PodibleLibraryView: View {
       guard let client else { return }
       await refresh(using: client)
     }
-    .searchable(text: $viewModel.query, prompt: "Search")
-    #if os(macOS)
-      .onSubmit(of: .search) {
-        guard mode == .library else { return }
-        guard let client else { return }
-        Task {
-          await viewModel.search(using: client)
-        }
-      }
-    #else
-      .onSubmit(of: .search) {
-        guard mode == .library else { return }
-        guard let client else { return }
-        Task {
-          await viewModel.search(using: client)
-        }
-      }
-    #endif
-    .onChange(of: viewModel.query) { _, newValue in
-      searchTask?.cancel()
-      let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmed.isEmpty {
-        viewModel.searchResults = []
-        pendingSearchItemIDs.removeAll()
-        return
-      }
-      guard mode == .library else {
-        viewModel.searchResults = []
-        pendingSearchItemIDs.removeAll()
-        return
-      }
-      searchTask = Task {
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        guard Task.isCancelled == false else { return }
-        guard let client else { return }
-        await viewModel.search(using: client, query: trimmed)
-      }
-    }
+    .modifier(
+      RemoteLibrarySearchModifier(
+        isEnabled: isSearchEnabled,
+        viewModel: viewModel,
+        onSubmit: { submitSearch(client: client) },
+        onChange: { handleSearchQueryChange($0, client: client) }
+      )
+    )
     #if os(iOS)
       .sheet(isPresented: $isShowingShareSheet) {
         if let shareURL {
@@ -477,6 +449,38 @@ struct PodibleLibraryView: View {
 
   private var trimmedSearchQuery: String {
     viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func submitSearch(client: RemoteLibraryServing?) {
+    guard mode == .library else { return }
+    guard let client else { return }
+    Task {
+      await viewModel.search(using: client)
+    }
+  }
+
+  private func handleSearchQueryChange(
+    _ newValue: String,
+    client: RemoteLibraryServing?
+  ) {
+    searchTask?.cancel()
+    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty {
+      viewModel.searchResults = []
+      pendingSearchItemIDs.removeAll()
+      return
+    }
+    guard mode == .library else {
+      viewModel.searchResults = []
+      pendingSearchItemIDs.removeAll()
+      return
+    }
+    searchTask = Task {
+      try? await Task.sleep(nanoseconds: 200_000_000)
+      guard Task.isCancelled == false else { return }
+      guard let client else { return }
+      await viewModel.search(using: client, query: trimmed)
+    }
   }
 
   private var collectionTiles: [BookTileViewData] {
@@ -2756,6 +2760,27 @@ struct ActivityShareSheet: View {
 
   var body: some View {
     ActivityShareSheetController(items: items)
+  }
+}
+
+private struct RemoteLibrarySearchModifier: ViewModifier {
+  let isEnabled: Bool
+  @ObservedObject var viewModel: RemoteLibraryViewModel
+  let onSubmit: () -> Void
+  let onChange: (String) -> Void
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isEnabled {
+      content
+        .searchable(text: $viewModel.query, prompt: "Search")
+        .onSubmit(of: .search, onSubmit)
+        .onChange(of: viewModel.query) { _, newValue in
+          onChange(newValue)
+        }
+    } else {
+      content
+    }
   }
 }
 
