@@ -497,6 +497,7 @@ struct PodibleLibraryView: View {
           books: collectionTiles,
           layout: collectionLayout,
           filter: collectionFilter,
+          artwork: collectionArtwork(for:cornerRadius:),
           onSelect: selectCollectionBook(_:),
           onToggleRead: toggleRead(_:),
           onToggleFavorite: toggleFavorite(_:)
@@ -590,6 +591,7 @@ struct PodibleLibraryView: View {
         ),
         layout: collectionLayout,
         filter: collectionFilter,
+        artwork: collectionArtwork(for:cornerRadius:),
         onSelect: selectCollectionBook(_:),
         onToggleRead: toggleRead(_:),
         onToggleFavorite: toggleFavorite(_:)
@@ -629,6 +631,50 @@ struct PodibleLibraryView: View {
       narrator: book.narrator,
       description: book.summary
     )
+  }
+
+  private func collectionArtwork(
+    for book: BookTileViewData,
+    cornerRadius: CGFloat
+  ) -> AnyView {
+    AnyView(
+      Group {
+        if let url = book.artworkURL {
+          AuthenticatedRemoteImage(
+            url: url,
+            rpcURLString: userSettings.podibleRPCURL,
+            accessToken: podibleAuth.accessToken
+          ) {
+            collectionArtworkPlaceholder(for: book)
+          }
+          .scaledToFill()
+        } else {
+          collectionArtworkPlaceholder(for: book)
+        }
+      }
+      .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    )
+  }
+
+  private func collectionArtworkPlaceholder(for book: BookTileViewData) -> some View {
+    ZStack {
+      Rectangle()
+        .fill(coverPlaceholderColor(title: book.title, author: book.author))
+      VStack(spacing: 6) {
+        Text(book.title)
+          .font(.caption.weight(.bold))
+          .multilineTextAlignment(.center)
+          .lineLimit(4)
+        if book.author.isEmpty == false {
+          Text(book.author)
+            .font(.caption2)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+        }
+      }
+      .padding(10)
+      .foregroundStyle(.secondary)
+    }
   }
 
   private func artworkPalette(for book: LibraryBook) -> ArtworkPalette {

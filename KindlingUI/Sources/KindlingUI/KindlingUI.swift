@@ -402,11 +402,13 @@ public struct BookCollectionView: View {
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
+  private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
 
   public init(
     books: [BookTileViewData],
     layout: BookCollectionLayout,
     filter: BookCollectionFilter,
+    artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
@@ -414,6 +416,7 @@ public struct BookCollectionView: View {
     self.books = books
     self.layout = layout
     self.filter = filter
+    self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
@@ -438,6 +441,7 @@ public struct BookCollectionView: View {
               ForEach(filteredBooks) { book in
                 BookGridTileView(
                   book: book,
+                  artwork: { collectionArtwork(for: book, cornerRadius: $0) },
                   onSelect: { onSelect(book) },
                   onToggleRead: { onToggleRead(book) },
                   onToggleFavorite: { onToggleFavorite(book) }
@@ -453,6 +457,7 @@ public struct BookCollectionView: View {
               ForEach(filteredBooks) { book in
                 BookListRowView(
                   book: book,
+                  artwork: { collectionArtwork(for: book, cornerRadius: $0) },
                   onSelect: { onSelect(book) },
                   onToggleRead: { onToggleRead(book) },
                   onToggleFavorite: { onToggleFavorite(book) }
@@ -473,6 +478,21 @@ public struct BookCollectionView: View {
       }
     }
   }
+
+  private func collectionArtwork(for book: BookTileViewData, cornerRadius: CGFloat) -> AnyView {
+    if let artwork {
+      return artwork(book, cornerRadius)
+    }
+
+    return AnyView(
+      CoverArtworkView(
+        title: book.title,
+        author: book.author,
+        url: book.artworkURL,
+        cornerRadius: cornerRadius
+      )
+    )
+  }
 }
 
 public struct BookGridTileView: View {
@@ -480,14 +500,17 @@ public struct BookGridTileView: View {
   public let onSelect: () -> Void
   public let onToggleRead: () -> Void
   public let onToggleFavorite: () -> Void
+  private let artwork: ((CGFloat) -> AnyView)?
 
   public init(
     book: BookTileViewData,
+    artwork: ((CGFloat) -> AnyView)? = nil,
     onSelect: @escaping () -> Void = {},
     onToggleRead: @escaping () -> Void = {},
     onToggleFavorite: @escaping () -> Void = {}
   ) {
     self.book = book
+    self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
@@ -497,7 +520,7 @@ public struct BookGridTileView: View {
     Button(action: onSelect) {
       VStack(alignment: .leading, spacing: 6) {
         statusStrip
-        artwork
+        artworkView
         Text(book.title)
           .font(.caption.weight(.bold))
           .foregroundStyle(.primary)
@@ -536,15 +559,22 @@ public struct BookGridTileView: View {
     .background(book.palette.background, in: RoundedRectangle(cornerRadius: 3))
   }
 
-  private var artwork: some View {
-    CoverArtworkView(
-      title: book.title,
-      author: book.author,
-      url: book.artworkURL,
-      cornerRadius: 4
-    )
-    .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
-    .frame(maxWidth: .infinity)
+  @ViewBuilder
+  private var artworkView: some View {
+    if let artwork {
+      artwork(4)
+        .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+    } else {
+      CoverArtworkView(
+        title: book.title,
+        author: book.author,
+        url: book.artworkURL,
+        cornerRadius: 4
+      )
+      .aspectRatio(book.usesSquareArtwork ? 1 : 2 / 3, contentMode: .fit)
+      .frame(maxWidth: .infinity)
+    }
   }
 }
 
@@ -553,14 +583,17 @@ public struct BookListRowView: View {
   public let onSelect: () -> Void
   public let onToggleRead: () -> Void
   public let onToggleFavorite: () -> Void
+  private let artwork: ((CGFloat) -> AnyView)?
 
   public init(
     book: BookTileViewData,
+    artwork: ((CGFloat) -> AnyView)? = nil,
     onSelect: @escaping () -> Void = {},
     onToggleRead: @escaping () -> Void = {},
     onToggleFavorite: @escaping () -> Void = {}
   ) {
     self.book = book
+    self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
@@ -569,13 +602,8 @@ public struct BookListRowView: View {
   public var body: some View {
     Button(action: onSelect) {
       HStack(spacing: 12) {
-        CoverArtworkView(
-          title: book.title,
-          author: book.author,
-          url: book.artworkURL,
-          cornerRadius: 5
-        )
-        .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
+        listArtwork
+          .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(book.title)
@@ -605,6 +633,20 @@ public struct BookListRowView: View {
       .padding(.vertical, 6)
     }
     .buttonStyle(.plain)
+  }
+
+  @ViewBuilder
+  private var listArtwork: some View {
+    if let artwork {
+      artwork(5)
+    } else {
+      CoverArtworkView(
+        title: book.title,
+        author: book.author,
+        url: book.artworkURL,
+        cornerRadius: 5
+      )
+    }
   }
 }
 
@@ -878,11 +920,13 @@ public struct SeriesContentView: View {
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
+  private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
 
   public init(
     series: SeriesViewData,
     layout: BookCollectionLayout,
     filter: BookCollectionFilter,
+    artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
@@ -890,6 +934,7 @@ public struct SeriesContentView: View {
     self.series = series
     self.layout = layout
     self.filter = filter
+    self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
@@ -900,6 +945,7 @@ public struct SeriesContentView: View {
       books: series.books,
       layout: layout,
       filter: filter,
+      artwork: artwork,
       onSelect: onSelect,
       onToggleRead: onToggleRead,
       onToggleFavorite: onToggleFavorite
