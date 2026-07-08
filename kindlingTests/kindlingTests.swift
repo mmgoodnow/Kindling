@@ -6,6 +6,8 @@ import XCTest
 @testable import Kindling
 
 final class kindlingTests: XCTestCase {
+  private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
+
   func testArtworkPaletteSamplerReadsDominantColor() throws {
     let image = try solidImage(red: 204, green: 34, blue: 17)
     let palette = try XCTUnwrap(ArtworkPaletteSampler.palette(from: image))
@@ -22,6 +24,35 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(palette.red, 0.71, accuracy: 0.02)
     XCTAssertEqual(palette.green, 0.71, accuracy: 0.02)
     XCTAssertEqual(palette.blue, 0.71, accuracy: 0.02)
+  }
+
+  func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
+    let legacyResumeID = "OL123W"
+    let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
+    let expectedPosition = 3_218.5
+    let defaults = UserDefaults.standard
+    let sessionKey = "audioPlayer.lastSession"
+    let legacyKey = resumePositionKeyPrefix + legacyResumeID
+    let manifestationKey = resumePositionKeyPrefix + manifestationResumeID
+    defaults.removeObject(forKey: sessionKey)
+    defaults.removeObject(forKey: legacyKey)
+    defaults.removeObject(forKey: manifestationKey)
+    defer {
+      defaults.removeObject(forKey: sessionKey)
+      defaults.removeObject(forKey: legacyKey)
+      defaults.removeObject(forKey: manifestationKey)
+    }
+    defaults.set(expectedPosition, forKey: legacyKey)
+    defaults.set(0, forKey: manifestationKey)
+
+    let player = AudioPlayerController()
+    player.load(
+      url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
+      resumeID: manifestationResumeID,
+      title: "Regression Test"
+    )
+
+    XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
   }
 
   private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {

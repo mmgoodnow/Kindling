@@ -736,7 +736,17 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func persistedPosition(for resumeID: String) -> Double {
-    UserDefaults.standard.double(forKey: ResumeStore.keyPrefix + resumeID)
+    let savedPositions = resumeIDsToPersist(for: resumeID).compactMap { candidateResumeID in
+      storedPersistedPosition(for: candidateResumeID).map { position in
+        (resumeID: candidateResumeID, position: position)
+      }
+    }
+    guard let restored = savedPositions.max(by: { $0.position < $1.position }) else { return 0 }
+
+    if restored.resumeID != resumeID {
+      UserDefaults.standard.set(restored.position, forKey: resumePositionKey(for: resumeID))
+    }
+    return restored.position
   }
 
   private func persistCurrentPosition(force: Bool = false) {
@@ -744,7 +754,9 @@ final class AudioPlayerController: ObservableObject {
     let now = Date.timeIntervalSinceReferenceDate
     guard force || now - lastPersistedPositionAt >= 10 else { return }
     lastPersistedPositionAt = now
-    UserDefaults.standard.set(progress.currentTime, forKey: ResumeStore.keyPrefix + currentResumeID)
+    for resumeID in resumeIDsToPersist(for: currentResumeID) {
+      UserDefaults.standard.set(progress.currentTime, forKey: resumePositionKey(for: resumeID))
+    }
   }
 
   private func clearPersistedPosition() {
@@ -753,7 +765,36 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func clearPersistedPosition(for resumeID: String) {
-    UserDefaults.standard.removeObject(forKey: ResumeStore.keyPrefix + resumeID)
+    for resumeID in resumeIDsToPersist(for: resumeID) {
+      UserDefaults.standard.removeObject(forKey: resumePositionKey(for: resumeID))
+    }
+  }
+
+  private func storedPersistedPosition(for resumeID: String) -> Double? {
+    guard let value = UserDefaults.standard.object(forKey: resumePositionKey(for: resumeID)) else {
+      return nil
+    }
+    if let number = value as? NSNumber {
+      return number.doubleValue
+    }
+    return value as? Double
+  }
+
+  private func resumePositionKey(for resumeID: String) -> String {
+    ResumeStore.keyPrefix + resumeID
+  }
+
+  private func resumeIDsToPersist(for resumeID: String) -> [String] {
+    [resumeID] + fallbackResumeIDs(for: resumeID)
+  }
+
+  private func fallbackResumeIDs(for resumeID: String) -> [String] {
+    guard let range = resumeID.range(of: "#manifestation-") else {
+      return []
+    }
+    let legacyResumeID = String(resumeID[..<range.lowerBound])
+    guard legacyResumeID.isEmpty == false else { return [] }
+    return [legacyResumeID]
   }
 
   private func persistSession() {
