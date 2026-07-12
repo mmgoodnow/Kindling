@@ -488,7 +488,7 @@ struct BookDetailView: View {
       downloadingCapsule(progress: progress)
     case .idle:
       if let play = actions.play {
-        primaryPlayButton(action: play)
+        secondaryGlassButton(systemImage: "play.fill", accessibilityLabel: "Play", action: play)
       } else if let downloadAudio = actions.downloadAudio {
         primaryGlassButton(
           title: "Download Audiobook",
@@ -507,27 +507,6 @@ struct BookDetailView: View {
           action: {})
       }
     }
-  }
-
-  @ViewBuilder
-  private func primaryPlayButton(action: @escaping () -> Void) -> some View {
-    let button = Button(action: action) {
-      Label {
-        Text("Play")
-          .font(.headline.weight(.semibold))
-          .lineLimit(1)
-      } icon: {
-        Image(systemName: "play.fill")
-          .font(.headline.weight(.semibold))
-      }
-      .frame(minWidth: 88)
-    }
-    .controlSize(.regular)
-    .accessibilityLabel("Play")
-
-    button
-      .buttonStyle(.glass)
-      .buttonBorderShape(.capsule)
   }
 
   @ViewBuilder
