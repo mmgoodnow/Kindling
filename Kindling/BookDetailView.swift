@@ -474,9 +474,6 @@ struct BookDetailView: View {
           accessibilityLabel: "Share eBook",
           action: shareEbook)
       }
-      if hasMenuActions {
-        overflowMenu
-      }
       primaryButton
     }
     .frame(maxWidth: .infinity)
@@ -491,8 +488,7 @@ struct BookDetailView: View {
       downloadingCapsule(progress: progress)
     case .idle:
       if let play = actions.play {
-        primaryGlassButton(
-          title: "Play", systemImage: "play.fill", action: play)
+        primaryPlayButton(action: play)
       } else if let downloadAudio = actions.downloadAudio {
         primaryGlassButton(
           title: "Download Audiobook",
@@ -514,6 +510,27 @@ struct BookDetailView: View {
   }
 
   @ViewBuilder
+  private func primaryPlayButton(action: @escaping () -> Void) -> some View {
+    let button = Button(action: action) {
+      Label {
+        Text("Play")
+          .font(.headline.weight(.semibold))
+          .lineLimit(1)
+      } icon: {
+        Image(systemName: "play.fill")
+          .font(.headline.weight(.semibold))
+      }
+      .frame(minWidth: 88)
+    }
+    .controlSize(.regular)
+    .accessibilityLabel("Play")
+
+    button
+      .buttonStyle(.glass)
+      .buttonBorderShape(.capsule)
+  }
+
+  @ViewBuilder
   private func primaryGlassButton(
     title: String,
     systemImage: String,
@@ -526,6 +543,8 @@ struct BookDetailView: View {
       } icon: {
         Image(systemName: systemImage).font(.title2.weight(.semibold))
       }
+      .lineLimit(1)
+      .minimumScaleFactor(0.8)
       .frame(maxWidth: .infinity)
     }
     .controlSize(.large)
