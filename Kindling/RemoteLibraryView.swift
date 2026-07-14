@@ -751,6 +751,7 @@ struct PodibleLibraryView: View {
       author: book.author?.name ?? "Unknown Author",
       artworkURL: artworkURL,
       durationText: book.runtimeSeconds.map(formatRuntime(seconds:)),
+      progress: playbackProgress(for: book),
       isRead: book.localState?.isRead == true,
       isFavorite: book.localState?.isFavorite == true,
       palette: artworkPalette(for: artworkURL),
@@ -1907,9 +1908,11 @@ struct PodibleLibraryView: View {
     localState.lastPlayedAt = Date()
     try? modelContext.save()
     let resumeID = playbackResumeID(for: book)
+    let resumeIDAliases = playbackResumeIDAliases(for: book)
     player.load(
       url: url,
       resumeID: resumeID,
+      resumeIDAliases: resumeIDAliases,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
@@ -1954,6 +1957,7 @@ struct PodibleLibraryView: View {
   ) {
     isShowingPlayer = true
     let resumeID = streamingResumeID(for: item, playbackAudio: playbackAudio)
+    let resumeIDAliases = streamingResumeIDAliases(for: item, playbackAudio: playbackAudio)
     let localBookID = ensureLocalBook(for: item).podibleId
     Task {
       do {
@@ -1971,6 +1975,7 @@ struct PodibleLibraryView: View {
             httpURL: httpURL,
             accessToken: podibleAuth.accessToken,
             resumeID: resumeID,
+            resumeIDAliases: resumeIDAliases,
             title: item.title,
             author: item.author,
             description: item.summary,
@@ -2027,6 +2032,23 @@ struct PodibleLibraryView: View {
     return manifestationResumeID(
       bookIdentity: item.openLibraryWorkID,
       fallback: item.id,
+      manifestationID: manifestationID
+    )
+  }
+
+  private func streamingResumeIDAliases(
+    for item: PodibleLibraryItem,
+    playbackAudio: PodiblePlaybackAudio? = nil
+  ) -> [String] {
+    let manifestationID =
+      playbackAudio?.manifestationId
+      ?? item.playback?.audio?.manifestationId
+      ?? localBooksById[item.id].flatMap {
+        self.playback(from: $0.playbackJSON)?.audio?.manifestationId
+      }
+    return resumeIDAliases(
+      openLibraryWorkID: item.openLibraryWorkID,
+      podibleID: item.id,
       manifestationID: manifestationID
     )
   }
@@ -2141,6 +2163,22 @@ struct PodibleLibraryView: View {
     )
   }
 
+  private func playbackResumeIDAliases(for book: LibraryBook) -> [String] {
+    resumeIDAliases(
+      openLibraryWorkID: book.openLibraryWorkID,
+      podibleID: book.podibleId,
+      manifestationID: playback(from: book.playbackJSON)?.audio?.manifestationId
+    )
+  }
+
+  private func playbackProgress(for book: LibraryBook) -> Double? {
+    player.persistedProgress(
+      resumeID: playbackResumeID(for: book),
+      aliases: playbackResumeIDAliases(for: book),
+      duration: book.runtimeSeconds.map(Double.init)
+    )
+  }
+
   private func manifestationResumeID(
     bookIdentity: String?,
     fallback: String,
@@ -2154,6 +2192,25 @@ struct PodibleLibraryView: View {
     }
     guard let manifestationID else { return base }
     return "\(base)#manifestation-\(manifestationID)"
+  }
+
+  private func resumeIDAliases(
+    openLibraryWorkID: String?,
+    podibleID: String,
+    manifestationID: Int?
+  ) -> [String] {
+    var aliases: [String] = []
+    if let openLibraryWorkID, openLibraryWorkID.isEmpty == false {
+      aliases.append(openLibraryWorkID)
+      if let manifestationID {
+        aliases.append("\(openLibraryWorkID)#manifestation-\(manifestationID)")
+      }
+    }
+    aliases.append(podibleID)
+    if let manifestationID {
+      aliases.append("\(podibleID)#manifestation-\(manifestationID)")
+    }
+    return aliases
   }
 
   @MainActor

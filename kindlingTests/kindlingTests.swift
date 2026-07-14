@@ -55,6 +55,41 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
   }
 
+  func testResumeIDAliasesPreserveProgressAcrossBookIdentityChanges() {
+    let openLibraryResumeID = "OL123W#manifestation-456"
+    let openLibraryLegacyResumeID = "OL123W"
+    let podibleResumeID = "podible-123#manifestation-456"
+    let expectedPosition = 3_218.5
+    let defaults = UserDefaults.standard
+    let sessionKey = "audioPlayer.lastSession"
+    let openLibraryKey = resumePositionKeyPrefix + openLibraryResumeID
+    let openLibraryLegacyKey = resumePositionKeyPrefix + openLibraryLegacyResumeID
+    let podibleKey = resumePositionKeyPrefix + podibleResumeID
+    defaults.removeObject(forKey: sessionKey)
+    defaults.removeObject(forKey: openLibraryKey)
+    defaults.removeObject(forKey: openLibraryLegacyKey)
+    defaults.removeObject(forKey: podibleKey)
+    defer {
+      defaults.removeObject(forKey: sessionKey)
+      defaults.removeObject(forKey: openLibraryKey)
+      defaults.removeObject(forKey: openLibraryLegacyKey)
+      defaults.removeObject(forKey: podibleKey)
+    }
+    defaults.set(expectedPosition, forKey: openLibraryKey)
+    defaults.set(0, forKey: podibleKey)
+
+    let player = AudioPlayerController()
+    player.load(
+      url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
+      resumeID: podibleResumeID,
+      resumeIDAliases: [openLibraryResumeID, openLibraryLegacyResumeID],
+      title: "Regression Test"
+    )
+
+    XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
+    XCTAssertEqual(defaults.double(forKey: podibleKey), expectedPosition, accuracy: 0.001)
+  }
+
   private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {
     let width = 8
     let height = 8

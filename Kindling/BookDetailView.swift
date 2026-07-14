@@ -213,6 +213,11 @@ struct BookDetailView: View {
       }
       .scaledToFill()
       .frame(width: 200, height: 290)
+      .overlay(alignment: .bottom) {
+        artworkProgressBar
+          .padding(.horizontal, 8)
+          .padding(.bottom, 8)
+      }
       .clipShape(RoundedRectangle(cornerRadius: 10))
       .shadow(radius: 8, y: 4)
     } else {
@@ -223,7 +228,28 @@ struct BookDetailView: View {
         height: 290,
         cornerRadius: 10
       )
+      .overlay(alignment: .bottom) {
+        artworkProgressBar
+          .padding(.horizontal, 8)
+          .padding(.bottom, 8)
+      }
       .shadow(radius: 8, y: 4)
+    }
+  }
+
+  @ViewBuilder
+  private var artworkProgressBar: some View {
+    if let progress = detailPlaybackProgress {
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          Capsule()
+            .fill(.black.opacity(0.18))
+          Capsule()
+            .fill(.white.opacity(0.86))
+            .frame(width: proxy.size.width * progress)
+        }
+      }
+      .frame(height: 3)
     }
   }
 
@@ -263,6 +289,66 @@ struct BookDetailView: View {
     return parts.isEmpty ? nil : parts.joined(separator: " • ")
   }
 
+  private var detailPlaybackProgress: Double? {
+    let playbackAudio =
+      item.playback?.audio ?? localBook.flatMap { playback(from: $0.playbackJSON)?.audio }
+    let manifestationID = playbackAudio?.manifestationId
+    let openLibraryWorkID = item.openLibraryWorkID ?? localBook?.openLibraryWorkID
+    let podibleID = localBook?.podibleId ?? item.id
+    return player.persistedProgress(
+      resumeID: manifestationResumeID(
+        bookIdentity: openLibraryWorkID,
+        fallback: podibleID,
+        manifestationID: manifestationID
+      ),
+      aliases: resumeIDAliases(
+        openLibraryWorkID: openLibraryWorkID,
+        podibleID: podibleID,
+        manifestationID: manifestationID
+      ),
+      duration: (item.runtimeSeconds ?? localBook?.runtimeSeconds).map(Double.init)
+    )
+  }
+
+  private func manifestationResumeID(
+    bookIdentity: String?,
+    fallback: String,
+    manifestationID: Int?
+  ) -> String {
+    let base: String
+    if let bookIdentity, bookIdentity.isEmpty == false {
+      base = bookIdentity
+    } else {
+      base = fallback
+    }
+    guard let manifestationID else { return base }
+    return "\(base)#manifestation-\(manifestationID)"
+  }
+
+  private func resumeIDAliases(
+    openLibraryWorkID: String?,
+    podibleID: String,
+    manifestationID: Int?
+  ) -> [String] {
+    var aliases: [String] = []
+    if let openLibraryWorkID, openLibraryWorkID.isEmpty == false {
+      aliases.append(openLibraryWorkID)
+      if let manifestationID {
+        aliases.append("\(openLibraryWorkID)#manifestation-\(manifestationID)")
+      }
+    }
+    aliases.append(podibleID)
+    if let manifestationID {
+      aliases.append("\(podibleID)#manifestation-\(manifestationID)")
+    }
+    return aliases
+  }
+
+  private func playback(from data: Data?) -> PodiblePlayback? {
+    guard let data else { return nil }
+    return try? JSONDecoder().decode(PodiblePlayback.self, from: data)
+  }
+
   private var displaySummary: String? {
     if let summary = item.summary, summary.isEmpty == false {
       return summary
@@ -281,6 +367,7 @@ struct BookDetailView: View {
       artworkURL: currentArtworkURL,
       palette: detailPalette,
       durationText: metricsText,
+      progress: detailPlaybackProgress,
       seriesTitle: item.seriesTitle ?? localBook?.series?.title,
       seriesPosition: item.seriesPosition ?? localBook?.seriesIndex,
       narrator: item.narrator ?? localBook?.narrator,

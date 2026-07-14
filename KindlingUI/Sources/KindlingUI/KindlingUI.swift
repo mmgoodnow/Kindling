@@ -97,6 +97,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
   public var artworkURL: URL?
   public var usesSquareArtwork: Bool
   public var durationText: String?
+  public var progress: Double?
   public var isRead: Bool
   public var isFavorite: Bool
   public var palette: ArtworkPalette
@@ -114,6 +115,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
     artworkURL: URL? = nil,
     usesSquareArtwork: Bool = false,
     durationText: String? = nil,
+    progress: Double? = nil,
     isRead: Bool = false,
     isFavorite: Bool = false,
     palette: ArtworkPalette = .fallback,
@@ -130,6 +132,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
     self.artworkURL = artworkURL
     self.usesSquareArtwork = usesSquareArtwork
     self.durationText = durationText
+    self.progress = progress.map { min(max($0, 0), 1) }
     self.isRead = isRead
     self.isFavorite = isFavorite
     self.palette = palette
@@ -178,6 +181,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
   public var usesSquareArtwork: Bool
   public var palette: ArtworkPalette
   public var durationText: String?
+  public var progress: Double?
   public var seriesTitle: String?
   public var seriesPosition: Double?
   public var narrator: String?
@@ -192,6 +196,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
     usesSquareArtwork: Bool = false,
     palette: ArtworkPalette = .fallback,
     durationText: String? = nil,
+    progress: Double? = nil,
     seriesTitle: String? = nil,
     seriesPosition: Double? = nil,
     narrator: String? = nil,
@@ -205,6 +210,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
     self.usesSquareArtwork = usesSquareArtwork
     self.palette = palette
     self.durationText = durationText
+    self.progress = progress.map { min(max($0, 0), 1) }
     self.seriesTitle = seriesTitle
     self.seriesPosition = seriesPosition
     self.narrator = narrator
@@ -594,6 +600,11 @@ public struct BookGridTileView: View {
   private var artworkView: some View {
     CoverCropFrame(cornerRadius: 4) {
       artworkContent(cornerRadius: 4)
+    }
+    .overlay(alignment: .bottom) {
+      ArtworkProgressBar(progress: book.progress)
+        .padding(.horizontal, 5)
+        .padding(.bottom, 5)
     }
     .aspectRatio(artworkAspectRatio, contentMode: .fit)
     .frame(maxWidth: .infinity)
@@ -1302,5 +1313,24 @@ private struct CoverCropFrame<Artwork: View>: View {
         .clipped()
     }
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+  }
+}
+
+private struct ArtworkProgressBar: View {
+  let progress: Double?
+
+  var body: some View {
+    if let progress, progress > 0, progress < 1 {
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          Capsule()
+            .fill(.black.opacity(0.18))
+          Capsule()
+            .fill(.white.opacity(0.86))
+            .frame(width: proxy.size.width * progress)
+        }
+      }
+      .frame(height: 3)
+    }
   }
 }
