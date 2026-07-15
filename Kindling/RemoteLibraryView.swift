@@ -891,7 +891,7 @@ struct PodibleLibraryView: View {
   @MainActor
   private func markFinishedPlaybackRead(_ notification: Notification) {
     guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
-    guard let book = localBooks.first(where: { playbackResumeID(for: $0) == resumeID }) else {
+    guard let book = localBooks.first(where: { playbackIdentity(for: $0).matches(resumeID) }) else {
       return
     }
     let state = ensureLocalState(for: book)
@@ -1907,12 +1907,10 @@ struct PodibleLibraryView: View {
     let localState = ensureLocalState(for: book)
     localState.lastPlayedAt = Date()
     try? modelContext.save()
-    let resumeID = playbackResumeID(for: book)
-    let resumeIDAliases = playbackResumeIDAliases(for: book)
+    let identity = playbackIdentity(for: book)
     player.load(
       url: url,
-      resumeID: resumeID,
-      resumeIDAliases: resumeIDAliases,
+      identity: identity,
       title: book.title,
       author: book.author?.name,
       description: book.summary,
@@ -1926,7 +1924,7 @@ struct PodibleLibraryView: View {
     if let client = configuredClient {
       let playbackAudio = playback(from: book.playbackJSON)?.audio
       Task {
-        await loadPlaybackMetadata(playback: playbackAudio, resumeID: resumeID, client: client)
+        await loadPlaybackMetadata(playback: playbackAudio, identity: identity, client: client)
       }
     }
     player.play()
@@ -1956,8 +1954,7 @@ struct PodibleLibraryView: View {
     client: RemoteLibraryServing
   ) {
     isShowingPlayer = true
-    let resumeID = streamingResumeID(for: item, playbackAudio: playbackAudio)
-    let resumeIDAliases = streamingResumeIDAliases(for: item, playbackAudio: playbackAudio)
+    let identity = streamingIdentity(for: item, playbackAudio: playbackAudio)
     let localBookID = ensureLocalBook(for: item).podibleId
     Task {
       do {
@@ -1974,8 +1971,7 @@ struct PodibleLibraryView: View {
           player.loadStreaming(
             httpURL: httpURL,
             accessToken: podibleAuth.accessToken,
-            resumeID: resumeID,
-            resumeIDAliases: resumeIDAliases,
+            identity: identity,
             title: item.title,
             author: item.author,
             description: item.summary,
@@ -2010,7 +2006,7 @@ struct PodibleLibraryView: View {
           }
           // Server-side chapters/transcript still available — fire and forget.
           Task {
-            await loadPlaybackMetadata(playback: playbackAudio, resumeID: resumeID, client: client)
+            await loadPlaybackMetadata(playback: playbackAudio, identity: identity, client: client)
           }
         }
       } catch {
@@ -2019,34 +2015,17 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private func streamingResumeID(
+  private func streamingIdentity(
     for item: PodibleLibraryItem,
     playbackAudio: PodiblePlaybackAudio? = nil
-  ) -> String {
+  ) -> PlaybackIdentity {
     let manifestationID =
       playbackAudio?.manifestationId
       ?? item.playback?.audio?.manifestationId
       ?? localBooksById[item.id].flatMap {
         self.playback(from: $0.playbackJSON)?.audio?.manifestationId
       }
-    return manifestationResumeID(
-      bookIdentity: item.openLibraryWorkID,
-      fallback: item.id,
-      manifestationID: manifestationID
-    )
-  }
-
-  private func streamingResumeIDAliases(
-    for item: PodibleLibraryItem,
-    playbackAudio: PodiblePlaybackAudio? = nil
-  ) -> [String] {
-    let manifestationID =
-      playbackAudio?.manifestationId
-      ?? item.playback?.audio?.manifestationId
-      ?? localBooksById[item.id].flatMap {
-        self.playback(from: $0.playbackJSON)?.audio?.manifestationId
-      }
-    return resumeIDAliases(
+    return PlaybackIdentity(
       openLibraryWorkID: item.openLibraryWorkID,
       podibleID: item.id,
       manifestationID: manifestationID
@@ -2056,26 +2035,26 @@ struct PodibleLibraryView: View {
   @MainActor
   private func loadPlaybackMetadata(
     playback: PodiblePlaybackAudio?,
-    resumeID: String,
+    identity: PlaybackIdentity,
     client: RemoteLibraryServing
   ) async {
     guard let playback else {
       player.applyRemoteTranscriptUnavailable(
         "No audio edition metadata is available for transcript lookup.",
-        for: resumeID
+        for: identity
       )
-      player.applyRemoteChapters([], for: resumeID)
+      player.applyRemoteChapters([], for: identity)
       return
     }
 
     async let chapters: Void = loadRemoteChapters(
       playback: playback,
-      resumeID: resumeID,
+      identity: identity,
       client: client
     )
     async let transcript: Void = loadRemoteTranscript(
       playback: playback,
-      resumeID: resumeID,
+      identity: identity,
       client: client
     )
     _ = await (chapters, transcript)
@@ -2086,17 +2065,23 @@ struct PodibleLibraryView: View {
     guard player.transcriptLoadState == .idle else { return }
     guard let activeResumeID = player.activeResumeID else { return }
     guard
-      let activeBook = localBooks.first(where: { playbackResumeID(for: $0) == activeResumeID })
+      let activeBook = localBooks.first(where: {
+        playbackIdentity(for: $0).matches(activeResumeID)
+      })
     else {
       return
     }
     let playbackAudio = playback(from: activeBook.playbackJSON)?.audio
-    await loadPlaybackMetadata(playback: playbackAudio, resumeID: activeResumeID, client: client)
+    await loadPlaybackMetadata(
+      playback: playbackAudio,
+      identity: playbackIdentity(for: activeBook),
+      client: client
+    )
   }
 
   private func loadRemoteTranscript(
     playback: PodiblePlaybackAudio,
-    resumeID: String,
+    identity: PlaybackIdentity,
     client: RemoteLibraryServing
   ) async {
     guard let transcriptURL = playback.transcriptUrl,
@@ -2105,26 +2090,26 @@ struct PodibleLibraryView: View {
       await MainActor.run {
         player.applyRemoteTranscriptUnavailable(
           "Podible did not return a transcript URL for this audio edition.",
-          for: resumeID
+          for: identity
         )
       }
       return
     }
 
     await MainActor.run {
-      player.beginRemoteTranscriptLoad(for: resumeID)
+      player.beginRemoteTranscriptLoad(for: identity)
     }
 
     do {
       if let transcript = try await client.fetchTranscript(playback: playback) {
         await MainActor.run {
-          player.applyRemoteTranscript(transcript, for: resumeID)
+          player.applyRemoteTranscript(transcript, for: identity)
         }
       } else {
         await MainActor.run {
           player.applyRemoteTranscriptUnavailable(
             "Podible returned 404 for this transcript URL.",
-            for: resumeID
+            for: identity
           )
         }
       }
@@ -2132,7 +2117,7 @@ struct PodibleLibraryView: View {
       await MainActor.run {
         player.applyRemoteTranscriptFailure(
           "Transcript download failed: \(error.localizedDescription)",
-          for: resumeID
+          for: identity
         )
       }
     }
@@ -2140,31 +2125,23 @@ struct PodibleLibraryView: View {
 
   private func loadRemoteChapters(
     playback: PodiblePlaybackAudio,
-    resumeID: String,
+    identity: PlaybackIdentity,
     client: RemoteLibraryServing
   ) async {
     do {
       let chapters = try await client.fetchChapters(playback: playback)
       await MainActor.run {
-        player.applyRemoteChapters(chapters, for: resumeID)
+        player.applyRemoteChapters(chapters, for: identity)
       }
     } catch {
       await MainActor.run {
-        player.applyRemoteChapters([], for: resumeID)
+        player.applyRemoteChapters([], for: identity)
       }
     }
   }
 
-  private func playbackResumeID(for book: LibraryBook) -> String {
-    return manifestationResumeID(
-      bookIdentity: book.openLibraryWorkID,
-      fallback: book.podibleId,
-      manifestationID: playback(from: book.playbackJSON)?.audio?.manifestationId
-    )
-  }
-
-  private func playbackResumeIDAliases(for book: LibraryBook) -> [String] {
-    resumeIDAliases(
+  private func playbackIdentity(for book: LibraryBook) -> PlaybackIdentity {
+    return PlaybackIdentity(
       openLibraryWorkID: book.openLibraryWorkID,
       podibleID: book.podibleId,
       manifestationID: playback(from: book.playbackJSON)?.audio?.manifestationId
@@ -2173,44 +2150,9 @@ struct PodibleLibraryView: View {
 
   private func playbackProgress(for book: LibraryBook) -> Double? {
     player.persistedProgress(
-      resumeID: playbackResumeID(for: book),
-      aliases: playbackResumeIDAliases(for: book),
+      identity: playbackIdentity(for: book),
       duration: book.runtimeSeconds.map(Double.init)
     )
-  }
-
-  private func manifestationResumeID(
-    bookIdentity: String?,
-    fallback: String,
-    manifestationID: Int?
-  ) -> String {
-    let base: String
-    if let bookIdentity, bookIdentity.isEmpty == false {
-      base = bookIdentity
-    } else {
-      base = fallback
-    }
-    guard let manifestationID else { return base }
-    return "\(base)#manifestation-\(manifestationID)"
-  }
-
-  private func resumeIDAliases(
-    openLibraryWorkID: String?,
-    podibleID: String,
-    manifestationID: Int?
-  ) -> [String] {
-    var aliases: [String] = []
-    if let openLibraryWorkID, openLibraryWorkID.isEmpty == false {
-      aliases.append(openLibraryWorkID)
-      if let manifestationID {
-        aliases.append("\(openLibraryWorkID)#manifestation-\(manifestationID)")
-      }
-    }
-    aliases.append(podibleID)
-    if let manifestationID {
-      aliases.append("\(podibleID)#manifestation-\(manifestationID)")
-    }
-    return aliases
   }
 
   @MainActor

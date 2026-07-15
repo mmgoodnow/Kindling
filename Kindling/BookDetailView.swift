@@ -296,52 +296,13 @@ struct BookDetailView: View {
     let openLibraryWorkID = item.openLibraryWorkID ?? localBook?.openLibraryWorkID
     let podibleID = localBook?.podibleId ?? item.id
     return player.persistedProgress(
-      resumeID: manifestationResumeID(
-        bookIdentity: openLibraryWorkID,
-        fallback: podibleID,
-        manifestationID: manifestationID
-      ),
-      aliases: resumeIDAliases(
+      identity: PlaybackIdentity(
         openLibraryWorkID: openLibraryWorkID,
         podibleID: podibleID,
         manifestationID: manifestationID
       ),
       duration: (item.runtimeSeconds ?? localBook?.runtimeSeconds).map(Double.init)
     )
-  }
-
-  private func manifestationResumeID(
-    bookIdentity: String?,
-    fallback: String,
-    manifestationID: Int?
-  ) -> String {
-    let base: String
-    if let bookIdentity, bookIdentity.isEmpty == false {
-      base = bookIdentity
-    } else {
-      base = fallback
-    }
-    guard let manifestationID else { return base }
-    return "\(base)#manifestation-\(manifestationID)"
-  }
-
-  private func resumeIDAliases(
-    openLibraryWorkID: String?,
-    podibleID: String,
-    manifestationID: Int?
-  ) -> [String] {
-    var aliases: [String] = []
-    if let openLibraryWorkID, openLibraryWorkID.isEmpty == false {
-      aliases.append(openLibraryWorkID)
-      if let manifestationID {
-        aliases.append("\(openLibraryWorkID)#manifestation-\(manifestationID)")
-      }
-    }
-    aliases.append(podibleID)
-    if let manifestationID {
-      aliases.append("\(podibleID)#manifestation-\(manifestationID)")
-    }
-    return aliases
   }
 
   private func playback(from data: Data?) -> PodiblePlayback? {

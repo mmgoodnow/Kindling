@@ -29,6 +29,7 @@ final class kindlingTests: XCTestCase {
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
+    let identity = PlaybackIdentity(canonicalID: manifestationResumeID)
     let expectedPosition = 3_218.5
     let defaults = UserDefaults.standard
     let sessionKey = "audioPlayer.lastSession"
@@ -48,7 +49,7 @@ final class kindlingTests: XCTestCase {
     let player = AudioPlayerController()
     player.load(
       url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
-      resumeID: manifestationResumeID,
+      identity: identity,
       title: "Regression Test"
     )
 
@@ -59,6 +60,11 @@ final class kindlingTests: XCTestCase {
     let openLibraryResumeID = "OL123W#manifestation-456"
     let openLibraryLegacyResumeID = "OL123W"
     let podibleResumeID = "podible-123#manifestation-456"
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: openLibraryLegacyResumeID,
+      podibleID: "podible-123",
+      manifestationID: 456
+    )
     let expectedPosition = 3_218.5
     let defaults = UserDefaults.standard
     let sessionKey = "audioPlayer.lastSession"
@@ -81,13 +87,35 @@ final class kindlingTests: XCTestCase {
     let player = AudioPlayerController()
     player.load(
       url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
-      resumeID: podibleResumeID,
-      resumeIDAliases: [openLibraryResumeID, openLibraryLegacyResumeID],
+      identity: identity,
       title: "Regression Test"
     )
 
     XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
+    XCTAssertEqual(defaults.double(forKey: openLibraryKey), expectedPosition, accuracy: 0.001)
     XCTAssertEqual(defaults.double(forKey: podibleKey), expectedPosition, accuracy: 0.001)
+  }
+
+  func testPlaybackIdentityIncludesCanonicalAliasesAndLegacyFallbacks() {
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 456
+    )
+
+    XCTAssertEqual(identity.canonicalID, "OL123W#manifestation-456")
+    XCTAssertEqual(
+      identity.allResumeIDs,
+      [
+        "OL123W#manifestation-456",
+        "OL123W",
+        "podible-123",
+        "podible-123#manifestation-456",
+      ]
+    )
+    XCTAssertTrue(identity.matches("podible-123#manifestation-456"))
+    XCTAssertTrue(identity.matches("podible-123"))
+    XCTAssertFalse(identity.matches("other-book"))
   }
 
   private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {

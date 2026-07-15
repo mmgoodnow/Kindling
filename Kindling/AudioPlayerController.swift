@@ -72,8 +72,7 @@ final class AudioPlayerController: ObservableObject {
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
-  private var currentResumeID: String?
-  private var currentResumeIDAliases: [String] = []
+  private var currentPlaybackIdentity: PlaybackIdentity?
   private var currentFileURL: URL?
   private var loadedRangesObservation: NSKeyValueObservation?
   private var timeControlObservation: NSKeyValueObservation?
@@ -114,8 +113,7 @@ final class AudioPlayerController: ObservableObject {
 
   func load(
     url: URL,
-    resumeID: String,
-    resumeIDAliases: [String] = [],
+    identity: PlaybackIdentity,
     title: String,
     author: String? = nil,
     description: String? = nil,
@@ -124,8 +122,7 @@ final class AudioPlayerController: ObservableObject {
   ) {
     streamingLoader = nil
     prepareForLoad(
-      resumeID: resumeID,
-      resumeIDAliases: resumeIDAliases,
+      identity: identity,
       url: url,
       title: title,
       author: author,
@@ -133,7 +130,7 @@ final class AudioPlayerController: ObservableObject {
       artworkURL: artworkURL,
       artworkAccessToken: artworkAccessToken
     )
-    let savedPosition = persistedPosition(for: resumeID, aliases: resumeIDAliases)
+    let savedPosition = persistedPosition(for: identity)
     let player = AVPlayer(url: url)
     self.player = player
     finishLoad(
@@ -151,8 +148,7 @@ final class AudioPlayerController: ObservableObject {
   func loadStreaming(
     httpURL: URL,
     accessToken: String?,
-    resumeID: String,
-    resumeIDAliases: [String] = [],
+    identity: PlaybackIdentity,
     title: String,
     author: String? = nil,
     description: String? = nil,
@@ -164,9 +160,14 @@ final class AudioPlayerController: ObservableObject {
     guard let proxyURL = StreamingAssetLoader.proxyURL(for: httpURL) else {
       // Fall back to plain load if we can't construct the custom-scheme URL.
       load(
-        url: httpURL, resumeID: resumeID, resumeIDAliases: resumeIDAliases, title: title,
+        url: httpURL,
+        identity: identity,
+        title: title,
         author: author,
-        description: description, artworkURL: artworkURL, artworkAccessToken: artworkAccessToken)
+        description: description,
+        artworkURL: artworkURL,
+        artworkAccessToken: artworkAccessToken
+      )
       return
     }
 
@@ -178,8 +179,7 @@ final class AudioPlayerController: ObservableObject {
     )
     streamingLoader = loader
     prepareForLoad(
-      resumeID: resumeID,
-      resumeIDAliases: resumeIDAliases,
+      identity: identity,
       url: httpURL,
       title: title,
       author: author,
@@ -187,7 +187,7 @@ final class AudioPlayerController: ObservableObject {
       artworkURL: artworkURL,
       artworkAccessToken: artworkAccessToken
     )
-    let savedPosition = persistedPosition(for: resumeID, aliases: resumeIDAliases)
+    let savedPosition = persistedPosition(for: identity)
 
     let asset = AVURLAsset(url: proxyURL)
     asset.resourceLoader.setDelegate(loader, queue: .main)
@@ -208,8 +208,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func prepareForLoad(
-    resumeID: String,
-    resumeIDAliases: [String],
+    identity: PlaybackIdentity,
     url: URL,
     title: String,
     author: String?,
@@ -222,9 +221,8 @@ final class AudioPlayerController: ObservableObject {
     #if os(iOS)
       artworkLoadTask?.cancel()
     #endif
-    currentResumeID = resumeID
-    currentResumeIDAliases = normalizedResumeIDs(resumeIDAliases)
-    activeResumeID = resumeID
+    currentPlaybackIdentity = identity
+    activeResumeID = identity.canonicalID
     currentFileURL = url
     self.title = title
     self.author = author ?? ""
@@ -233,7 +231,7 @@ final class AudioPlayerController: ObservableObject {
     #if os(iOS)
       self.artworkAccessToken = artworkAccessToken
     #endif
-    progress.currentTime = persistedPosition(for: resumeID, aliases: currentResumeIDAliases)
+    progress.currentTime = persistedPosition(for: identity)
     progress.duration = 0
     lastPersistedPositionAt = 0
     self.isPlaying = false
@@ -376,8 +374,7 @@ final class AudioPlayerController: ObservableObject {
     chapterLoadTask = nil
     player = nil
     currentFileURL = nil
-    currentResumeID = nil
-    currentResumeIDAliases = []
+    currentPlaybackIdentity = nil
     activeResumeID = nil
     progress.duration = 0
     title = ""
@@ -423,7 +420,7 @@ final class AudioPlayerController: ObservableObject {
 
       load(
         url: url,
-        resumeID: session.resumeID,
+        identity: PlaybackIdentity(canonicalID: session.resumeID),
         title: session.title,
         author: session.author.isEmpty ? nil : session.author,
         description: session.description.isEmpty ? nil : session.description,
@@ -445,7 +442,7 @@ final class AudioPlayerController: ObservableObject {
     loadStreaming(
       httpURL: streamingURL,
       accessToken: accessToken,
-      resumeID: session.resumeID,
+      identity: PlaybackIdentity(canonicalID: session.resumeID),
       title: session.title,
       author: session.author.isEmpty ? nil : session.author,
       description: session.description.isEmpty ? nil : session.description,
@@ -460,15 +457,15 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @MainActor
-  func beginRemoteTranscriptLoad(for resumeID: String) {
-    guard currentResumeID == resumeID else { return }
+  func beginRemoteTranscriptLoad(for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     transcript = nil
     transcriptLoadState = .loading
   }
 
   @MainActor
-  func applyRemoteTranscript(_ transcript: PodibleTranscript?, for resumeID: String) {
-    guard currentResumeID == resumeID else { return }
+  func applyRemoteTranscript(_ transcript: PodibleTranscript?, for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     self.transcript = transcript
     if let transcript {
       transcriptLoadState = .loaded(wordCount: transcript.words.count)
@@ -478,22 +475,22 @@ final class AudioPlayerController: ObservableObject {
   }
 
   @MainActor
-  func applyRemoteTranscriptUnavailable(_ message: String, for resumeID: String) {
-    guard currentResumeID == resumeID else { return }
+  func applyRemoteTranscriptUnavailable(_ message: String, for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     transcript = nil
     transcriptLoadState = .unavailable(message)
   }
 
   @MainActor
-  func applyRemoteTranscriptFailure(_ message: String, for resumeID: String) {
-    guard currentResumeID == resumeID else { return }
+  func applyRemoteTranscriptFailure(_ message: String, for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     transcript = nil
     transcriptLoadState = .failed(message)
   }
 
   @MainActor
-  func applyRemoteChapters(_ markers: [PodibleChapterMarker], for resumeID: String) {
-    guard currentResumeID == resumeID else { return }
+  func applyRemoteChapters(_ markers: [PodibleChapterMarker], for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     guard markers.isEmpty == false else { return }
 
     let sorted = markers.sorted { $0.startTime < $1.startTime }
@@ -631,11 +628,11 @@ final class AudioPlayerController: ObservableObject {
       guard let self else { return }
       isPlaying = false
       progress.currentTime = progress.duration
-      if let currentResumeID {
+      if let currentPlaybackIdentity {
         NotificationCenter.default.post(
           name: .audioPlayerDidFinishItem,
           object: self,
-          userInfo: ["resumeID": currentResumeID]
+          userInfo: ["resumeID": currentPlaybackIdentity.canonicalID]
         )
       }
       clearPersistedPosition()
@@ -744,54 +741,57 @@ final class AudioPlayerController: ObservableObject {
     seekHistory.append(normalized)
   }
 
-  func persistedProgress(resumeID: String, aliases: [String] = [], duration: Double?) -> Double? {
+  func persistedProgress(identity: PlaybackIdentity, duration: Double?) -> Double? {
     guard let duration, duration.isFinite, duration > 0 else { return nil }
     if let activeResumeID,
-      resumeIDsToPersist(for: resumeID, aliases: aliases).contains(activeResumeID),
+      identity.matches(activeResumeID),
       progress.currentTime > 0,
       progress.currentTime < duration - 0.5
     {
       return min(max(progress.currentTime / duration, 0), 1)
     }
-    let position = persistedPosition(for: resumeID, aliases: aliases)
+    let position = persistedPosition(for: identity)
     guard position > 0, position < duration - 0.5 else { return nil }
     return min(max(position / duration, 0), 1)
   }
 
-  private func persistedPosition(for resumeID: String, aliases: [String] = []) -> Double {
-    let savedPositions = resumeIDsToPersist(for: resumeID, aliases: aliases).compactMap {
-      candidateResumeID in
+  private func persistedPosition(for identity: PlaybackIdentity) -> Double {
+    let savedPositions = identity.allResumeIDs.compactMap { candidateResumeID in
       storedPersistedPosition(for: candidateResumeID).map { position in
         (resumeID: candidateResumeID, position: position)
       }
     }
     guard let restored = savedPositions.max(by: { $0.position < $1.position }) else { return 0 }
 
-    if restored.resumeID != resumeID {
+    for resumeID in identity.allResumeIDs where resumeID != restored.resumeID {
       UserDefaults.standard.set(restored.position, forKey: resumePositionKey(for: resumeID))
     }
     return restored.position
   }
 
   private func persistCurrentPosition(force: Bool = false) {
-    guard let currentResumeID else { return }
+    guard let currentPlaybackIdentity else { return }
     let now = Date.timeIntervalSinceReferenceDate
     guard force || now - lastPersistedPositionAt >= 10 else { return }
     lastPersistedPositionAt = now
-    for resumeID in resumeIDsToPersist(for: currentResumeID, aliases: currentResumeIDAliases) {
+    for resumeID in currentPlaybackIdentity.allResumeIDs {
       UserDefaults.standard.set(progress.currentTime, forKey: resumePositionKey(for: resumeID))
     }
   }
 
   private func clearPersistedPosition() {
-    guard let currentResumeID else { return }
-    clearPersistedPosition(for: currentResumeID, aliases: currentResumeIDAliases)
+    guard let currentPlaybackIdentity else { return }
+    clearPersistedPosition(for: currentPlaybackIdentity)
   }
 
-  private func clearPersistedPosition(for resumeID: String, aliases: [String] = []) {
-    for resumeID in resumeIDsToPersist(for: resumeID, aliases: aliases) {
+  private func clearPersistedPosition(for identity: PlaybackIdentity) {
+    for resumeID in identity.allResumeIDs {
       UserDefaults.standard.removeObject(forKey: resumePositionKey(for: resumeID))
     }
+  }
+
+  private func clearPersistedPosition(for resumeID: String) {
+    clearPersistedPosition(for: PlaybackIdentity(canonicalID: resumeID))
   }
 
   private func storedPersistedPosition(for resumeID: String) -> Double? {
@@ -808,36 +808,8 @@ final class AudioPlayerController: ObservableObject {
     ResumeStore.keyPrefix + resumeID
   }
 
-  private func resumeIDsToPersist(for resumeID: String, aliases: [String] = []) -> [String] {
-    normalizedResumeIDs([resumeID] + aliases)
-      .flatMap { [$0] + fallbackResumeIDs(for: $0) }
-      .reduce(into: []) { uniqueIDs, candidate in
-        if uniqueIDs.contains(candidate) == false {
-          uniqueIDs.append(candidate)
-        }
-      }
-  }
-
-  private func normalizedResumeIDs(_ resumeIDs: [String]) -> [String] {
-    resumeIDs.reduce(into: []) { uniqueIDs, candidate in
-      guard candidate.isEmpty == false else { return }
-      if uniqueIDs.contains(candidate) == false {
-        uniqueIDs.append(candidate)
-      }
-    }
-  }
-
-  private func fallbackResumeIDs(for resumeID: String) -> [String] {
-    guard let range = resumeID.range(of: "#manifestation-") else {
-      return []
-    }
-    let legacyResumeID = String(resumeID[..<range.lowerBound])
-    guard legacyResumeID.isEmpty == false else { return [] }
-    return [legacyResumeID]
-  }
-
   private func persistSession() {
-    guard let currentResumeID, let currentFileURL else { return }
+    guard let currentPlaybackIdentity, let currentFileURL else { return }
     let relativePath = try? LibraryStorage().relativePath(forFileURL: currentFileURL)
     let streamingURLString = relativePath == nil ? currentFileURL.absoluteString : nil
     guard relativePath != nil || streamingURLString != nil else {
@@ -845,7 +817,7 @@ final class AudioPlayerController: ObservableObject {
     }
 
     let session = PersistedSession(
-      resumeID: currentResumeID,
+      resumeID: currentPlaybackIdentity.canonicalID,
       fileRelativePath: relativePath,
       streamingURLString: streamingURLString,
       title: title,
