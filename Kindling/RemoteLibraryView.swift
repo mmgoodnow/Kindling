@@ -1254,7 +1254,7 @@ struct PodibleLibraryView: View {
       )
       updateSyncState(with: summary, syncedAt: Date())
     } catch {
-      syncErrorMessage = error.localizedDescription
+      syncErrorMessage = librarySyncErrorMessage(for: error)
     }
     cancelSyncSpinner()
     isSyncing = false

@@ -44,6 +44,17 @@ final class kindlingTests: XCTestCase {
     XCTAssertNil(cache.palette(for: removedKey))
   }
 
+  func testLibrarySyncCancellationDoesNotProduceUserFacingError() {
+    XCTAssertNil(librarySyncErrorMessage(for: CancellationError()))
+    XCTAssertNil(librarySyncErrorMessage(for: URLError(.cancelled)))
+  }
+
+  func testLibrarySyncFailureRemainsUserFacing() {
+    let error = URLError(.notConnectedToInternet)
+
+    XCTAssertEqual(librarySyncErrorMessage(for: error), error.localizedDescription)
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

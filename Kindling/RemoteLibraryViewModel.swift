@@ -1,5 +1,15 @@
 import Foundation
 
+func isCancellationError(_ error: Error) -> Bool {
+  if error is CancellationError { return true }
+  let nsError = error as NSError
+  return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+}
+
+func librarySyncErrorMessage(for error: Error) -> String? {
+  isCancellationError(error) ? nil : error.localizedDescription
+}
+
 @MainActor
 final class PodibleLibraryViewModel: ObservableObject {
   struct DownloadProgress: Hashable {
@@ -193,7 +203,7 @@ final class PodibleLibraryViewModel: ObservableObject {
     }
     return filtered.sorted { lhs, rhs in
       switch (lhs.bookAdded, rhs.bookAdded) {
-      case let (l?, r?):
+      case (let l?, let r?):
         if l != r { return l > r }
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
       case (_?, nil):
@@ -468,11 +478,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   }
 
   private func shouldIgnoreError(_ error: Error) -> Bool {
-    if error is CancellationError { return true }
-    if let urlError = error as? URLError, urlError.code == .cancelled {
-      return true
-    }
-    return false
+    isCancellationError(error)
   }
 }
 
