@@ -114,6 +114,38 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(defaults.double(forKey: podibleKey), expectedPosition, accuracy: 0.001)
   }
 
+  func testPersistedProgressLookupDoesNotRewriteResumeAliases() throws {
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 456
+    )
+    let expectedPosition = 1_234.5
+    let defaults = UserDefaults.standard
+    let keys = identity.allResumeIDs.map { resumePositionKeyPrefix + $0 }
+    for key in keys {
+      defaults.removeObject(forKey: key)
+    }
+    defer {
+      for key in keys {
+        defaults.removeObject(forKey: key)
+      }
+    }
+    defaults.set(expectedPosition, forKey: resumePositionKeyPrefix + "OL123W")
+
+    let player = AudioPlayerController()
+    let progress = try XCTUnwrap(
+      player.persistedProgress(identity: identity, duration: 2_469)
+    )
+
+    XCTAssertEqual(progress, 0.5, accuracy: 0.001)
+    XCTAssertNil(defaults.object(forKey: resumePositionKeyPrefix + identity.canonicalID))
+    XCTAssertNil(defaults.object(forKey: resumePositionKeyPrefix + "podible-123"))
+    XCTAssertNil(
+      defaults.object(forKey: resumePositionKeyPrefix + "podible-123#manifestation-456")
+    )
+  }
+
   func testPlaybackIdentityIncludesCanonicalAliasesAndLegacyFallbacks() {
     let identity = PlaybackIdentity(
       openLibraryWorkID: "OL123W",

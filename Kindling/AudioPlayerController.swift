@@ -750,12 +750,15 @@ final class AudioPlayerController: ObservableObject {
     {
       return min(max(progress.currentTime / duration, 0), 1)
     }
-    let position = persistedPosition(for: identity)
+    let position = persistedPosition(for: identity, migrateAliases: false)
     guard position > 0, position < duration - 0.5 else { return nil }
     return min(max(position / duration, 0), 1)
   }
 
-  private func persistedPosition(for identity: PlaybackIdentity) -> Double {
+  private func persistedPosition(
+    for identity: PlaybackIdentity,
+    migrateAliases: Bool = true
+  ) -> Double {
     let savedPositions = identity.allResumeIDs.compactMap { candidateResumeID in
       storedPersistedPosition(for: candidateResumeID).map { position in
         (resumeID: candidateResumeID, position: position)
@@ -763,8 +766,11 @@ final class AudioPlayerController: ObservableObject {
     }
     guard let restored = savedPositions.max(by: { $0.position < $1.position }) else { return 0 }
 
-    for resumeID in identity.allResumeIDs where resumeID != restored.resumeID {
-      UserDefaults.standard.set(restored.position, forKey: resumePositionKey(for: resumeID))
+    if migrateAliases {
+      for resumeID in identity.allResumeIDs where resumeID != restored.resumeID {
+        guard storedPersistedPosition(for: resumeID) != restored.position else { continue }
+        UserDefaults.standard.set(restored.position, forKey: resumePositionKey(for: resumeID))
+      }
     }
     return restored.position
   }
