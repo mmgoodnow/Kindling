@@ -3,27 +3,46 @@ import Foundation
 import KindlingUI
 import Kingfisher
 
-enum ArtworkPaletteLoader {
-  static func palette(
-    for url: URL,
-    rpcURLString: String,
-    accessToken: String?
-  ) async -> ArtworkPalette? {
-    var options: KingfisherOptionsInfo = []
-    if let modifier = AuthenticatedRemoteImageRequest.modifier(
-      for: url,
-      rpcURLString: rpcURLString,
-      accessToken: accessToken
-    ) {
-      options.append(.requestModifier(modifier))
-    }
+struct ArtworkPaletteCache {
+  private struct StoredPalette: Codable {
+    var red: Double
+    var green: Double
+    var blue: Double
+  }
 
-    do {
-      let result = try await KingfisherManager.shared.retrieveImage(with: url, options: options)
-      return ArtworkPaletteSampler.palette(from: result.image)
-    } catch {
+  private let defaults: UserDefaults
+  private let keyPrefix = "artworkPalette."
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
+
+  func palette(for key: String) -> ArtworkPalette? {
+    guard let data = defaults.data(forKey: storageKey(for: key)),
+      let stored = try? JSONDecoder().decode(StoredPalette.self, from: data)
+    else {
       return nil
     }
+    return ArtworkPalette(red: stored.red, green: stored.green, blue: stored.blue)
+  }
+
+  func store(_ palette: ArtworkPalette, for key: String) {
+    let stored = StoredPalette(red: palette.red, green: palette.green, blue: palette.blue)
+    guard let data = try? JSONEncoder().encode(stored) else { return }
+    defaults.set(data, forKey: storageKey(for: key))
+  }
+
+  func removePalettes(excluding validKeys: Set<String>) {
+    let validStorageKeys = Set(validKeys.map(storageKey(for:)))
+    for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(keyPrefix) {
+      if validStorageKeys.contains(key) == false {
+        defaults.removeObject(forKey: key)
+      }
+    }
+  }
+
+  private func storageKey(for key: String) -> String {
+    keyPrefix + key
   }
 }
 

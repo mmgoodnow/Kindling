@@ -1,4 +1,5 @@
 import KindlingUI
+import Kingfisher
 import SwiftData
 import SwiftUI
 
@@ -95,7 +96,7 @@ struct BookDetailView: View {
       }
     #endif
     .task(id: detailPaletteTaskID) {
-      await loadDetailPalette()
+      loadDetailPalette()
     }
     .safeAreaInset(edge: .bottom, spacing: 8) {
       floatingActionDock
@@ -201,7 +202,10 @@ struct BookDetailView: View {
       AuthenticatedRemoteImage(
         url: url,
         rpcURLString: userSettings.podibleRPCURL,
-        accessToken: podibleAuth.accessToken
+        accessToken: podibleAuth.accessToken,
+        onSuccess: { image in
+          sampleAndCacheDetailPalette(from: image, for: url)
+        }
       ) {
         bookCoverPlaceholder(
           title: item.title,
@@ -346,24 +350,27 @@ struct BookDetailView: View {
   }
 
   @MainActor
-  private func loadDetailPalette() async {
+  private func loadDetailPalette() {
     guard let url = currentArtworkURL else {
       detailPalette = .fallback
       return
     }
+    detailPalette = ArtworkPaletteCache().palette(for: url.absoluteString) ?? .fallback
+  }
 
-    guard
-      let palette = await ArtworkPaletteLoader.palette(
-        for: url,
-        rpcURLString: userSettings.podibleRPCURL,
-        accessToken: podibleAuth.accessToken
-      ),
-      Task.isCancelled == false
-    else {
-      detailPalette = .fallback
-      return
+  @MainActor
+  private func sampleAndCacheDetailPalette(
+    from image: KFCrossPlatformImage,
+    for url: URL
+  ) {
+    Task {
+      let palette = await Task.detached(priority: .utility) {
+        ArtworkPaletteSampler.palette(from: image)
+      }.value
+      guard let palette, currentArtworkURL == url else { return }
+      ArtworkPaletteCache().store(palette, for: url.absoluteString)
+      detailPalette = palette
     }
-    detailPalette = palette
   }
 
   private var seriesText: String? {

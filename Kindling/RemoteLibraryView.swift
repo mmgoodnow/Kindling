@@ -53,6 +53,7 @@ struct PodibleLibraryView: View {
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
   @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
+  @State private var artworkPaletteKeysBeingSampled = Set<String>()
   @State private var selectedDetailItem: PodibleLibraryItem?
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
@@ -387,7 +388,7 @@ struct PodibleLibraryView: View {
       await loadMetadataForActivePlaybackIfNeeded(client: client)
     }
     .task(id: artworkPaletteTaskID) {
-      await loadArtworkPalettes()
+      loadCachedArtworkPalettes()
     }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else { return }
@@ -774,7 +775,10 @@ struct PodibleLibraryView: View {
           AuthenticatedRemoteImage(
             url: url,
             rpcURLString: userSettings.podibleRPCURL,
-            accessToken: podibleAuth.accessToken
+            accessToken: podibleAuth.accessToken,
+            onSuccess: { image in
+              sampleAndCacheArtworkPalette(from: image, for: url)
+            }
           ) {
             collectionArtworkPlaceholder(for: book)
           }
@@ -826,7 +830,7 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
-  private func loadArtworkPalettes() async {
+  private func loadCachedArtworkPalettes() {
     let requests = localBooks.compactMap { book -> URL? in
       remoteLibraryAssetURL(
         baseURLString: remoteAssetBaseURLString,
@@ -834,21 +838,39 @@ struct PodibleLibraryView: View {
         versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
       )
     }
+    guard requests.isEmpty == false else {
+      artworkPalettesByURL = [:]
+      return
+    }
     let currentKeys = Set(requests.map(\.absoluteString))
-    artworkPalettesByURL = artworkPalettesByURL.filter { currentKeys.contains($0.key) }
+    let cache = ArtworkPaletteCache()
+    cache.removePalettes(excluding: currentKeys)
 
-    for url in requests where artworkPalettesByURL[url.absoluteString] == nil {
-      if Task.isCancelled { return }
-      guard
-        let palette = await ArtworkPaletteLoader.palette(
-          for: url,
-          rpcURLString: remoteAssetBaseURLString,
-          accessToken: podibleAuth.accessToken
-        )
-      else {
-        continue
+    artworkPalettesByURL = artworkPalettesByURL.filter { currentKeys.contains($0.key) }
+    for key in currentKeys where artworkPalettesByURL[key] == nil {
+      if let cached = cache.palette(for: key) {
+        artworkPalettesByURL[key] = cached
       }
-      artworkPalettesByURL[url.absoluteString] = palette
+    }
+  }
+
+  @MainActor
+  private func sampleAndCacheArtworkPalette(
+    from image: KFCrossPlatformImage,
+    for url: URL
+  ) {
+    let key = url.absoluteString
+    guard artworkPalettesByURL[key] == nil else { return }
+    guard artworkPaletteKeysBeingSampled.insert(key).inserted else { return }
+
+    Task {
+      let palette = await Task.detached(priority: .utility) {
+        ArtworkPaletteSampler.palette(from: image)
+      }.value
+      artworkPaletteKeysBeingSampled.remove(key)
+      guard let palette else { return }
+      ArtworkPaletteCache().store(palette, for: key)
+      artworkPalettesByURL[key] = palette
     }
   }
 
@@ -872,7 +894,7 @@ struct PodibleLibraryView: View {
   private func toggleRead(bookID: String) {
     guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
-    state.isRead.toggle()
+    state.isRead = !(state.isRead ?? false)
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -882,7 +904,7 @@ struct PodibleLibraryView: View {
   private func toggleFavorite(bookID: String) {
     guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
-    state.isFavorite.toggle()
+    state.isFavorite = !(state.isFavorite ?? false)
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -895,7 +917,7 @@ struct PodibleLibraryView: View {
       return
     }
     let state = ensureLocalState(for: book)
-    guard state.isRead == false else { return }
+    guard state.isRead != true else { return }
     state.isRead = true
     if modelContext.hasChanges {
       saveModelContext()

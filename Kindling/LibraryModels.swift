@@ -181,8 +181,8 @@ final class LibraryBookFile {
 final class LocalBookState {
   @Attribute(.unique, originalName: "bookLlId") var bookPodibleId: String
   var isDownloaded: Bool
-  var isFavorite: Bool = false
-  var isRead: Bool = false
+  var isFavorite: Bool?
+  var isRead: Bool?
   var progressSeconds: Double
   var lastPlayedAt: Date?
   var playbackRate: Double

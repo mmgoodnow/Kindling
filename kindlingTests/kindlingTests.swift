@@ -26,6 +26,24 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(palette.blue, 0.71, accuracy: 0.02)
   }
 
+  func testArtworkPaletteCacheRoundTripsAndPrunesStoredPalettes() throws {
+    let suiteName = "KindlingTests.ArtworkPaletteCache.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let cache = ArtworkPaletteCache(defaults: defaults)
+    let retainedKey = "https://example.com/retained.jpg?v=1"
+    let removedKey = "https://example.com/removed.jpg?v=1"
+    let retainedPalette = ArtworkPalette(red: 0.12, green: 0.34, blue: 0.56)
+
+    cache.store(retainedPalette, for: retainedKey)
+    cache.store(ArtworkPalette(red: 0.8, green: 0.7, blue: 0.6), for: removedKey)
+
+    XCTAssertEqual(cache.palette(for: retainedKey), retainedPalette)
+    cache.removePalettes(excluding: [retainedKey])
+    XCTAssertEqual(cache.palette(for: retainedKey), retainedPalette)
+    XCTAssertNil(cache.palette(for: removedKey))
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

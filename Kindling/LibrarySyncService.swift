@@ -284,7 +284,9 @@ struct LibrarySyncService {
     if let localState = book.localState, localState.isDownloaded {
       return false
     }
-    if let localState = book.localState, localState.isFavorite || localState.isRead {
+    if let localState = book.localState,
+      localState.isFavorite == true || localState.isRead == true
+    {
       return false
     }
     for file in book.files {

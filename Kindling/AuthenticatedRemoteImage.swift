@@ -6,7 +6,22 @@ struct AuthenticatedRemoteImage<Placeholder: View>: View {
   let url: URL?
   let rpcURLString: String
   let accessToken: String?
+  let onSuccess: ((KFCrossPlatformImage) -> Void)?
   let placeholder: () -> Placeholder
+
+  init(
+    url: URL?,
+    rpcURLString: String,
+    accessToken: String?,
+    onSuccess: ((KFCrossPlatformImage) -> Void)? = nil,
+    @ViewBuilder placeholder: @escaping () -> Placeholder
+  ) {
+    self.url = url
+    self.rpcURLString = rpcURLString
+    self.accessToken = accessToken
+    self.onSuccess = onSuccess
+    self.placeholder = placeholder
+  }
 
   var body: some View {
     if let url {
@@ -19,6 +34,9 @@ struct AuthenticatedRemoteImage<Placeholder: View>: View {
 
   private func configuredImage(for url: URL) -> KFImage {
     let image = KFImage.url(url)
+      .onSuccess { result in
+        onSuccess?(result.image)
+      }
       .cancelOnDisappear(true)
       .resizable()
 
