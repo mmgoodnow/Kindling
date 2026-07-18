@@ -387,9 +387,9 @@ struct BookDetailView: View {
   @ViewBuilder
   private var audioEditionSection: some View {
     let options = audioEditionOptions
-    if options.isEmpty == false {
+    if options.count > 1 {
       VStack(alignment: .leading, spacing: 10) {
-        Text(options.count == 1 ? "Audio Edition" : "Audio Editions")
+        Text("Audio Editions")
           .font(.caption.weight(.semibold))
           .textCase(.uppercase)
           .foregroundStyle(.secondary)
