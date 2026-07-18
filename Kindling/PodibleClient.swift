@@ -136,6 +136,16 @@ struct PodibleBook: Identifiable, Hashable, Decodable {
   }
 }
 
+struct PodibleBookSeriesMembership: Hashable, Codable {
+  let key: String?
+  let name: String
+  let position: String?
+
+  var numericPosition: Double? {
+    position.flatMap(Double.init)
+  }
+}
+
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let openLibraryWorkID: String?
@@ -153,6 +163,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let runtimeSeconds: Int?
   let publishedYear: Int?
   let narrator: String?
+  let series: [PodibleBookSeriesMembership]
   let seriesKey: String?
   let seriesTitle: String?
   let seriesPosition: Double?
@@ -175,6 +186,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     runtimeSeconds: Int? = nil,
     publishedYear: Int? = nil,
     narrator: String? = nil,
+    series: [PodibleBookSeriesMembership] = [],
     seriesKey: String? = nil,
     seriesTitle: String? = nil,
     seriesPosition: Double? = nil,
@@ -196,9 +208,22 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.runtimeSeconds = runtimeSeconds
     self.publishedYear = publishedYear
     self.narrator = narrator
-    self.seriesKey = seriesKey
-    self.seriesTitle = seriesTitle
-    self.seriesPosition = seriesPosition
+    let normalizedSeries =
+      series.isEmpty
+      ? seriesTitle.map {
+        [
+          PodibleBookSeriesMembership(
+            key: seriesKey,
+            name: $0,
+            position: seriesPosition.map { String($0) }
+          )
+        ]
+      } ?? []
+      : series
+    self.series = normalizedSeries
+    self.seriesKey = normalizedSeries.first?.key ?? seriesKey
+    self.seriesTitle = normalizedSeries.first?.name ?? seriesTitle
+    self.seriesPosition = normalizedSeries.first?.numericPosition ?? seriesPosition
     self.playback = playback
   }
 
@@ -283,14 +308,17 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     narrator =
       (try? container.decodeIfPresent(String.self, forKey: .narrator))
       ?? (try? container.decodeIfPresent(String.self, forKey: .narratedBy))
+    series =
+      (try? container.decodeIfPresent([PodibleBookSeriesMembership].self, forKey: .series)) ?? []
     seriesKey =
-      (try? container.decodeIfPresent(String.self, forKey: .seriesKey))
+      series.first?.key ?? (try? container.decodeIfPresent(String.self, forKey: .seriesKey))
       ?? (try? container.decodeIfPresent(String.self, forKey: .seriesId))
       ?? (try? container.decodeIfPresent(String.self, forKey: .seriesID))
     seriesTitle =
-      (try? container.decodeIfPresent(String.self, forKey: .seriesTitle))
-      ?? (try? container.decodeIfPresent(String.self, forKey: .series))
-    if let value = try? container.decodeIfPresent(Double.self, forKey: .seriesPosition) {
+      series.first?.name ?? (try? container.decodeIfPresent(String.self, forKey: .seriesTitle))
+    if let value = series.first?.numericPosition {
+      seriesPosition = value
+    } else if let value = try? container.decodeIfPresent(Double.self, forKey: .seriesPosition) {
       seriesPosition = value
     } else if let value = try? container.decodeIfPresent(Int.self, forKey: .seriesPosition) {
       seriesPosition = Double(value)
@@ -1340,7 +1368,7 @@ private struct PodibleLibraryBook: Decodable {
   let seriesId: String?
   let seriesID: String?
   let seriesTitle: String?
-  let series: String?
+  let series: [PodibleBookSeriesMembership]
   let seriesPosition: Double?
   let seriesIndex: Double?
   let audioStatus: String
@@ -1825,9 +1853,10 @@ struct PodibleClient: PodibleLibraryServing {
       },
       publishedYear: book.publishedYear ?? book.firstPublishYear ?? year(from: book.publishedAt),
       narrator: book.narrator ?? book.narratedBy,
-      seriesKey: book.seriesKey ?? book.seriesId ?? book.seriesID,
-      seriesTitle: book.seriesTitle ?? book.series,
-      seriesPosition: book.seriesPosition ?? book.seriesIndex,
+      series: book.series,
+      seriesKey: book.series.first?.key ?? book.seriesKey ?? book.seriesId ?? book.seriesID,
+      seriesTitle: book.series.first?.name ?? book.seriesTitle,
+      seriesPosition: book.series.first?.numericPosition ?? book.seriesPosition ?? book.seriesIndex,
       playback: book.playback
     )
   }

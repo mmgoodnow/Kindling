@@ -66,6 +66,30 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testLibraryItemDecodesSeriesMembership() throws {
+    let data = try XCTUnwrap(
+      """
+      {
+        "id": "42",
+        "bookname": "The Second Book",
+        "authorname": "An Author",
+        "status": "have",
+        "series": [
+          { "key": "OL123L", "name": "The Series", "position": "2" }
+        ]
+      }
+      """.data(using: .utf8)
+    )
+
+    let item = try JSONDecoder().decode(PodibleLibraryItem.self, from: data)
+
+    XCTAssertEqual(
+      item.series, [PodibleBookSeriesMembership(key: "OL123L", name: "The Series", position: "2")])
+    XCTAssertEqual(item.seriesKey, "OL123L")
+    XCTAssertEqual(item.seriesTitle, "The Series")
+    XCTAssertEqual(item.seriesPosition, 2)
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
