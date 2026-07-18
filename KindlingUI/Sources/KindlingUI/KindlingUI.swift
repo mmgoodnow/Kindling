@@ -486,8 +486,6 @@ public struct BookCollectionView: View {
                   onToggleRead: { onToggleRead(book) },
                   onToggleFavorite: { onToggleFavorite(book) }
                 )
-                .padding(.horizontal, 18)
-                .padding(.vertical, 6)
 
                 if book.id != filteredBooks.last?.id {
                   Divider()
@@ -721,7 +719,10 @@ public struct BookListRowView: View {
       }
     }
     .foregroundStyle(.primary)
-    .padding(.vertical, 6)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 18)
+    .padding(.vertical, 12)
+    .contentShape(Rectangle())
   }
 
   @ViewBuilder
