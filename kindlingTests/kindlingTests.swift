@@ -114,11 +114,12 @@ final class kindlingTests: XCTestCase {
   }
 
   func testMarkdownDescriptionNormalizationRemovesCarriageReturnsAndLineBackslashes() {
-    let description = "First paragraph.\\\r\n\\\r\nSecond paragraph.\\\r\n"
+    let description =
+      "First sentence.\\\r\nSecond sentence.\\\r\n\\\r\nSecond paragraph.\\\r\n"
 
     XCTAssertEqual(
       normalizedMarkdownDescription(description),
-      "First paragraph.\n\nSecond paragraph."
+      "First sentence. Second sentence.\n\nSecond paragraph."
     )
   }
 

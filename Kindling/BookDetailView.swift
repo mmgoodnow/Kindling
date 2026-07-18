@@ -862,18 +862,38 @@ func markdownDescriptionAttributedString(markdown: String) -> AttributedString? 
 }
 
 func normalizedMarkdownDescription(_ description: String) -> String {
-  description
+  let rawLines =
+    description
     .replacingOccurrences(of: "\r", with: "")
     .split(separator: "\n", omittingEmptySubsequences: false)
-    .map { rawLine in
-      var line = String(rawLine)
-      while line.last == "\\" {
-        line.removeLast()
-      }
-      return line
+  let lines = rawLines.map { rawLine -> (text: String, wasEscaped: Bool) in
+    var line = String(rawLine)
+    var wasEscaped = false
+    while line.last == "\\" {
+      line.removeLast()
+      wasEscaped = true
     }
-    .joined(separator: "\n")
-    .trimmingCharacters(in: .whitespacesAndNewlines)
+    return (line, wasEscaped)
+  }
+
+  var normalized = ""
+  for index in lines.indices {
+    let line = lines[index]
+    normalized += line.text
+    guard index < lines.index(before: lines.endIndex) else { continue }
+
+    let nextLine = lines[lines.index(after: index)]
+    let lineIsEmpty = line.text.trimmingCharacters(in: .whitespaces).isEmpty
+    let nextLineIsEmpty = nextLine.text.trimmingCharacters(in: .whitespaces).isEmpty
+    if lineIsEmpty || nextLineIsEmpty {
+      normalized += "\n"
+    } else if line.wasEscaped {
+      normalized += " "
+    } else {
+      normalized += "\n"
+    }
+  }
+  return normalized.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private struct BookReleaseSearchSheet: View {
