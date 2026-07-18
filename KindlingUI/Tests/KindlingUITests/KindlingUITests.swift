@@ -63,6 +63,10 @@ final class KindlingUITests: XCTestCase {
     XCTAssertTrue(BookCollectionFilter.read.filtered([external]).isEmpty)
   }
 
+  func testSeriesDefaultLayoutIsList() {
+    XCTAssertEqual(BookCollectionLayout.seriesDefault, .list)
+  }
+
   func testFavoritesFilteringKeepsLocalFavorites() {
     XCTAssertEqual(
       BookCollectionHelpers.favorites(from: books).map(\.id),

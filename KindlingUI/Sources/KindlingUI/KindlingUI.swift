@@ -40,6 +40,7 @@ public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
   case list
 
   public var id: String { rawValue }
+  public static var seriesDefault: Self { .list }
 
   public var title: String {
     switch self {

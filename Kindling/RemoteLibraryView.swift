@@ -73,6 +73,8 @@ struct PodibleLibraryView: View {
     BookCollectionFilter.all.rawValue
   @AppStorage("library.collectionLayout") private var collectionLayoutRawValue =
     BookCollectionLayout.grid.rawValue
+  @AppStorage("library.seriesLayout") private var seriesLayoutRawValue =
+    BookCollectionLayout.seriesDefault.rawValue
 
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
@@ -432,6 +434,10 @@ struct PodibleLibraryView: View {
     BookCollectionLayout(rawValue: collectionLayoutRawValue) ?? .grid
   }
 
+  private var seriesLayout: BookCollectionLayout {
+    BookCollectionLayout(rawValue: seriesLayoutRawValue) ?? .seriesDefault
+  }
+
   private var navigationTitle: String {
     searchQuery == nil ? mode.title : "Search"
   }
@@ -447,6 +453,13 @@ struct PodibleLibraryView: View {
     Binding(
       get: { collectionLayout },
       set: { collectionLayoutRawValue = $0.rawValue }
+    )
+  }
+
+  private var seriesLayoutBinding: Binding<BookCollectionLayout> {
+    Binding(
+      get: { seriesLayout },
+      set: { seriesLayoutRawValue = $0.rawValue }
     )
   }
 
@@ -666,6 +679,26 @@ struct PodibleLibraryView: View {
     .accessibilityLabel("Library options")
   }
 
+  private var seriesOptionsMenu: some View {
+    Menu {
+      Picker("Read filter", selection: collectionFilterBinding) {
+        ForEach(BookCollectionFilter.allCases) { filter in
+          Text(filter.title).tag(filter)
+        }
+      }
+
+      Picker("Layout", selection: seriesLayoutBinding) {
+        ForEach(BookCollectionLayout.allCases) { layout in
+          Label(layout.title, systemImage: layout.systemImage).tag(layout)
+        }
+      }
+    } label: {
+      Image(systemName: "ellipsis")
+        .imageScale(.large)
+    }
+    .accessibilityLabel("Series options")
+  }
+
   private func syncButton(client: RemoteLibraryServing?) -> some View {
     Button(action: { startSync(using: client) }) {
       if isSyncSpinnerVisible {
@@ -702,6 +735,17 @@ struct PodibleLibraryView: View {
       }
     }
     .navigationTitle(route.title)
+    .toolbar {
+      #if os(iOS)
+        ToolbarItem(placement: .topBarTrailing) {
+          seriesOptionsMenu
+        }
+      #else
+        ToolbarItem(placement: .primaryAction) {
+          seriesOptionsMenu
+        }
+      #endif
+    }
     .task(id: route) {
       await loadSeries(route, using: configuredClient)
     }
@@ -712,7 +756,7 @@ struct PodibleLibraryView: View {
     #if os(iOS)
       SeriesContentView(
         series: SeriesViewData(id: route.id, title: route.title, books: books),
-        layout: collectionLayout,
+        layout: seriesLayout,
         filter: collectionFilter,
         artwork: collectionArtwork(for:cornerRadius:),
         onSelect: selectCollectionBook(_:),
@@ -721,10 +765,27 @@ struct PodibleLibraryView: View {
       )
     #else
       VStack(spacing: 0) {
-        collectionControls
+        HStack(spacing: 12) {
+          Picker("Read filter", selection: collectionFilterBinding) {
+            ForEach(BookCollectionFilter.allCases) { filter in
+              Text(filter.title).tag(filter)
+            }
+          }
+          .pickerStyle(.segmented)
+
+          Picker("Layout", selection: seriesLayoutBinding) {
+            ForEach(BookCollectionLayout.allCases) { layout in
+              Image(systemName: layout.systemImage).tag(layout)
+            }
+          }
+          .pickerStyle(.segmented)
+          .frame(width: 96)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         SeriesContentView(
           series: SeriesViewData(id: route.id, title: route.title, books: books),
-          layout: collectionLayout,
+          layout: seriesLayout,
           filter: collectionFilter,
           artwork: collectionArtwork(for:cornerRadius:),
           onSelect: selectCollectionBook(_:),
