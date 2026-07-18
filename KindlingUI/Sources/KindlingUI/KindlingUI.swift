@@ -868,6 +868,7 @@ public struct BookDetailContentView: View {
   public let book: BookDetailViewData
   public let actions: BookActionViewData
   public let onSeries: () -> Void
+  public let onAuthor: () -> Void
   public let onEmailToKindle: () -> Void
   public let onToggleFavorite: () -> Void
   public let onToggleRead: () -> Void
@@ -880,6 +881,7 @@ public struct BookDetailContentView: View {
     book: BookDetailViewData,
     actions: BookActionViewData,
     onSeries: @escaping () -> Void = {},
+    onAuthor: @escaping () -> Void = {},
     onEmailToKindle: @escaping () -> Void = {},
     onToggleFavorite: @escaping () -> Void = {},
     onToggleRead: @escaping () -> Void = {},
@@ -891,6 +893,7 @@ public struct BookDetailContentView: View {
     self.book = book
     self.actions = actions
     self.onSeries = onSeries
+    self.onAuthor = onAuthor
     self.onEmailToKindle = onEmailToKindle
     self.onToggleFavorite = onToggleFavorite
     self.onToggleRead = onToggleRead
@@ -936,7 +939,7 @@ public struct BookDetailContentView: View {
   @ViewBuilder
   private var detailHero: some View {
     if let seriesText = book.seriesText {
-      BookDetailHeroView(book: book) {
+      BookDetailHeroView(book: book, onAuthor: onAuthor) {
         detailArtwork
       } seriesBar: {
         Button(action: onSeries) {
@@ -945,7 +948,7 @@ public struct BookDetailContentView: View {
         .buttonStyle(.plain)
       }
     } else {
-      BookDetailHeroView(book: book) {
+      BookDetailHeroView(book: book, onAuthor: onAuthor) {
         detailArtwork
       }
     }

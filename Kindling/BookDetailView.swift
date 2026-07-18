@@ -26,9 +26,29 @@ struct BookSeriesRoute: Hashable {
   }
 }
 
+struct BookAuthorRoute: Hashable {
+  let name: String
+
+  var title: String { "Works by \(name)" }
+}
+
+enum BookGroupRoute: Hashable {
+  case series(BookSeriesRoute)
+  case author(BookAuthorRoute)
+
+  var title: String {
+    switch self {
+    case .series(let route):
+      route.title
+    case .author(let route):
+      route.title
+    }
+  }
+}
+
 enum LibraryNavigationRoute: Hashable {
   case book(PodibleLibraryItem)
-  case series(BookSeriesRoute)
+  case group(BookGroupRoute)
 }
 
 struct BookDetailActions {
@@ -64,6 +84,7 @@ struct BookDetailView: View {
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
   let actions: BookDetailActions
+  let onShowAuthor: (String) -> Void
   /// True if the audio is available remotely but not on disk (streamed only).
   let isStreamOnly: Bool
   @Binding var isShowingPlayer: Bool
@@ -153,12 +174,12 @@ struct BookDetailView: View {
   private var hero: some View {
     let routes = seriesRoutes
     if routes.isEmpty == false {
-      BookDetailHeroView(book: detailViewData) {
+      BookDetailHeroView(book: detailViewData, onAuthor: showAuthorAction) {
         heroCover
       } seriesBar: {
         VStack(spacing: 8) {
           ForEach(routes, id: \.self) { route in
-            NavigationLink(value: LibraryNavigationRoute.series(route)) {
+            NavigationLink(value: LibraryNavigationRoute.group(.series(route))) {
               BookDetailSeriesBarView(
                 text: route.displayText,
                 palette: detailPalette,
@@ -170,10 +191,18 @@ struct BookDetailView: View {
         }
       }
     } else {
-      BookDetailHeroView(book: detailViewData) {
+      BookDetailHeroView(book: detailViewData, onAuthor: showAuthorAction) {
         heroCover
       }
     }
+  }
+
+  private var showAuthorAction: (() -> Void)? {
+    let author = item.author.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard author.isEmpty == false,
+      author.localizedCaseInsensitiveCompare("Unknown Author") != .orderedSame
+    else { return nil }
+    return { onShowAuthor(author) }
   }
 
   private var currentCoverImagePath: String? {

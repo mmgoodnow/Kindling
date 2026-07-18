@@ -14,6 +14,16 @@ func librarySyncRelativeText(syncedAt: Date, relativeTo now: Date = .now) -> Str
   return formatter.localizedString(for: syncedAt, relativeTo: now)
 }
 
+func relatedBookIdentity(title: String, author: String) -> String {
+  [title, author]
+    .map {
+      $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+    }
+    .joined(separator: "|")
+}
+
 enum PodibleLibraryScreenMode {
   case library
   case favorites
@@ -64,9 +74,9 @@ struct PodibleLibraryView: View {
   @State private var localDownloadingBookIDs: Set<String> = []
   @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
   @State private var artworkPaletteKeysBeingSampled = Set<String>()
-  @State private var seriesResults: [BookSeriesRoute: PodibleSeriesResult] = [:]
-  @State private var loadingSeriesRoutes = Set<BookSeriesRoute>()
-  @State private var seriesErrors: [BookSeriesRoute: String] = [:]
+  @State private var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
+  @State private var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
+  @State private var relatedBooksErrors: [BookGroupRoute: String] = [:]
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
@@ -142,8 +152,8 @@ struct PodibleLibraryView: View {
         switch route {
         case .book(let item):
           bookDetailView(for: item)
-        case .series(let seriesRoute):
-          seriesContent(for: seriesRoute)
+        case .group(let groupRoute):
+          relatedBooksContent(for: groupRoute)
         }
       }
       .navigationDestination(isPresented: $isShowingSettings) {
@@ -159,6 +169,11 @@ struct PodibleLibraryView: View {
       item: item,
       localBook: localBooksById[item.id],
       actions: detailActions(item: item, client: configuredClient),
+      onShowAuthor: { authorName in
+        navigationPath.append(
+          LibraryNavigationRoute.group(.author(BookAuthorRoute(name: authorName)))
+        )
+      },
       isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
       isShowingPlayer: $isShowingPlayer
     )
@@ -679,7 +694,7 @@ struct PodibleLibraryView: View {
     .accessibilityLabel("Library options")
   }
 
-  private var seriesOptionsMenu: some View {
+  private var relatedBooksOptionsMenu: some View {
     Menu {
       Picker("Read filter", selection: collectionFilterBinding) {
         ForEach(BookCollectionFilter.allCases) { filter in
@@ -696,7 +711,7 @@ struct PodibleLibraryView: View {
       Image(systemName: "ellipsis")
         .imageScale(.large)
     }
-    .accessibilityLabel("Series options")
+    .accessibilityLabel("Book list options")
   }
 
   private func syncButton(client: RemoteLibraryServing?) -> some View {
@@ -718,44 +733,48 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private func seriesContent(for route: BookSeriesRoute) -> some View {
-    let books = seriesBookTiles(for: route)
+  private func relatedBooksContent(for route: BookGroupRoute) -> some View {
+    let books = relatedBookTiles(for: route)
     return Group {
-      if loadingSeriesRoutes.contains(route) && seriesResults[route] == nil && books.isEmpty {
+      if loadingRelatedBooksRoutes.contains(route) && relatedBooksResults[route] == nil
+        && books.isEmpty
+      {
         ProgressView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if let error = seriesErrors[route], books.isEmpty {
+      } else if let error = relatedBooksErrors[route], books.isEmpty {
         ContentUnavailableView(
-          "Unable to Load Series",
+          "Unable to Load Books",
           systemImage: "exclamationmark.triangle",
           description: Text(error)
         )
       } else {
-        seriesCollection(route: route, books: books)
+        relatedBooksCollection(route: route, books: books)
       }
     }
     .navigationTitle(route.title)
     .toolbar {
       #if os(iOS)
         ToolbarItem(placement: .topBarTrailing) {
-          seriesOptionsMenu
+          relatedBooksOptionsMenu
         }
       #else
         ToolbarItem(placement: .primaryAction) {
-          seriesOptionsMenu
+          relatedBooksOptionsMenu
         }
       #endif
     }
     .task(id: route) {
-      await loadSeries(route, using: configuredClient)
+      await loadRelatedBooks(route, using: configuredClient)
     }
   }
 
   @ViewBuilder
-  private func seriesCollection(route: BookSeriesRoute, books: [BookTileViewData]) -> some View {
+  private func relatedBooksCollection(route: BookGroupRoute, books: [BookTileViewData]) -> some View
+  {
     #if os(iOS)
-      SeriesContentView(
-        series: SeriesViewData(id: route.id, title: route.title, books: books),
+      BookGroupContentView(
+        title: route.title,
+        books: books,
         layout: seriesLayout,
         filter: collectionFilter,
         artwork: collectionArtwork(for:cornerRadius:),
@@ -783,8 +802,9 @@ struct PodibleLibraryView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        SeriesContentView(
-          series: SeriesViewData(id: route.id, title: route.title, books: books),
+        BookGroupContentView(
+          title: route.title,
+          books: books,
           layout: seriesLayout,
           filter: collectionFilter,
           artwork: collectionArtwork(for:cornerRadius:),
@@ -797,36 +817,51 @@ struct PodibleLibraryView: View {
   }
 
   @MainActor
-  private func loadSeries(_ route: BookSeriesRoute, using client: RemoteLibraryServing?) async {
-    guard seriesResults[route] == nil else { return }
-    guard loadingSeriesRoutes.insert(route).inserted else { return }
-    defer { loadingSeriesRoutes.remove(route) }
+  private func loadRelatedBooks(_ route: BookGroupRoute, using client: RemoteLibraryServing?) async
+  {
+    guard relatedBooksResults[route] == nil else { return }
+    guard loadingRelatedBooksRoutes.insert(route).inserted else { return }
+    defer { loadingRelatedBooksRoutes.remove(route) }
     guard let client else { return }
 
     do {
-      let result = try await client.fetchSeries(
-        seriesKey: route.seriesKey,
-        seriesName: route.title,
-        limit: 100
-      )
+      let result: PodibleRelatedBooksResult
+      switch route {
+      case .series(let series):
+        result = try await client.fetchSeries(
+          seriesKey: series.seriesKey,
+          seriesName: series.title,
+          limit: 100
+        ).relatedBooks
+      case .author(let author):
+        result = try await client.fetchAuthor(authorName: author.name, limit: 100).relatedBooks
+      }
       result.libraryBooks.forEach(applyLibraryItemUpdate(_:))
-      seriesResults[route] = result
-      seriesErrors[route] = nil
+      relatedBooksResults[route] = result
+      relatedBooksErrors[route] = nil
     } catch {
       guard isCancellationError(error) == false else { return }
-      seriesErrors[route] = error.localizedDescription
+      relatedBooksErrors[route] = error.localizedDescription
     }
   }
 
-  private func seriesBooks(for route: BookSeriesRoute) -> [LibraryBook] {
-    localBooks.filter { book in
-      book.series?.podibleId == route.id || book.series?.title == route.title
+  private func localRelatedBooks(for route: BookGroupRoute) -> [LibraryBook] {
+    switch route {
+    case .series(let series):
+      localBooks.filter { book in
+        book.series?.podibleId == series.id || book.series?.title == series.title
+      }
+    case .author(let author):
+      localBooks.filter {
+        $0.author?.name.localizedCaseInsensitiveCompare(author.name) == .orderedSame
+      }
     }
   }
 
-  private func seriesBookTiles(for route: BookSeriesRoute) -> [BookTileViewData] {
-    guard let result = seriesResults[route] else {
-      return seriesBooks(for: route).map(bookTileViewData(for:))
+  private func relatedBookTiles(for route: BookGroupRoute) -> [BookTileViewData] {
+    guard let result = relatedBooksResults[route] else {
+      return sortRelatedBookTiles(
+        localRelatedBooks(for: route).map(bookTileViewData(for:)), for: route)
     }
 
     var books = result.libraryBooks.map { item in
@@ -838,14 +873,36 @@ struct PodibleLibraryView: View {
     let libraryOpenLibraryIDs = Set(
       result.libraryBooks.compactMap(\.openLibraryWorkID).map(normalizedOpenLibraryID(_:))
     )
+    let libraryBookIdentities = Set(
+      result.libraryBooks.map { relatedBookIdentity(title: $0.title, author: $0.author) }
+    )
     books.append(
       contentsOf: result.openLibraryBooks.compactMap { book in
         guard libraryOpenLibraryIDs.contains(normalizedOpenLibraryID(book.openLibraryKey)) == false
         else { return nil }
-        return bookTileViewData(for: book, route: route)
+        guard
+          libraryBookIdentities.contains(
+            relatedBookIdentity(title: book.title, author: book.author)
+          ) == false
+        else { return nil }
+        return bookTileViewData(for: book, group: route)
       }
     )
-    return SeriesViewData.sortedBooks(books)
+    return sortRelatedBookTiles(books, for: route)
+  }
+
+  private func sortRelatedBookTiles(
+    _ books: [BookTileViewData],
+    for route: BookGroupRoute
+  ) -> [BookTileViewData] {
+    switch route {
+    case .series:
+      SeriesViewData.sortedBooks(books)
+    case .author:
+      books.sorted {
+        $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+      }
+    }
   }
 
   private var localBooksById: [String: LibraryBook] {
@@ -902,10 +959,17 @@ struct PodibleLibraryView: View {
 
   private func bookTileViewData(
     for book: PodibleOpenLibraryBook,
-    route: BookSeriesRoute
+    group route: BookGroupRoute
   ) -> BookTileViewData {
-    let membership = book.series.first {
-      $0.key == route.id || $0.name.localizedCaseInsensitiveCompare(route.title) == .orderedSame
+    let membership: PodibleBookSeriesMembership?
+    switch route {
+    case .series(let series):
+      membership = book.series.first {
+        $0.key == series.id
+          || $0.name.localizedCaseInsensitiveCompare(series.title) == .orderedSame
+      }
+    case .author:
+      membership = book.series.first
     }
     let artworkURL = book.coverID.flatMap {
       URL(string: "https://covers.openlibrary.org/b/id/\($0)-L.jpg")
@@ -917,8 +981,8 @@ struct PodibleLibraryView: View {
       artworkURL: artworkURL,
       isInLibrary: false,
       palette: artworkPalette(for: artworkURL),
-      seriesKey: membership?.key ?? route.id,
-      seriesTitle: membership?.name ?? route.title,
+      seriesKey: membership?.key,
+      seriesTitle: membership?.name,
       seriesPosition: membership?.numericPosition,
       publishedYear: book.publishedYear
     )
@@ -1044,7 +1108,7 @@ struct PodibleLibraryView: View {
       return
     }
     guard
-      let item = seriesResults.values.lazy
+      let item = relatedBooksResults.values.lazy
         .flatMap(\.libraryBooks)
         .first(where: { $0.id == book.id })
     else { return }

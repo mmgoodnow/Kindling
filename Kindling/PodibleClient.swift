@@ -169,6 +169,23 @@ struct PodibleAuthorResult: Hashable {
   let openLibraryBooks: [PodibleOpenLibraryBook]
 }
 
+struct PodibleRelatedBooksResult: Hashable {
+  let libraryBooks: [PodibleLibraryItem]
+  let openLibraryBooks: [PodibleOpenLibraryBook]
+}
+
+extension PodibleSeriesResult {
+  var relatedBooks: PodibleRelatedBooksResult {
+    PodibleRelatedBooksResult(libraryBooks: libraryBooks, openLibraryBooks: openLibraryBooks)
+  }
+}
+
+extension PodibleAuthorResult {
+  var relatedBooks: PodibleRelatedBooksResult {
+    PodibleRelatedBooksResult(libraryBooks: libraryBooks, openLibraryBooks: openLibraryBooks)
+  }
+}
+
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let openLibraryWorkID: String?

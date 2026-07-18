@@ -232,7 +232,8 @@ extension View {
       canShare: true,
       canDownload: false,
       canPlay: true
-    )
+    ),
+    onAuthor: {}
   )
 }
 
@@ -265,6 +266,27 @@ extension View {
   NavigationStack {
     SeriesContentView(
       series: SeriesViewData.groups(from: PreviewData.books)[0],
+      layout: .list,
+      filter: .all
+    )
+  }
+}
+
+#Preview("Works by Author") {
+  NavigationStack {
+    BookGroupContentView(
+      title: "Works by J.K. Rowling",
+      books: [
+        PreviewData.books[0],
+        PreviewData.books[1],
+        BookTileViewData(
+          id: "openlibrary-casual-vacancy",
+          title: "The Casual Vacancy",
+          author: "J.K. Rowling",
+          isInLibrary: false,
+          publishedYear: 2012
+        ),
+      ],
       layout: .list,
       filter: .all
     )

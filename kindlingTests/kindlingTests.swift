@@ -162,6 +162,20 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testAuthorRouteUsesWorksByTitle() {
+    let author = BookAuthorRoute(name: "Hugh Howey")
+
+    XCTAssertEqual(author.title, "Works by Hugh Howey")
+    XCTAssertEqual(BookGroupRoute.author(author).title, "Works by Hugh Howey")
+  }
+
+  func testRelatedBookIdentityNormalizesAuthorAndTitleForDeduplication() {
+    XCTAssertEqual(
+      relatedBookIdentity(title: "  The   Résumé  ", author: "AN AUTHOR"),
+      relatedBookIdentity(title: "the resume", author: "an author")
+    )
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
