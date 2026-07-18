@@ -90,6 +90,51 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(item.seriesPosition, 2)
   }
 
+  func testLibrarySeriesResponseDecodesOpenLibraryBooks() throws {
+    let data = try XCTUnwrap(
+      """
+      {
+        "series": { "key": "OL123L", "name": "The Series", "position": null },
+        "libraryBooks": [],
+        "openLibraryBooks": [
+          {
+            "openLibraryKey": "/works/OL456W",
+            "title": "The First Book",
+            "author": "An Author",
+            "publishedAt": "2024",
+            "coverId": 123,
+            "series": [
+              { "key": "OL123L", "name": "The Series", "position": "1" }
+            ]
+          }
+        ]
+      }
+      """.data(using: .utf8)
+    )
+
+    let response = try JSONDecoder().decode(PodibleLibrarySeriesRPCResult.self, from: data)
+
+    XCTAssertEqual(response.series.name, "The Series")
+    XCTAssertEqual(response.openLibraryBooks.map(\.openLibraryKey), ["/works/OL456W"])
+    XCTAssertEqual(response.openLibraryBooks.first?.series.first?.numericPosition, 1)
+  }
+
+  func testBookSeriesRouteFormatsNumericAndFreeformPositions() {
+    XCTAssertEqual(
+      BookSeriesRoute(id: "one", title: "Series", seriesKey: "one", position: "2").displayText,
+      "#2 in Series"
+    )
+    XCTAssertEqual(
+      BookSeriesRoute(
+        id: "two",
+        title: "Series",
+        seriesKey: "two",
+        position: "Prequel"
+      ).displayText,
+      "Prequel in Series"
+    )
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

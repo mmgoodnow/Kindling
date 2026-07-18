@@ -50,6 +50,19 @@ final class KindlingUITests: XCTestCase {
     XCTAssertEqual(BookCollectionFilter.read.filtered(books).map(\.id), ["second"])
   }
 
+  func testReadFiltersExcludeBooksOutsideLibrary() {
+    let external = BookTileViewData(
+      id: "external",
+      title: "External",
+      author: "Author",
+      isInLibrary: false
+    )
+
+    XCTAssertEqual(BookCollectionFilter.all.filtered([external]).map(\.id), ["external"])
+    XCTAssertTrue(BookCollectionFilter.unread.filtered([external]).isEmpty)
+    XCTAssertTrue(BookCollectionFilter.read.filtered([external]).isEmpty)
+  }
+
   func testFavoritesFilteringKeepsLocalFavorites() {
     XCTAssertEqual(
       BookCollectionHelpers.favorites(from: books).map(\.id),

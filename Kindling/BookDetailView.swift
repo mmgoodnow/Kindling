@@ -14,6 +14,16 @@ enum AudioDownloadState {
 struct BookSeriesRoute: Hashable {
   let id: String
   let title: String
+  let seriesKey: String?
+  let position: String?
+
+  var displayText: String {
+    guard let position, position.isEmpty == false else { return title }
+    if let numericPosition = Double(position) {
+      return "\(KindlingUIFormatters.seriesPositionText(numericPosition)) in \(title)"
+    }
+    return "\(position) in \(title)"
+  }
 }
 
 struct BookDetailActions {
@@ -136,17 +146,22 @@ struct BookDetailView: View {
 
   @ViewBuilder
   private var hero: some View {
-    if let seriesText {
+    let routes = seriesRoutes
+    if routes.isEmpty == false {
       BookDetailHeroView(book: detailViewData) {
         heroCover
       } seriesBar: {
-        if let seriesRoute {
-          NavigationLink(value: seriesRoute) {
-            BookDetailSeriesBarView(text: seriesText, palette: detailPalette)
+        VStack(spacing: 8) {
+          ForEach(routes, id: \.self) { route in
+            NavigationLink(value: route) {
+              BookDetailSeriesBarView(
+                text: route.displayText,
+                palette: detailPalette,
+                showsDisclosureIndicator: true
+              )
+            }
+            .buttonStyle(.plain)
           }
-          .buttonStyle(.plain)
-        } else {
-          BookDetailSeriesBarView(text: seriesText, palette: detailPalette)
         }
       }
     } else {
@@ -373,15 +388,35 @@ struct BookDetailView: View {
     }
   }
 
-  private var seriesText: String? {
-    detailViewData.seriesText
-  }
-
-  private var seriesRoute: BookSeriesRoute? {
-    let title = item.seriesTitle ?? localBook?.series?.title
-    guard let title, title.isEmpty == false else { return nil }
-    let id = item.seriesKey ?? localBook?.series?.podibleId ?? title
-    return BookSeriesRoute(id: id, title: title)
+  private var seriesRoutes: [BookSeriesRoute] {
+    let memberships =
+      item.series.isEmpty
+      ? (localBook?.series).map {
+        [
+          PodibleBookSeriesMembership(
+            key: $0.podibleId,
+            name: $0.title,
+            position: localBook?.seriesIndex.map { "\($0)" }
+          )
+        ]
+      } ?? []
+      : item.series
+    var seen = Set<String>()
+    return memberships.compactMap { membership in
+      let title = membership.name.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard title.isEmpty == false else { return nil }
+      let candidateKey = membership.key?.trimmingCharacters(in: .whitespacesAndNewlines)
+      let seriesKey =
+        candidateKey?.localizedCaseInsensitiveCompare(title) == .orderedSame ? nil : candidateKey
+      let id = seriesKey ?? title
+      guard seen.insert(id).inserted else { return nil }
+      return BookSeriesRoute(
+        id: id,
+        title: title,
+        seriesKey: seriesKey,
+        position: membership.position
+      )
+    }
   }
 
   @ViewBuilder

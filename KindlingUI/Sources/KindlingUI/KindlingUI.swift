@@ -24,9 +24,9 @@ public enum BookCollectionFilter: String, CaseIterable, Identifiable, Sendable {
     case .all:
       true
     case .unread:
-      book.isRead == false
+      book.isInLibrary && book.isRead == false
     case .read:
-      book.isRead
+      book.isInLibrary && book.isRead
     }
   }
 
@@ -98,6 +98,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
   public var usesSquareArtwork: Bool
   public var durationText: String?
   public var progress: Double?
+  public var isInLibrary: Bool
   public var isRead: Bool
   public var isFavorite: Bool
   public var palette: ArtworkPalette
@@ -116,6 +117,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
     usesSquareArtwork: Bool = false,
     durationText: String? = nil,
     progress: Double? = nil,
+    isInLibrary: Bool = true,
     isRead: Bool = false,
     isFavorite: Bool = false,
     palette: ArtworkPalette = .fallback,
@@ -133,6 +135,7 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
     self.usesSquareArtwork = usesSquareArtwork
     self.durationText = durationText
     self.progress = progress.map { min(max($0, 0), 1) }
+    self.isInLibrary = isInLibrary
     self.isRead = isRead
     self.isFavorite = isFavorite
     self.palette = palette
@@ -545,30 +548,46 @@ public struct BookGridTileView: View {
   }
 
   public var body: some View {
-    Button(action: onSelect) {
-      VStack(alignment: .leading, spacing: 6) {
-        statusStrip
-        artworkView
-        metadata
+    Group {
+      if book.isInLibrary {
+        Button(action: onSelect) {
+          tileContent
+        }
+        .buttonStyle(.plain)
+      } else {
+        tileContent
       }
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+  }
+
+  private var tileContent: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      statusStrip
+      artworkView
+      metadata
+    }
+    .contentShape(Rectangle())
   }
 
   private var statusStrip: some View {
     HStack(spacing: 6) {
-      Image(systemName: "music.note")
+      Image(systemName: book.isInLibrary ? "music.note" : "books.vertical")
       if let durationText = book.durationText {
         Text(durationText)
           .monospacedDigit()
       }
       Spacer(minLength: 0)
-      Button(action: onToggleRead) {
-        Image(systemName: book.isRead ? "checkmark.circle.fill" : "circle")
+      if book.isInLibrary {
+        Button(action: onToggleRead) {
+          Image(systemName: book.isRead ? "checkmark.circle.fill" : "circle")
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(book.isRead ? "Mark as unread" : "Mark as read")
+      } else {
+        Text("Not in Library")
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel(book.isRead ? "Mark as unread" : "Mark as read")
     }
     .font(.caption2.weight(.semibold))
     .foregroundStyle(book.palette.foreground)
@@ -651,28 +670,41 @@ public struct BookListRowView: View {
   }
 
   public var body: some View {
-    Button(action: onSelect) {
-      HStack(spacing: 12) {
-        CoverCropFrame(cornerRadius: 5) {
-          artworkContent(cornerRadius: 5)
+    Group {
+      if book.isInLibrary {
+        Button(action: onSelect) {
+          rowContent
         }
-        .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
+        .buttonStyle(.plain)
+      } else {
+        rowContent
+      }
+    }
+  }
 
-        VStack(alignment: .leading, spacing: 4) {
-          Text(book.title)
-            .font(.headline)
-            .lineLimit(2)
-          Text(book.author)
-            .font(.subheadline)
+  private var rowContent: some View {
+    HStack(spacing: 12) {
+      CoverCropFrame(cornerRadius: 5) {
+        artworkContent(cornerRadius: 5)
+      }
+      .frame(width: 56, height: book.usesSquareArtwork ? 56 : 82)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text(book.title)
+          .font(.headline)
+          .lineLimit(2)
+        Text(book.author)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        if let durationText = book.durationText {
+          Label(durationText, systemImage: "music.note")
+            .font(.caption)
             .foregroundStyle(.secondary)
-            .lineLimit(1)
-          if let durationText = book.durationText {
-            Label(durationText, systemImage: "music.note")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
         }
-        Spacer(minLength: 0)
+      }
+      Spacer(minLength: 0)
+      if book.isInLibrary {
         Button(action: onToggleFavorite) {
           Image(systemName: book.isFavorite ? "heart.fill" : "heart")
         }
@@ -681,11 +713,14 @@ public struct BookListRowView: View {
           Image(systemName: book.isRead ? "checkmark.circle.fill" : "circle")
         }
         .buttonStyle(.plain)
+      } else {
+        Text("Not in Library")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
-      .foregroundStyle(.primary)
-      .padding(.vertical, 6)
     }
-    .buttonStyle(.plain)
+    .foregroundStyle(.primary)
+    .padding(.vertical, 6)
   }
 
   @ViewBuilder
@@ -745,19 +780,34 @@ extension BookDetailHeroView where SeriesBar == EmptyView {
 public struct BookDetailSeriesBarView: View {
   public let text: String
   public let palette: ArtworkPalette
+  public let showsDisclosureIndicator: Bool
 
-  public init(text: String, palette: ArtworkPalette) {
+  public init(
+    text: String,
+    palette: ArtworkPalette,
+    showsDisclosureIndicator: Bool = false
+  ) {
     self.text = text
     self.palette = palette
+    self.showsDisclosureIndicator = showsDisclosureIndicator
   }
 
   public var body: some View {
-    Text(text)
-      .font(.caption.weight(.semibold))
-      .foregroundStyle(palette.foreground)
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 6)
-      .background(palette.background, in: RoundedRectangle(cornerRadius: 4))
+    HStack(spacing: 6) {
+      Text(text)
+        .frame(maxWidth: .infinity, alignment: .center)
+      if showsDisclosureIndicator {
+        Image(systemName: "chevron.right")
+          .font(.caption2.weight(.bold))
+          .accessibilityHidden(true)
+      }
+    }
+    .font(.caption.weight(.semibold))
+    .foregroundStyle(palette.foreground)
+    .padding(.leading, showsDisclosureIndicator ? 22 : 0)
+    .padding(.trailing, showsDisclosureIndicator ? 8 : 0)
+    .padding(.vertical, 6)
+    .background(palette.background, in: RoundedRectangle(cornerRadius: 4))
   }
 }
 

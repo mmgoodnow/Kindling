@@ -146,6 +146,23 @@ struct PodibleBookSeriesMembership: Hashable, Codable {
   }
 }
 
+struct PodibleOpenLibrarySeriesBook: Identifiable, Hashable {
+  let openLibraryKey: String
+  let title: String
+  let author: String
+  let coverID: Int?
+  let publishedYear: Int?
+  let series: [PodibleBookSeriesMembership]
+
+  var id: String { openLibraryKey }
+}
+
+struct PodibleSeriesResult: Hashable {
+  let series: PodibleBookSeriesMembership
+  let libraryBooks: [PodibleLibraryItem]
+  let openLibraryBooks: [PodibleOpenLibrarySeriesBook]
+}
+
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let id: String
   let openLibraryWorkID: String?
@@ -438,6 +455,8 @@ protocol PodibleLibraryServing {
     -> PodibleLibraryItem
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchLibraryItems() async throws -> [PodibleLibraryItem]
+  func fetchSeries(seriesKey: String?, seriesName: String?, limit: Int?) async throws
+    -> PodibleSeriesResult
   func deleteLibraryBook(bookID: String) async throws
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
@@ -493,6 +512,15 @@ extension PodibleLibraryServing {
   func fetchInProgressLibraryItems(bookIDs: [String]? = nil) async throws -> [PodibleLibraryItem] {
     _ = bookIDs
     return []
+  }
+
+  func fetchSeries(seriesKey: String?, seriesName: String?, limit: Int? = nil) async throws
+    -> PodibleSeriesResult
+  {
+    _ = seriesKey
+    _ = seriesName
+    _ = limit
+    throw PodibleError.unsupported("This backend does not support series lookup.")
   }
 
   func fetchAlternateCovers(bookID: String, limit: Int = 50) async throws -> [PodibleAlternateCover]
@@ -1300,12 +1328,19 @@ private struct PodibleOpenLibraryCoversResult: Decodable {
   }
 }
 
-private struct PodibleOpenLibraryCandidate: Decodable {
+struct PodibleOpenLibraryCandidate: Decodable {
   let openLibraryKey: String
   let title: String
   let author: String
   let publishedAt: String?
   let coverId: Int?
+  let series: [PodibleBookSeriesMembership]
+}
+
+struct PodibleLibrarySeriesRPCResult: Decodable {
+  let series: PodibleBookSeriesMembership
+  let libraryBooks: [PodibleLibraryBook]
+  let openLibraryBooks: [PodibleOpenLibraryCandidate]
 }
 
 private struct PodibleOpenLibraryCoverCandidate: Decodable {
@@ -1349,7 +1384,7 @@ private struct PodibleOpenLibrarySetCoverResult: Decodable {
   let book: PodibleLibraryBook
 }
 
-private struct PodibleLibraryBook: Decodable {
+struct PodibleLibraryBook: Decodable {
   let id: Int
   let identifiers: PodibleLibraryIdentifiers?
   let title: String
@@ -1380,7 +1415,7 @@ private struct PodibleLibraryBook: Decodable {
   let playback: PodiblePlayback?
 }
 
-private struct PodibleLibraryIdentifiers: Decodable {
+struct PodibleLibraryIdentifiers: Decodable {
   let openlibrary: String?
 }
 
@@ -1591,6 +1626,40 @@ struct PodibleClient: PodibleLibraryServing {
     }
 
     return collected.map(toLibraryItem(_:))
+  }
+
+  func fetchSeries(seriesKey: String?, seriesName: String?, limit: Int? = nil) async throws
+    -> PodibleSeriesResult
+  {
+    var params: [String: Any] = [:]
+    if let seriesKey, seriesKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+      params["seriesKey"] = seriesKey
+    }
+    if let seriesName, seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+      params["seriesName"] = seriesName
+    }
+    if let limit {
+      params["limit"] = limit
+    }
+
+    let response: PodibleLibrarySeriesRPCResult = try await rpcCall(
+      method: "library.series",
+      params: params
+    )
+    return PodibleSeriesResult(
+      series: response.series,
+      libraryBooks: response.libraryBooks.map(toLibraryItem(_:)),
+      openLibraryBooks: response.openLibraryBooks.map { book in
+        PodibleOpenLibrarySeriesBook(
+          openLibraryKey: book.openLibraryKey,
+          title: book.title,
+          author: book.author,
+          coverID: book.coverId,
+          publishedYear: year(from: book.publishedAt),
+          series: book.series
+        )
+      }
+    )
   }
 
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {

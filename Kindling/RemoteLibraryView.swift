@@ -64,6 +64,9 @@ struct PodibleLibraryView: View {
   @State private var localDownloadingBookIDs: Set<String> = []
   @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
   @State private var artworkPaletteKeysBeingSampled = Set<String>()
+  @State private var seriesResults: [BookSeriesRoute: PodibleSeriesResult] = [:]
+  @State private var loadingSeriesRoutes = Set<BookSeriesRoute>()
+  @State private var seriesErrors: [BookSeriesRoute: String] = [:]
   @State private var selectedDetailItem: PodibleLibraryItem?
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
@@ -702,14 +705,44 @@ struct PodibleLibraryView: View {
   }
 
   private func seriesContent(for route: BookSeriesRoute) -> some View {
-    Group {
-      #if os(iOS)
+    let books = seriesBookTiles(for: route)
+    return Group {
+      if loadingSeriesRoutes.contains(route) && seriesResults[route] == nil && books.isEmpty {
+        ProgressView()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if let error = seriesErrors[route], books.isEmpty {
+        ContentUnavailableView(
+          "Unable to Load Series",
+          systemImage: "exclamationmark.triangle",
+          description: Text(error)
+        )
+      } else {
+        seriesCollection(route: route, books: books)
+      }
+    }
+    .navigationTitle(route.title)
+    .task(id: route) {
+      await loadSeries(route, using: configuredClient)
+    }
+  }
+
+  @ViewBuilder
+  private func seriesCollection(route: BookSeriesRoute, books: [BookTileViewData]) -> some View {
+    #if os(iOS)
+      SeriesContentView(
+        series: SeriesViewData(id: route.id, title: route.title, books: books),
+        layout: collectionLayout,
+        filter: collectionFilter,
+        artwork: collectionArtwork(for:cornerRadius:),
+        onSelect: selectCollectionBook(_:),
+        onToggleRead: toggleRead(_:),
+        onToggleFavorite: toggleFavorite(_:)
+      )
+    #else
+      VStack(spacing: 0) {
+        collectionControls
         SeriesContentView(
-          series: SeriesViewData(
-            id: route.id,
-            title: route.title,
-            books: seriesBooks(for: route).map(bookTileViewData(for:))
-          ),
+          series: SeriesViewData(id: route.id, title: route.title, books: books),
           layout: collectionLayout,
           filter: collectionFilter,
           artwork: collectionArtwork(for:cornerRadius:),
@@ -717,32 +750,60 @@ struct PodibleLibraryView: View {
           onToggleRead: toggleRead(_:),
           onToggleFavorite: toggleFavorite(_:)
         )
-      #else
-        VStack(spacing: 0) {
-          collectionControls
-          SeriesContentView(
-            series: SeriesViewData(
-              id: route.id,
-              title: route.title,
-              books: seriesBooks(for: route).map(bookTileViewData(for:))
-            ),
-            layout: collectionLayout,
-            filter: collectionFilter,
-            artwork: collectionArtwork(for:cornerRadius:),
-            onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:)
-          )
-        }
-      #endif
+      }
+    #endif
+  }
+
+  @MainActor
+  private func loadSeries(_ route: BookSeriesRoute, using client: RemoteLibraryServing?) async {
+    guard seriesResults[route] == nil else { return }
+    guard loadingSeriesRoutes.insert(route).inserted else { return }
+    defer { loadingSeriesRoutes.remove(route) }
+    guard let client else { return }
+
+    do {
+      let result = try await client.fetchSeries(
+        seriesKey: route.seriesKey,
+        seriesName: route.title,
+        limit: 100
+      )
+      result.libraryBooks.forEach(applyLibraryItemUpdate(_:))
+      seriesResults[route] = result
+      seriesErrors[route] = nil
+    } catch {
+      guard isCancellationError(error) == false else { return }
+      seriesErrors[route] = error.localizedDescription
     }
-    .navigationTitle(route.title)
   }
 
   private func seriesBooks(for route: BookSeriesRoute) -> [LibraryBook] {
     localBooks.filter { book in
       book.series?.podibleId == route.id || book.series?.title == route.title
     }
+  }
+
+  private func seriesBookTiles(for route: BookSeriesRoute) -> [BookTileViewData] {
+    guard let result = seriesResults[route] else {
+      return seriesBooks(for: route).map(bookTileViewData(for:))
+    }
+
+    var books = result.libraryBooks.map { item in
+      if let localBook = localBooksById[item.id] {
+        return bookTileViewData(for: localBook)
+      }
+      return bookTileViewData(for: item)
+    }
+    let libraryOpenLibraryIDs = Set(
+      result.libraryBooks.compactMap(\.openLibraryWorkID).map(normalizedOpenLibraryID(_:))
+    )
+    books.append(
+      contentsOf: result.openLibraryBooks.compactMap { book in
+        guard libraryOpenLibraryIDs.contains(normalizedOpenLibraryID(book.openLibraryKey)) == false
+        else { return nil }
+        return bookTileViewData(for: book, route: route)
+      }
+    )
+    return SeriesViewData.sortedBooks(books)
   }
 
   private var localBooksById: [String: LibraryBook] {
@@ -773,6 +834,56 @@ struct PodibleLibraryView: View {
       narrator: book.narrator,
       description: book.summary
     )
+  }
+
+  private func bookTileViewData(for item: PodibleLibraryItem) -> BookTileViewData {
+    let artworkURL = remoteLibraryAssetURL(
+      baseURLString: remoteAssetBaseURLString,
+      path: item.bookImagePath,
+      versionToken: item.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+    )
+    return BookTileViewData(
+      id: item.id,
+      title: item.title,
+      author: item.author,
+      artworkURL: artworkURL,
+      durationText: item.runtimeSeconds.map(formatRuntime(seconds:)),
+      palette: artworkPalette(for: artworkURL),
+      seriesKey: item.seriesKey,
+      seriesTitle: item.seriesTitle,
+      seriesPosition: item.seriesPosition,
+      publishedYear: item.publishedYear,
+      narrator: item.narrator,
+      description: item.summary
+    )
+  }
+
+  private func bookTileViewData(
+    for book: PodibleOpenLibrarySeriesBook,
+    route: BookSeriesRoute
+  ) -> BookTileViewData {
+    let membership = book.series.first {
+      $0.key == route.id || $0.name.localizedCaseInsensitiveCompare(route.title) == .orderedSame
+    }
+    let artworkURL = book.coverID.flatMap {
+      URL(string: "https://covers.openlibrary.org/b/id/\($0)-L.jpg")
+    }
+    return BookTileViewData(
+      id: "openlibrary:\(book.openLibraryKey)",
+      title: book.title,
+      author: book.author,
+      artworkURL: artworkURL,
+      isInLibrary: false,
+      palette: artworkPalette(for: artworkURL),
+      seriesKey: membership?.key ?? route.id,
+      seriesTitle: membership?.name ?? route.title,
+      seriesPosition: membership?.numericPosition,
+      publishedYear: book.publishedYear
+    )
+  }
+
+  private func normalizedOpenLibraryID(_ raw: String) -> String {
+    raw.split(separator: "/").last.map(String.init)?.uppercased() ?? raw.uppercased()
   }
 
   private func collectionArtwork(
@@ -886,8 +997,13 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func selectCollectionBook(_ book: BookTileViewData) {
-    guard let localBook = localBooksById[book.id] else { return }
-    selectedDetailItem = localProxyItem(for: localBook)
+    if let localBook = localBooksById[book.id] {
+      selectedDetailItem = localProxyItem(for: localBook)
+      return
+    }
+    selectedDetailItem = seriesResults.values.lazy
+      .flatMap(\.libraryBooks)
+      .first { $0.id == book.id }
   }
 
   @MainActor
