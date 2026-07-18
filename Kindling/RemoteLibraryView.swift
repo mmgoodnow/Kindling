@@ -67,7 +67,6 @@ struct PodibleLibraryView: View {
   @State private var seriesResults: [BookSeriesRoute: PodibleSeriesResult] = [:]
   @State private var loadingSeriesRoutes = Set<BookSeriesRoute>()
   @State private var seriesErrors: [BookSeriesRoute: String] = [:]
-  @State private var selectedDetailItem: PodibleLibraryItem?
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
@@ -78,17 +77,20 @@ struct PodibleLibraryView: View {
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
   let searchQuery: Binding<String>?
+  @Binding var navigationPath: NavigationPath
   @Binding var isShowingPlayer: Bool
 
   init(
     mode: PodibleLibraryScreenMode = .library,
     client: RemoteLibraryServing? = nil,
     searchQuery: Binding<String>? = nil,
+    navigationPath: Binding<NavigationPath> = .constant(NavigationPath()),
     isShowingPlayer: Binding<Bool> = .constant(false)
   ) {
     self.mode = mode
     self.clientOverride = client
     self.searchQuery = searchQuery
+    self._navigationPath = navigationPath
     self._isShowingPlayer = isShowingPlayer
   }
 
@@ -134,16 +136,17 @@ struct PodibleLibraryView: View {
 
   var body: some View {
     content(client: configuredClient)
-      .navigationDestination(for: PodibleLibraryItem.self) { item in
-        bookDetailView(for: item)
-      }
-      .navigationDestination(for: BookSeriesRoute.self) { route in
-        seriesContent(for: route)
+      .navigationDestination(for: LibraryNavigationRoute.self) { route in
+        switch route {
+        case .book(let item):
+          bookDetailView(for: item)
+        case .series(let seriesRoute):
+          seriesContent(for: seriesRoute)
+        }
       }
       .navigationDestination(isPresented: $isShowingSettings) {
         SettingsView()
       }
-      .background(detailNavigationLink)
       .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
         markFinishedPlaybackRead($0)
       }
@@ -157,28 +160,6 @@ struct PodibleLibraryView: View {
       isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
       isShowingPlayer: $isShowingPlayer
     )
-  }
-
-  private var detailNavigationLink: some View {
-    NavigationLink(
-      isActive: Binding(
-        get: { selectedDetailItem != nil },
-        set: { isActive in
-          if isActive == false {
-            selectedDetailItem = nil
-          }
-        }
-      )
-    ) {
-      if let selectedDetailItem {
-        bookDetailView(for: selectedDetailItem)
-      } else {
-        EmptyView()
-      }
-    } label: {
-      EmptyView()
-    }
-    .hidden()
   }
 
   private func detailActions(
@@ -998,12 +979,15 @@ struct PodibleLibraryView: View {
   @MainActor
   private func selectCollectionBook(_ book: BookTileViewData) {
     if let localBook = localBooksById[book.id] {
-      selectedDetailItem = localProxyItem(for: localBook)
+      navigationPath.append(LibraryNavigationRoute.book(localProxyItem(for: localBook)))
       return
     }
-    selectedDetailItem = seriesResults.values.lazy
-      .flatMap(\.libraryBooks)
-      .first { $0.id == book.id }
+    guard
+      let item = seriesResults.values.lazy
+        .flatMap(\.libraryBooks)
+        .first(where: { $0.id == book.id })
+    else { return }
+    navigationPath.append(LibraryNavigationRoute.book(item))
   }
 
   @MainActor
@@ -1776,7 +1760,7 @@ struct PodibleLibraryView: View {
       // Invisible NavigationLink provides the value-based push but no visual
       // chevron — that lives inside the row's HStack below so the divider can
       // extend past it.
-      NavigationLink(value: item) {
+      NavigationLink(value: LibraryNavigationRoute.book(item)) {
         EmptyView()
       }
       .opacity(0)

@@ -4,6 +4,9 @@ struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
   @State private var selectedTab: AppTab = .library
   @State private var searchQuery = ""
+  @State private var libraryNavigationPath = NavigationPath()
+  @State private var favoritesNavigationPath = NavigationPath()
+  @State private var searchNavigationPath = NavigationPath()
 
   private enum AppTab: Hashable {
     case library
@@ -26,18 +29,20 @@ struct ContentView: View {
   var body: some View {
     TabView(selection: $selectedTab) {
       Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
-        NavigationStack {
+        NavigationStack(path: $libraryNavigationPath) {
           RemoteLibraryView(
             mode: .library,
+            navigationPath: $libraryNavigationPath,
             isShowingPlayer: playerTabBinding
           )
         }
       }
 
       Tab("Favorites", systemImage: "heart.fill", value: AppTab.favorites) {
-        NavigationStack {
+        NavigationStack(path: $favoritesNavigationPath) {
           RemoteLibraryView(
             mode: .favorites,
+            navigationPath: $favoritesNavigationPath,
             isShowingPlayer: playerTabBinding
           )
         }
@@ -52,10 +57,11 @@ struct ContentView: View {
       }
 
       Tab("Search", systemImage: "magnifyingglass", value: AppTab.search) {
-        NavigationStack {
+        NavigationStack(path: $searchNavigationPath) {
           RemoteLibraryView(
             mode: .library,
             searchQuery: $searchQuery,
+            navigationPath: $searchNavigationPath,
             isShowingPlayer: playerTabBinding
           )
         }

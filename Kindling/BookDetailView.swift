@@ -26,6 +26,11 @@ struct BookSeriesRoute: Hashable {
   }
 }
 
+enum LibraryNavigationRoute: Hashable {
+  case book(PodibleLibraryItem)
+  case series(BookSeriesRoute)
+}
+
 struct BookDetailActions {
   var isFavorite: Bool = false
   var isRead: Bool = false
@@ -153,7 +158,7 @@ struct BookDetailView: View {
       } seriesBar: {
         VStack(spacing: 8) {
           ForEach(routes, id: \.self) { route in
-            NavigationLink(value: route) {
+            NavigationLink(value: LibraryNavigationRoute.series(route)) {
               BookDetailSeriesBarView(
                 text: route.displayText,
                 palette: detailPalette,
