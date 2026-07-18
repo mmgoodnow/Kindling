@@ -192,6 +192,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let title: String
   let author: String
   let summary: String?
+  let descriptionHTML: String?
   let status: PodibleLibraryItemStatus
   let ebookStatus: PodibleLibraryItemStatus?
   let audioStatus: PodibleLibraryItemStatus?
@@ -215,6 +216,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     title: String,
     author: String,
     summary: String? = nil,
+    descriptionHTML: String? = nil,
     status: PodibleLibraryItemStatus,
     ebookStatus: PodibleLibraryItemStatus? = nil,
     audioStatus: PodibleLibraryItemStatus? = nil,
@@ -237,6 +239,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.title = title
     self.author = author
     self.summary = summary
+    self.descriptionHTML = descriptionHTML
     self.status = status
     self.ebookStatus = ebookStatus
     self.audioStatus = audioStatus
@@ -277,6 +280,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case authorUpper = "AuthorName"
     case summaryLower = "description"
     case summaryUpper = "Description"
+    case descriptionHTML = "descriptionHtml"
     case status = "status"
     case statusAlt = "Status"
     case ebookStatus = "ebookStatus"
@@ -308,6 +312,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     title = try container.decodeIfPresent(String.self, forKeys: [.titleLower, .titleUpper])
     author = try container.decodeIfPresent(String.self, forKeys: [.authorLower, .authorUpper])
     summary = try? container.decodeIfPresent(String.self, forKeys: [.summaryLower, .summaryUpper])
+    descriptionHTML = try? container.decodeIfPresent(String.self, forKey: .descriptionHTML)
     status =
       (try? container.decode(PodibleLibraryItemStatus.self, forKey: .status))
       ?? (try? container.decode(PodibleLibraryItemStatus.self, forKey: .statusAlt))
@@ -1058,6 +1063,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
       title: existing.title,
       author: existing.author,
       summary: existing.summary,
+      descriptionHTML: existing.descriptionHTML,
       status: existing.status,
       ebookStatus: existing.ebookStatus,
       audioStatus: existing.audioStatus,
@@ -1069,6 +1075,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
       runtimeSeconds: existing.runtimeSeconds,
       publishedYear: existing.publishedYear,
       narrator: existing.narrator,
+      series: existing.series,
       seriesKey: existing.seriesKey,
       seriesTitle: existing.seriesTitle,
       seriesPosition: existing.seriesPosition,
@@ -1177,6 +1184,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
       title: existing.title,
       author: existing.author,
       summary: existing.summary,
+      descriptionHTML: existing.descriptionHTML,
       status: .snatched,
       ebookStatus: selection.mediaType == .ebook ? .snatched : existing.ebookStatus,
       audioStatus: selection.mediaType == .audio ? .snatched : existing.audioStatus,
@@ -1188,6 +1196,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
       runtimeSeconds: existing.runtimeSeconds,
       publishedYear: existing.publishedYear,
       narrator: existing.narrator,
+      series: existing.series,
       seriesKey: existing.seriesKey,
       seriesTitle: existing.seriesTitle,
       seriesPosition: existing.seriesPosition,
@@ -1217,6 +1226,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
         title: existing.title,
         author: existing.author,
         summary: existing.summary,
+        descriptionHTML: existing.descriptionHTML,
         status: combined >= 100 ? .have : .requested,
         ebookStatus: ebook >= 100 ? .have : .requested,
         audioStatus: audio >= 100 ? .have : .requested,
@@ -1228,6 +1238,7 @@ final actor PodibleMockClient: PodibleLibraryServing {
         runtimeSeconds: existing.runtimeSeconds,
         publishedYear: existing.publishedYear,
         narrator: existing.narrator,
+        series: existing.series,
         seriesKey: existing.seriesKey,
         seriesTitle: existing.seriesTitle,
         seriesPosition: existing.seriesPosition,
@@ -1426,6 +1437,7 @@ struct PodibleLibraryBook: Decodable {
   let title: String
   let author: String
   let description: String?
+  let descriptionHtml: String?
   let coverId: Int?
   let coverUrl: String?
   let addedAt: String
@@ -1971,6 +1983,7 @@ struct PodibleClient: PodibleLibraryServing {
       title: book.title,
       author: book.author,
       summary: book.description,
+      descriptionHTML: book.descriptionHtml,
       status: mapPodibleStatus(book.status),
       ebookStatus: ebookStatus,
       audioStatus: audioStatus,

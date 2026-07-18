@@ -73,6 +73,7 @@ final class LibraryBook {
   var title: String
   var sortTitle: String?
   var summary: String?
+  var descriptionHTML: String?
   var coverURLString: String?
   var runtimeSeconds: Int?
   var wordCount: Int?
@@ -97,6 +98,7 @@ final class LibraryBook {
     title: String,
     sortTitle: String? = nil,
     summary: String? = nil,
+    descriptionHTML: String? = nil,
     coverURLString: String? = nil,
     runtimeSeconds: Int? = nil,
     wordCount: Int? = nil,
@@ -116,6 +118,7 @@ final class LibraryBook {
     self.title = title
     self.sortTitle = sortTitle
     self.summary = summary
+    self.descriptionHTML = descriptionHTML
     self.coverURLString = coverURLString
     self.runtimeSeconds = runtimeSeconds
     self.wordCount = wordCount

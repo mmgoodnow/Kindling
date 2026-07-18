@@ -136,6 +136,7 @@ final class PodibleLibraryViewModel: ObservableObject {
           title: requested.title,
           author: requested.author,
           summary: requested.summary ?? existing.summary,
+          descriptionHTML: requested.descriptionHTML ?? existing.descriptionHTML,
           status: requested.status,
           ebookStatus: requested.ebookStatus ?? existing.ebookStatus,
           audioStatus: requested.audioStatus,
@@ -145,6 +146,12 @@ final class PodibleLibraryViewModel: ObservableObject {
           bookImagePath: requested.bookImagePath ?? existing.bookImagePath,
           wordCount: requested.wordCount ?? existing.wordCount,
           runtimeSeconds: requested.runtimeSeconds ?? existing.runtimeSeconds,
+          publishedYear: requested.publishedYear ?? existing.publishedYear,
+          narrator: requested.narrator ?? existing.narrator,
+          series: requested.series.isEmpty ? existing.series : requested.series,
+          seriesKey: requested.seriesKey ?? existing.seriesKey,
+          seriesTitle: requested.seriesTitle ?? existing.seriesTitle,
+          seriesPosition: requested.seriesPosition ?? existing.seriesPosition,
           playback: requested.playback ?? existing.playback
         )
         libraryItems[existingIndex] = updated
@@ -389,6 +396,7 @@ final class PodibleLibraryViewModel: ObservableObject {
         title: item.title,
         author: item.author,
         summary: item.summary ?? existing.summary,
+        descriptionHTML: item.descriptionHTML ?? existing.descriptionHTML,
         status: item.status,
         ebookStatus: item.ebookStatus ?? existing.ebookStatus,
         audioStatus: item.audioStatus ?? existing.audioStatus,
@@ -398,6 +406,12 @@ final class PodibleLibraryViewModel: ObservableObject {
         bookImagePath: item.bookImagePath ?? existing.bookImagePath,
         wordCount: item.wordCount ?? existing.wordCount,
         runtimeSeconds: item.runtimeSeconds ?? existing.runtimeSeconds,
+        publishedYear: item.publishedYear ?? existing.publishedYear,
+        narrator: item.narrator ?? existing.narrator,
+        series: item.series.isEmpty ? existing.series : item.series,
+        seriesKey: item.seriesKey ?? existing.seriesKey,
+        seriesTitle: item.seriesTitle ?? existing.seriesTitle,
+        seriesPosition: item.seriesPosition ?? existing.seriesPosition,
         playback: item.playback ?? existing.playback
       )
       libraryItems[index] = merged

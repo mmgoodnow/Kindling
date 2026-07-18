@@ -2051,6 +2051,7 @@ struct PodibleLibraryView: View {
       title: book.title,
       author: book.author?.name ?? "Unknown Author",
       summary: book.summary,
+      descriptionHTML: book.descriptionHTML,
       status: overallStatus,
       ebookStatus: ebookStatus,
       audioStatus: audioStatus,
@@ -2640,6 +2641,7 @@ struct PodibleLibraryView: View {
       openLibraryWorkID: item.openLibraryWorkID,
       title: item.title,
       summary: item.summary,
+      descriptionHTML: item.descriptionHTML,
       coverURLString: item.bookImagePath,
       runtimeSeconds: item.runtimeSeconds,
       wordCount: item.wordCount,
@@ -2719,6 +2721,10 @@ struct PodibleLibraryView: View {
     }
     if book.summary != item.summary {
       book.summary = item.summary
+      updated = true
+    }
+    if book.descriptionHTML != item.descriptionHTML {
+      book.descriptionHTML = item.descriptionHTML
       updated = true
     }
     if book.coverURLString != item.bookImagePath {

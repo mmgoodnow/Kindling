@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import KindlingUI
+import SwiftData
 import XCTest
 
 @testable import Kindling
@@ -73,6 +74,8 @@ final class kindlingTests: XCTestCase {
         "id": "42",
         "bookname": "The Second Book",
         "authorname": "An Author",
+        "description": "A plain description.",
+        "descriptionHtml": "<p>A <strong>rich</strong> description.</p>",
         "status": "have",
         "series": [
           { "key": "OL123L", "name": "The Series", "position": "2" }
@@ -88,6 +91,49 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(item.seriesKey, "OL123L")
     XCTAssertEqual(item.seriesTitle, "The Series")
     XCTAssertEqual(item.seriesPosition, 2)
+    XCTAssertEqual(item.descriptionHTML, "<p>A <strong>rich</strong> description.</p>")
+  }
+
+  @MainActor
+  func testRichDescriptionRendererPreservesFormattedTextContent() throws {
+    let rendered = try XCTUnwrap(
+      richDescriptionAttributedString(
+        html: "<p>A <strong>rich</strong> description.</p><p>Second paragraph.</p>"
+      )
+    )
+
+    let text = String(rendered.characters)
+    XCTAssertTrue(text.contains("A rich description."))
+    XCTAssertTrue(text.contains("Second paragraph."))
+  }
+
+  @MainActor
+  func testLibraryBookPersistsRichDescriptionHTML() throws {
+    let schema = Schema([
+      Author.self,
+      Series.self,
+      LibraryBook.self,
+      LibraryBookFile.self,
+      LocalBookState.self,
+      LibrarySyncState.self,
+    ])
+    let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: schema, configurations: [configuration])
+    let context = container.mainContext
+    context.insert(
+      LibraryBook(
+        podibleId: "42",
+        title: "The Second Book",
+        descriptionHTML: "<p>A <strong>rich</strong> description.</p>"
+      )
+    )
+    try context.save()
+
+    let persisted = try XCTUnwrap(context.fetch(FetchDescriptor<LibraryBook>()).first)
+    XCTAssertEqual(
+      persisted.descriptionHTML,
+      "<p>A <strong>rich</strong> description.</p>"
+    )
   }
 
   func testLibrarySeriesResponseDecodesOpenLibraryBooks() throws {

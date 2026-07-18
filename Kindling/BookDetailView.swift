@@ -1,3 +1,4 @@
+import Foundation
 import KindlingUI
 import Kingfisher
 import SwiftData
@@ -100,7 +101,12 @@ struct BookDetailView: View {
         hero
         metricsLine
         audioEditionSection
-        if let summary = displaySummary, summary.isEmpty == false {
+        if let description = displayRichDescription {
+          Text(description)
+            .font(.body)
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if let summary = displaySummary, summary.isEmpty == false {
           Text(summary)
             .font(.body)
             .foregroundStyle(.primary)
@@ -371,6 +377,13 @@ struct BookDetailView: View {
       return summary
     }
     return nil
+  }
+
+  private var displayRichDescription: AttributedString? {
+    let html = [item.descriptionHTML, localBook?.descriptionHTML]
+      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .first { $0.isEmpty == false }
+    return html.flatMap(richDescriptionAttributedString(html:))
   }
 
   private var detailViewData: BookDetailViewData {
@@ -809,6 +822,52 @@ struct BookDetailView: View {
     }
     return "\(count)"
   }
+}
+
+@MainActor
+private let richDescriptionCache: NSCache<NSString, NSAttributedString> = {
+  let cache = NSCache<NSString, NSAttributedString>()
+  cache.countLimit = 100
+  return cache
+}()
+
+@MainActor
+func richDescriptionAttributedString(html: String) -> AttributedString? {
+  let cacheKey = html as NSString
+  if let cached = richDescriptionCache.object(forKey: cacheKey) {
+    return AttributedString(cached)
+  }
+  let document = """
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system; font-size: 17px; line-height: 1.35; }
+          p { margin: 0 0 0.8em 0; }
+        </style>
+      </head>
+      <body>\(html)</body>
+    </html>
+    """
+  guard let data = document.data(using: .utf8) else { return nil }
+  let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+    .documentType: NSAttributedString.DocumentType.html,
+    .characterEncoding: String.Encoding.utf8.rawValue,
+  ]
+  guard
+    let rendered = try? NSMutableAttributedString(
+      data: data,
+      options: options,
+      documentAttributes: nil
+    )
+  else { return nil }
+
+  let range = NSRange(location: 0, length: rendered.length)
+  rendered.removeAttribute(.foregroundColor, range: range)
+  rendered.removeAttribute(.backgroundColor, range: range)
+  let immutable = NSAttributedString(attributedString: rendered)
+  richDescriptionCache.setObject(immutable, forKey: cacheKey)
+  return AttributedString(immutable)
 }
 
 private struct BookReleaseSearchSheet: View {
