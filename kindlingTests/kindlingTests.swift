@@ -119,6 +119,33 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(response.openLibraryBooks.first?.series.first?.numericPosition, 1)
   }
 
+  func testLibraryAuthorResponseDecodesOwnedAndOpenLibraryBooks() throws {
+    let data = try XCTUnwrap(
+      """
+      {
+        "author": "Hugh Howey",
+        "libraryBooks": [],
+        "openLibraryBooks": [
+          {
+            "openLibraryKey": "/works/OL17377506W",
+            "title": "Sand",
+            "author": "Hugh Howey",
+            "publishedAt": "2014-01-01T00:00:00.000Z",
+            "coverId": 456,
+            "series": []
+          }
+        ]
+      }
+      """.data(using: .utf8)
+    )
+
+    let response = try JSONDecoder().decode(PodibleLibraryAuthorRPCResult.self, from: data)
+
+    XCTAssertEqual(response.author, "Hugh Howey")
+    XCTAssertEqual(response.openLibraryBooks.map(\.openLibraryKey), ["/works/OL17377506W"])
+    XCTAssertEqual(response.openLibraryBooks.first?.author, "Hugh Howey")
+  }
+
   func testBookSeriesRouteFormatsNumericAndFreeformPositions() {
     XCTAssertEqual(
       BookSeriesRoute(id: "one", title: "Series", seriesKey: "one", position: "2").displayText,
