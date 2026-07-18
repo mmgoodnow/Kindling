@@ -742,15 +742,18 @@ public struct BookListRowView: View {
 
 public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
   public let book: BookDetailViewData
+  private let onAuthor: (() -> Void)?
   private let artwork: Artwork
   private let seriesBar: SeriesBar
 
   public init(
     book: BookDetailViewData,
+    onAuthor: (() -> Void)? = nil,
     @ViewBuilder artwork: () -> Artwork,
     @ViewBuilder seriesBar: () -> SeriesBar
   ) {
     self.book = book
+    self.onAuthor = onAuthor
     self.artwork = artwork()
     self.seriesBar = seriesBar()
   }
@@ -762,7 +765,7 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
 
       seriesBar
 
-      BookDetailTitleBlockView(book: book)
+      BookDetailTitleBlockView(book: book, onAuthor: onAuthor)
     }
     .padding(.top, 8)
   }
@@ -771,9 +774,10 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
 extension BookDetailHeroView where SeriesBar == EmptyView {
   public init(
     book: BookDetailViewData,
+    onAuthor: (() -> Void)? = nil,
     @ViewBuilder artwork: () -> Artwork
   ) {
-    self.init(book: book, artwork: artwork) {
+    self.init(book: book, onAuthor: onAuthor, artwork: artwork) {
       EmptyView()
     }
   }
@@ -815,9 +819,11 @@ public struct BookDetailSeriesBarView: View {
 
 public struct BookDetailTitleBlockView: View {
   public let book: BookDetailViewData
+  private let onAuthor: (() -> Void)?
 
-  public init(book: BookDetailViewData) {
+  public init(book: BookDetailViewData, onAuthor: (() -> Void)? = nil) {
     self.book = book
+    self.onAuthor = onAuthor
   }
 
   public var body: some View {
@@ -825,10 +831,26 @@ public struct BookDetailTitleBlockView: View {
       Text(book.title)
         .font(.headline.weight(.bold))
         .multilineTextAlignment(.center)
-      Text(book.author)
+      if let onAuthor {
+        Button(action: onAuthor) {
+          HStack(spacing: 3) {
+            Text(book.author)
+            Image(systemName: "chevron.right")
+              .font(.caption2.weight(.semibold))
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
+        .accessibilityLabel("Works by \(book.author)")
+      } else {
+        Text(book.author)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      }
 
       if let metadataText = book.metadataText {
         Text(metadataText)
@@ -1051,7 +1073,8 @@ public struct SeriesContentView: View {
   }
 
   public var body: some View {
-    BookCollectionView(
+    BookGroupContentView(
+      title: series.title,
       books: series.books,
       layout: layout,
       filter: filter,
@@ -1061,7 +1084,54 @@ public struct SeriesContentView: View {
       onToggleRead: onToggleRead,
       onToggleFavorite: onToggleFavorite
     )
-    .navigationTitle(series.title)
+  }
+}
+
+public struct BookGroupContentView: View {
+  public let title: String
+  public let books: [BookTileViewData]
+  public let layout: BookCollectionLayout
+  public let filter: BookCollectionFilter
+  public let contentTopPadding: CGFloat
+  public let onSelect: (BookTileViewData) -> Void
+  public let onToggleRead: (BookTileViewData) -> Void
+  public let onToggleFavorite: (BookTileViewData) -> Void
+  private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
+
+  public init(
+    title: String,
+    books: [BookTileViewData],
+    layout: BookCollectionLayout,
+    filter: BookCollectionFilter,
+    contentTopPadding: CGFloat = 0,
+    artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
+    onSelect: @escaping (BookTileViewData) -> Void = { _ in },
+    onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
+    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
+  ) {
+    self.title = title
+    self.books = books
+    self.layout = layout
+    self.filter = filter
+    self.contentTopPadding = contentTopPadding
+    self.artwork = artwork
+    self.onSelect = onSelect
+    self.onToggleRead = onToggleRead
+    self.onToggleFavorite = onToggleFavorite
+  }
+
+  public var body: some View {
+    BookCollectionView(
+      books: books,
+      layout: layout,
+      filter: filter,
+      contentTopPadding: contentTopPadding,
+      artwork: artwork,
+      onSelect: onSelect,
+      onToggleRead: onToggleRead,
+      onToggleFavorite: onToggleFavorite
+    )
+    .navigationTitle(title)
   }
 }
 
