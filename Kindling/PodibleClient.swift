@@ -146,7 +146,7 @@ struct PodibleBookSeriesMembership: Hashable, Codable {
   }
 }
 
-struct PodibleOpenLibrarySeriesBook: Identifiable, Hashable {
+struct PodibleOpenLibraryBook: Identifiable, Hashable {
   let openLibraryKey: String
   let title: String
   let author: String
@@ -160,7 +160,13 @@ struct PodibleOpenLibrarySeriesBook: Identifiable, Hashable {
 struct PodibleSeriesResult: Hashable {
   let series: PodibleBookSeriesMembership
   let libraryBooks: [PodibleLibraryItem]
-  let openLibraryBooks: [PodibleOpenLibrarySeriesBook]
+  let openLibraryBooks: [PodibleOpenLibraryBook]
+}
+
+struct PodibleAuthorResult: Hashable {
+  let author: String
+  let libraryBooks: [PodibleLibraryItem]
+  let openLibraryBooks: [PodibleOpenLibraryBook]
 }
 
 struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
@@ -457,6 +463,7 @@ protocol PodibleLibraryServing {
   func fetchLibraryItems() async throws -> [PodibleLibraryItem]
   func fetchSeries(seriesKey: String?, seriesName: String?, limit: Int?) async throws
     -> PodibleSeriesResult
+  func fetchAuthor(authorName: String, limit: Int?) async throws -> PodibleAuthorResult
   func deleteLibraryBook(bookID: String) async throws
   func reportImportIssue(bookID: String, library: PodibleLibraryMedia) async throws
   func fetchInProgressLibraryItems(bookIDs: [String]?) async throws -> [PodibleLibraryItem]
@@ -521,6 +528,12 @@ extension PodibleLibraryServing {
     _ = seriesName
     _ = limit
     throw PodibleError.unsupported("This backend does not support series lookup.")
+  }
+
+  func fetchAuthor(authorName: String, limit: Int? = nil) async throws -> PodibleAuthorResult {
+    _ = authorName
+    _ = limit
+    throw PodibleError.unsupported("This backend does not support author lookup.")
   }
 
   func fetchAlternateCovers(bookID: String, limit: Int = 50) async throws -> [PodibleAlternateCover]
@@ -1343,6 +1356,12 @@ struct PodibleLibrarySeriesRPCResult: Decodable {
   let openLibraryBooks: [PodibleOpenLibraryCandidate]
 }
 
+struct PodibleLibraryAuthorRPCResult: Decodable {
+  let author: String
+  let libraryBooks: [PodibleLibraryBook]
+  let openLibraryBooks: [PodibleOpenLibraryCandidate]
+}
+
 private struct PodibleOpenLibraryCoverCandidate: Decodable {
   let coverId: Int?
   let coverUrl: String?
@@ -1650,7 +1669,33 @@ struct PodibleClient: PodibleLibraryServing {
       series: response.series,
       libraryBooks: response.libraryBooks.map(toLibraryItem(_:)),
       openLibraryBooks: response.openLibraryBooks.map { book in
-        PodibleOpenLibrarySeriesBook(
+        PodibleOpenLibraryBook(
+          openLibraryKey: book.openLibraryKey,
+          title: book.title,
+          author: book.author,
+          coverID: book.coverId,
+          publishedYear: year(from: book.publishedAt),
+          series: book.series
+        )
+      }
+    )
+  }
+
+  func fetchAuthor(authorName: String, limit: Int? = nil) async throws -> PodibleAuthorResult {
+    var params: [String: Any] = ["authorName": authorName]
+    if let limit {
+      params["limit"] = limit
+    }
+
+    let response: PodibleLibraryAuthorRPCResult = try await rpcCall(
+      method: "library.author",
+      params: params
+    )
+    return PodibleAuthorResult(
+      author: response.author,
+      libraryBooks: response.libraryBooks.map(toLibraryItem(_:)),
+      openLibraryBooks: response.openLibraryBooks.map { book in
+        PodibleOpenLibraryBook(
           openLibraryKey: book.openLibraryKey,
           title: book.title,
           author: book.author,

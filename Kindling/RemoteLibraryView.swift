@@ -901,7 +901,7 @@ struct PodibleLibraryView: View {
   }
 
   private func bookTileViewData(
-    for book: PodibleOpenLibrarySeriesBook,
+    for book: PodibleOpenLibraryBook,
     route: BookSeriesRoute
   ) -> BookTileViewData {
     let membership = book.series.first {
