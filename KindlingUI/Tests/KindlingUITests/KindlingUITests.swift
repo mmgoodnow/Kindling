@@ -84,6 +84,11 @@ final class KindlingUITests: XCTestCase {
     XCTAssertEqual(groups[0].books.map(\.id), ["first", "second"])
   }
 
+  func testBookTileMetadataIncludesSeriesPosition() {
+    XCTAssertEqual(books[0].secondaryMetadataText, "Author  ·  #2")
+    XCTAssertEqual(books[2].secondaryMetadataText, "Author")
+  }
+
   func testDurationFormatting() {
     XCTAssertNil(KindlingUIFormatters.durationText(seconds: nil))
     XCTAssertNil(KindlingUIFormatters.durationText(seconds: 0))

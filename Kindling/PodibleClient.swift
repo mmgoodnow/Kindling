@@ -146,6 +146,28 @@ struct PodibleBookSeriesMembership: Hashable, Codable {
   }
 }
 
+func podibleSeriesMembership(
+  matchingSeriesKey seriesKey: String?,
+  seriesTitle: String,
+  in memberships: [PodibleBookSeriesMembership]
+) -> PodibleBookSeriesMembership? {
+  let normalizedKey = seriesKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+  if let normalizedKey, normalizedKey.isEmpty == false,
+    let keyedMatch = memberships.first(where: {
+      $0.key?.trimmingCharacters(in: .whitespacesAndNewlines)
+        .localizedCaseInsensitiveCompare(normalizedKey) == .orderedSame
+    })
+  {
+    return keyedMatch
+  }
+
+  let normalizedTitle = seriesTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+  return memberships.first {
+    $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+      .localizedCaseInsensitiveCompare(normalizedTitle) == .orderedSame
+  }
+}
+
 func podibleSeriesMembershipsData(_ memberships: [PodibleBookSeriesMembership]) -> Data? {
   try? JSONEncoder().encode(memberships)
 }

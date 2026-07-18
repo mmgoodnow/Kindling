@@ -94,6 +94,39 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(item.descriptionHTML, "<p>A <strong>rich</strong> description.</p>")
   }
 
+  func testSeriesMembershipMatchesTheActiveSeriesInsteadOfTheFirstMembership() {
+    let memberships = [
+      PodibleBookSeriesMembership(key: "OL-OTHER", name: "Other Series", position: "8"),
+      PodibleBookSeriesMembership(key: "OL-DCC", name: "Dungeon Crawler Carl", position: "3"),
+    ]
+
+    XCTAssertEqual(
+      podibleSeriesMembership(
+        matchingSeriesKey: "OL-DCC",
+        seriesTitle: "Dungeon Crawler Carl",
+        in: memberships
+      ),
+      memberships[1]
+    )
+  }
+
+  func testSeriesMembershipFallsBackToCaseInsensitiveTitleMatch() {
+    let membership = PodibleBookSeriesMembership(
+      key: nil,
+      name: "Dungeon Crawler Carl",
+      position: "4"
+    )
+
+    XCTAssertEqual(
+      podibleSeriesMembership(
+        matchingSeriesKey: nil,
+        seriesTitle: "dungeon crawler carl",
+        in: [membership]
+      ),
+      membership
+    )
+  }
+
   @MainActor
   func testMarkdownDescriptionRendererPreservesFormatting() throws {
     let rendered = try XCTUnwrap(

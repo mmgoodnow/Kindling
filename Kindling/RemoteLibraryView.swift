@@ -861,14 +861,12 @@ struct PodibleLibraryView: View {
   private func relatedBookTiles(for route: BookGroupRoute) -> [BookTileViewData] {
     guard let result = relatedBooksResults[route] else {
       return sortRelatedBookTiles(
-        localRelatedBooks(for: route).map(bookTileViewData(for:)), for: route)
+        localRelatedBooks(for: route).map { bookTileViewData(for: $0, group: route) }, for: route)
     }
 
     var books = result.libraryBooks.map { item in
-      if let localBook = localBooksById[item.id] {
-        return bookTileViewData(for: localBook)
-      }
-      return bookTileViewData(for: item)
+      let tile = localBooksById[item.id].map(bookTileViewData(for:)) ?? bookTileViewData(for: item)
+      return bookTileViewData(tile, series: item.series, group: route)
     }
     let libraryOpenLibraryIDs = Set(
       result.libraryBooks.compactMap(\.openLibraryWorkID).map(normalizedOpenLibraryID(_:))
@@ -955,16 +953,54 @@ struct PodibleLibraryView: View {
   }
 
   private func bookTileViewData(
+    for book: LibraryBook,
+    group route: BookGroupRoute
+  ) -> BookTileViewData {
+    var memberships = podibleSeriesMemberships(from: book.seriesMembershipsJSON)
+    if memberships.isEmpty, let series = book.series {
+      memberships = [
+        PodibleBookSeriesMembership(
+          key: series.podibleId,
+          name: series.title,
+          position: book.seriesIndex.map { String($0) }
+        )
+      ]
+    }
+    return bookTileViewData(bookTileViewData(for: book), series: memberships, group: route)
+  }
+
+  private func bookTileViewData(
+    _ tile: BookTileViewData,
+    series memberships: [PodibleBookSeriesMembership],
+    group route: BookGroupRoute
+  ) -> BookTileViewData {
+    guard case .series(let series) = route,
+      let membership = podibleSeriesMembership(
+        matchingSeriesKey: series.seriesKey,
+        seriesTitle: series.title,
+        in: memberships
+      )
+    else { return tile }
+
+    var tile = tile
+    tile.seriesKey = membership.key
+    tile.seriesTitle = membership.name
+    tile.seriesPosition = membership.numericPosition
+    return tile
+  }
+
+  private func bookTileViewData(
     for book: PodibleOpenLibraryBook,
     group route: BookGroupRoute
   ) -> BookTileViewData {
     let membership: PodibleBookSeriesMembership?
     switch route {
     case .series(let series):
-      membership = book.series.first {
-        $0.key == series.id
-          || $0.name.localizedCaseInsensitiveCompare(series.title) == .orderedSame
-      }
+      membership = podibleSeriesMembership(
+        matchingSeriesKey: series.seriesKey,
+        seriesTitle: series.title,
+        in: book.series
+      )
     case .author:
       membership = book.series.first
     }

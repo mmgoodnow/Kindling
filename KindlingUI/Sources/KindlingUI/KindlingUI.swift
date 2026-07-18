@@ -147,6 +147,11 @@ public struct BookTileViewData: Identifiable, Hashable, Sendable {
     self.narrator = narrator
     self.description = description
   }
+
+  public var secondaryMetadataText: String {
+    guard let seriesPosition else { return author }
+    return "\(author)  ·  \(KindlingUIFormatters.seriesPositionText(seriesPosition))"
+  }
 }
 
 public struct BookActionViewData: Hashable, Sendable {
@@ -603,7 +608,7 @@ public struct BookGridTileView: View {
         .lineLimit(2)
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-      Text(book.author)
+      Text(book.secondaryMetadataText)
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
@@ -692,7 +697,7 @@ public struct BookListRowView: View {
         Text(book.title)
           .font(.headline)
           .lineLimit(2)
-        Text(book.author)
+        Text(book.secondaryMetadataText)
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .lineLimit(1)
@@ -763,9 +768,17 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
       artwork
         .frame(maxWidth: .infinity, alignment: .center)
 
-      seriesBar
-
-      BookDetailTitleBlockView(book: book, onAuthor: onAuthor)
+      VStack(alignment: .center, spacing: 4) {
+        BookDetailTitleBlockView(book: book, onAuthor: onAuthor)
+        seriesBar
+        if let metadataText = book.metadataText {
+          Text(metadataText)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+        }
+      }
     }
     .padding(.top, 8)
   }
@@ -785,16 +798,13 @@ extension BookDetailHeroView where SeriesBar == EmptyView {
 
 public struct BookDetailSeriesBarView: View {
   public let text: String
-  public let palette: ArtworkPalette
   public let showsDisclosureIndicator: Bool
 
   public init(
     text: String,
-    palette: ArtworkPalette,
     showsDisclosureIndicator: Bool = false
   ) {
     self.text = text
-    self.palette = palette
     self.showsDisclosureIndicator = showsDisclosureIndicator
   }
 
@@ -808,12 +818,10 @@ public struct BookDetailSeriesBarView: View {
           .accessibilityHidden(true)
       }
     }
-    .font(.caption.weight(.semibold))
-    .foregroundStyle(palette.foreground)
-    .padding(.leading, showsDisclosureIndicator ? 22 : 0)
-    .padding(.trailing, showsDisclosureIndicator ? 8 : 0)
-    .padding(.vertical, 6)
-    .background(palette.background, in: RoundedRectangle(cornerRadius: 4))
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .padding(.vertical, 2)
+    .contentShape(Rectangle())
   }
 }
 
@@ -850,14 +858,6 @@ public struct BookDetailTitleBlockView: View {
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
-      }
-
-      if let metadataText = book.metadataText {
-        Text(metadataText)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-          .frame(maxWidth: .infinity)
       }
     }
     .frame(maxWidth: .infinity)
@@ -943,7 +943,7 @@ public struct BookDetailContentView: View {
         detailArtwork
       } seriesBar: {
         Button(action: onSeries) {
-          BookDetailSeriesBarView(text: seriesText, palette: book.palette)
+          BookDetailSeriesBarView(text: seriesText)
         }
         .buttonStyle(.plain)
       }

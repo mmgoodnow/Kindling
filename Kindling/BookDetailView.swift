@@ -188,7 +188,6 @@ struct BookDetailView: View {
             NavigationLink(value: LibraryNavigationRoute.group(.series(route))) {
               BookDetailSeriesBarView(
                 text: route.displayText,
-                palette: detailPalette,
                 showsDisclosureIndicator: true
               )
             }
