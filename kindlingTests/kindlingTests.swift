@@ -55,6 +55,17 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(librarySyncErrorMessage(for: error), error.localizedDescription)
   }
 
+  func testRecentLibrarySyncTimestampDoesNotChangeEverySecond() {
+    let now = Date(timeIntervalSinceReferenceDate: 1_000)
+    let syncedAt = now.addingTimeInterval(-2)
+
+    XCTAssertEqual(librarySyncRelativeText(syncedAt: syncedAt, relativeTo: now), "just now")
+    XCTAssertEqual(
+      librarySyncRelativeText(syncedAt: syncedAt, relativeTo: now.addingTimeInterval(30)),
+      "just now"
+    )
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

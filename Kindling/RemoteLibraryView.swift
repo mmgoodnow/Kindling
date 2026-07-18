@@ -4,6 +4,16 @@ import Kingfisher
 import SwiftData
 import SwiftUI
 
+func librarySyncRelativeText(syncedAt: Date, relativeTo now: Date = .now) -> String {
+  if abs(now.timeIntervalSince(syncedAt)) < 60 {
+    return "just now"
+  }
+
+  let formatter = RelativeDateTimeFormatter()
+  formatter.unitsStyle = .short
+  return formatter.localizedString(for: syncedAt, relativeTo: now)
+}
+
 enum PodibleLibraryScreenMode {
   case library
   case favorites
@@ -954,10 +964,7 @@ struct PodibleLibraryView: View {
 
     var parts: [String] = []
     if let lastSync {
-      let formatter = RelativeDateTimeFormatter()
-      formatter.unitsStyle = .short
-      let relative = formatter.localizedString(for: lastSync, relativeTo: .now)
-      parts.append("Synced \(relative)")
+      parts.append("Synced \(librarySyncRelativeText(syncedAt: lastSync))")
     }
     if let added, let updated {
       parts.append("\(added) added")
