@@ -113,6 +113,21 @@ final class kindlingTests: XCTestCase {
     XCTAssertTrue(rendered.runs.contains { $0.link == URL(string: "https://example.com") })
   }
 
+  @MainActor
+  func testMarkdownDescriptionRendererPreservesParagraphSeparators() throws {
+    let rendered = try XCTUnwrap(
+      markdownDescriptionAttributedString(
+        markdown:
+          "**New Achievement! Total, Utter Failure.**\r\n\r\nYou failed a quest.\r\n\r\nA floating fortress."
+      )
+    )
+
+    XCTAssertEqual(
+      String(rendered.characters),
+      "New Achievement! Total, Utter Failure.\n\nYou failed a quest.\n\nA floating fortress."
+    )
+  }
+
   func testMarkdownDescriptionNormalizationRemovesCarriageReturnsAndLineBackslashes() {
     let description =
       "First sentence.\\\r\nSecond sentence.\\\r\n\\\r\nSecond paragraph.\\\r\n"

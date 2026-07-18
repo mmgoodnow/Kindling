@@ -107,7 +107,7 @@ struct BookDetailView: View {
             .foregroundStyle(.primary)
             .fixedSize(horizontal: false, vertical: true)
         } else if let summary = displaySummary, summary.isEmpty == false {
-          Text(summary)
+          Text(normalizedMarkdownDescription(summary))
             .font(.body)
             .foregroundStyle(.primary)
             .fixedSize(horizontal: false, vertical: true)
@@ -371,15 +371,13 @@ struct BookDetailView: View {
 
   private var displaySummary: String? {
     if let summary = item.summary {
-      let normalized = normalizedMarkdownDescription(summary)
-      if normalized.isEmpty == false {
-        return normalized
+      if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+        return summary
       }
     }
     if let summary = localBook?.summary {
-      let normalized = normalizedMarkdownDescription(summary)
-      if normalized.isEmpty == false {
-        return normalized
+      if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+        return summary
       }
     }
     return nil
@@ -827,38 +825,14 @@ struct BookDetailView: View {
   }
 }
 
-private final class MarkdownAttributedStringBox {
-  let value: AttributedString
-
-  init(_ value: AttributedString) {
-    self.value = value
-  }
-}
-
-@MainActor
-private let markdownDescriptionCache: NSCache<NSString, MarkdownAttributedStringBox> = {
-  let cache = NSCache<NSString, MarkdownAttributedStringBox>()
-  cache.countLimit = 100
-  return cache
-}()
-
-@MainActor
 func markdownDescriptionAttributedString(markdown: String) -> AttributedString? {
   let normalized = normalizedMarkdownDescription(markdown)
   guard normalized.isEmpty == false else { return nil }
-  let cacheKey = normalized as NSString
-  if let cached = markdownDescriptionCache.object(forKey: cacheKey) {
-    return cached.value
-  }
   let options = AttributedString.MarkdownParsingOptions(
-    interpretedSyntax: .full,
+    interpretedSyntax: .inlineOnlyPreservingWhitespace,
     failurePolicy: .returnPartiallyParsedIfPossible
   )
-  guard let rendered = try? AttributedString(markdown: normalized, options: options) else {
-    return nil
-  }
-  markdownDescriptionCache.setObject(MarkdownAttributedStringBox(rendered), forKey: cacheKey)
-  return rendered
+  return try? AttributedString(markdown: normalized, options: options)
 }
 
 func normalizedMarkdownDescription(_ description: String) -> String {
