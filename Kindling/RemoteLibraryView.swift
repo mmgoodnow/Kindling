@@ -873,18 +873,15 @@ struct PodibleLibraryView: View {
     let libraryOpenLibraryIDs = Set(
       result.libraryBooks.compactMap(\.openLibraryWorkID).map(normalizedOpenLibraryID(_:))
     )
-    let libraryBookIdentities = Set(
+    var seenBookIdentities = Set(
       result.libraryBooks.map { relatedBookIdentity(title: $0.title, author: $0.author) }
     )
     books.append(
       contentsOf: result.openLibraryBooks.compactMap { book in
         guard libraryOpenLibraryIDs.contains(normalizedOpenLibraryID(book.openLibraryKey)) == false
         else { return nil }
-        guard
-          libraryBookIdentities.contains(
-            relatedBookIdentity(title: book.title, author: book.author)
-          ) == false
-        else { return nil }
+        let identity = relatedBookIdentity(title: book.title, author: book.author)
+        guard seenBookIdentities.insert(identity).inserted else { return nil }
         return bookTileViewData(for: book, group: route)
       }
     )
