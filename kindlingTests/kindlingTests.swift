@@ -95,16 +95,31 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
-  func testRichDescriptionRendererPreservesFormattedTextContent() throws {
+  func testMarkdownDescriptionRendererPreservesFormatting() throws {
     let rendered = try XCTUnwrap(
-      richDescriptionAttributedString(
-        html: "<p>A <strong>rich</strong> description.</p><p>Second paragraph.</p>"
+      markdownDescriptionAttributedString(
+        markdown: "A **rich** description.\n\nSecond paragraph with [a link](https://example.com)."
       )
     )
 
     let text = String(rendered.characters)
     XCTAssertTrue(text.contains("A rich description."))
-    XCTAssertTrue(text.contains("Second paragraph."))
+    XCTAssertTrue(text.contains("Second paragraph with a link."))
+    XCTAssertTrue(
+      rendered.runs.contains {
+        $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+      }
+    )
+    XCTAssertTrue(rendered.runs.contains { $0.link == URL(string: "https://example.com") })
+  }
+
+  func testMarkdownDescriptionNormalizationRemovesCarriageReturnsAndLineBackslashes() {
+    let description = "First paragraph.\\\r\n\\\r\nSecond paragraph.\\\r\n"
+
+    XCTAssertEqual(
+      normalizedMarkdownDescription(description),
+      "First paragraph.\n\nSecond paragraph."
+    )
   }
 
   @MainActor

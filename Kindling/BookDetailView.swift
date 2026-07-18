@@ -101,7 +101,7 @@ struct BookDetailView: View {
         hero
         metricsLine
         audioEditionSection
-        if let description = displayRichDescription {
+        if let description = displayMarkdownDescription {
           Text(description)
             .font(.body)
             .foregroundStyle(.primary)
@@ -370,20 +370,23 @@ struct BookDetailView: View {
   }
 
   private var displaySummary: String? {
-    if let summary = item.summary, summary.isEmpty == false {
-      return summary
+    if let summary = item.summary {
+      let normalized = normalizedMarkdownDescription(summary)
+      if normalized.isEmpty == false {
+        return normalized
+      }
     }
-    if let summary = localBook?.summary, summary.isEmpty == false {
-      return summary
+    if let summary = localBook?.summary {
+      let normalized = normalizedMarkdownDescription(summary)
+      if normalized.isEmpty == false {
+        return normalized
+      }
     }
     return nil
   }
 
-  private var displayRichDescription: AttributedString? {
-    let html = [item.descriptionHTML, localBook?.descriptionHTML]
-      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-      .first { $0.isEmpty == false }
-    return html.flatMap(richDescriptionAttributedString(html:))
+  private var displayMarkdownDescription: AttributedString? {
+    displaySummary.flatMap(markdownDescriptionAttributedString(markdown:))
   }
 
   private var detailViewData: BookDetailViewData {
@@ -824,50 +827,53 @@ struct BookDetailView: View {
   }
 }
 
+private final class MarkdownAttributedStringBox {
+  let value: AttributedString
+
+  init(_ value: AttributedString) {
+    self.value = value
+  }
+}
+
 @MainActor
-private let richDescriptionCache: NSCache<NSString, NSAttributedString> = {
-  let cache = NSCache<NSString, NSAttributedString>()
+private let markdownDescriptionCache: NSCache<NSString, MarkdownAttributedStringBox> = {
+  let cache = NSCache<NSString, MarkdownAttributedStringBox>()
   cache.countLimit = 100
   return cache
 }()
 
 @MainActor
-func richDescriptionAttributedString(html: String) -> AttributedString? {
-  let cacheKey = html as NSString
-  if let cached = richDescriptionCache.object(forKey: cacheKey) {
-    return AttributedString(cached)
+func markdownDescriptionAttributedString(markdown: String) -> AttributedString? {
+  let normalized = normalizedMarkdownDescription(markdown)
+  guard normalized.isEmpty == false else { return nil }
+  let cacheKey = normalized as NSString
+  if let cached = markdownDescriptionCache.object(forKey: cacheKey) {
+    return cached.value
   }
-  let document = """
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: -apple-system; font-size: 17px; line-height: 1.35; }
-          p { margin: 0 0 0.8em 0; }
-        </style>
-      </head>
-      <body>\(html)</body>
-    </html>
-    """
-  guard let data = document.data(using: .utf8) else { return nil }
-  let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-    .documentType: NSAttributedString.DocumentType.html,
-    .characterEncoding: String.Encoding.utf8.rawValue,
-  ]
-  guard
-    let rendered = try? NSMutableAttributedString(
-      data: data,
-      options: options,
-      documentAttributes: nil
-    )
-  else { return nil }
+  let options = AttributedString.MarkdownParsingOptions(
+    interpretedSyntax: .full,
+    failurePolicy: .returnPartiallyParsedIfPossible
+  )
+  guard let rendered = try? AttributedString(markdown: normalized, options: options) else {
+    return nil
+  }
+  markdownDescriptionCache.setObject(MarkdownAttributedStringBox(rendered), forKey: cacheKey)
+  return rendered
+}
 
-  let range = NSRange(location: 0, length: rendered.length)
-  rendered.removeAttribute(.foregroundColor, range: range)
-  rendered.removeAttribute(.backgroundColor, range: range)
-  let immutable = NSAttributedString(attributedString: rendered)
-  richDescriptionCache.setObject(immutable, forKey: cacheKey)
-  return AttributedString(immutable)
+func normalizedMarkdownDescription(_ description: String) -> String {
+  description
+    .replacingOccurrences(of: "\r", with: "")
+    .split(separator: "\n", omittingEmptySubsequences: false)
+    .map { rawLine in
+      var line = String(rawLine)
+      while line.last == "\\" {
+        line.removeLast()
+      }
+      return line
+    }
+    .joined(separator: "\n")
+    .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private struct BookReleaseSearchSheet: View {
