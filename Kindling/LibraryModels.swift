@@ -81,7 +81,9 @@ final class LibraryBook {
   var narrator: String?
   var addedAt: Date?
   var updatedAt: Date?
+  var fullPseudoProgress: Int?
   var seriesIndex: Double?
+  var seriesMembershipsJSON: Data?
   var bookStatusRaw: String?
   var audioStatusRaw: String?
   var playbackJSON: Data?
@@ -106,7 +108,9 @@ final class LibraryBook {
     narrator: String? = nil,
     addedAt: Date? = nil,
     updatedAt: Date? = nil,
+    fullPseudoProgress: Int? = nil,
     seriesIndex: Double? = nil,
+    seriesMembershipsJSON: Data? = nil,
     bookStatusRaw: String? = nil,
     audioStatusRaw: String? = nil,
     playbackJSON: Data? = nil,
@@ -126,7 +130,9 @@ final class LibraryBook {
     self.narrator = narrator
     self.addedAt = addedAt
     self.updatedAt = updatedAt
+    self.fullPseudoProgress = fullPseudoProgress
     self.seriesIndex = seriesIndex
+    self.seriesMembershipsJSON = seriesMembershipsJSON
     self.bookStatusRaw = bookStatusRaw
     self.audioStatusRaw = audioStatusRaw
     self.playbackJSON = playbackJSON

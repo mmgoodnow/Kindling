@@ -2057,12 +2057,13 @@ struct PodibleLibraryView: View {
       audioStatus: audioStatus,
       bookAdded: book.addedAt,
       updatedAt: book.updatedAt,
-      fullPseudoProgress: nil,
+      fullPseudoProgress: book.fullPseudoProgress,
       bookImagePath: book.coverURLString,
       wordCount: book.wordCount,
       runtimeSeconds: book.runtimeSeconds,
       publishedYear: book.publishedYear,
       narrator: book.narrator,
+      series: podibleSeriesMemberships(from: book.seriesMembershipsJSON),
       seriesKey: book.series?.podibleId,
       seriesTitle: book.series?.title,
       seriesPosition: book.seriesIndex,
@@ -2649,7 +2650,9 @@ struct PodibleLibraryView: View {
       narrator: item.narrator,
       addedAt: item.bookAdded,
       updatedAt: latestLibraryDate(for: item),
+      fullPseudoProgress: item.fullPseudoProgress,
       seriesIndex: item.seriesPosition,
+      seriesMembershipsJSON: podibleSeriesMembershipsData(item.series),
       bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
       audioStatusRaw: item.audioStatus?.rawValue,
       playbackJSON: playbackData(for: item.playback),
@@ -2767,6 +2770,15 @@ struct PodibleLibraryView: View {
     }
     if book.seriesIndex != item.seriesPosition {
       book.seriesIndex = item.seriesPosition
+      updated = true
+    }
+    let nextSeriesMembershipsJSON = podibleSeriesMembershipsData(item.series)
+    if book.seriesMembershipsJSON != nextSeriesMembershipsJSON {
+      book.seriesMembershipsJSON = nextSeriesMembershipsJSON
+      updated = true
+    }
+    if book.fullPseudoProgress != item.fullPseudoProgress {
+      book.fullPseudoProgress = item.fullPseudoProgress
       updated = true
     }
     let ebookRaw = (item.ebookStatus ?? item.status).rawValue

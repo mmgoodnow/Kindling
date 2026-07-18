@@ -92,7 +92,9 @@ struct LibrarySyncService {
           narrator: item.narrator,
           addedAt: item.bookAdded,
           updatedAt: latestLibraryDate(for: item),
+          fullPseudoProgress: item.fullPseudoProgress,
           seriesIndex: item.seriesPosition,
+          seriesMembershipsJSON: podibleSeriesMembershipsData(item.series),
           bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
           audioStatusRaw: item.audioStatus?.rawValue,
           playbackJSON: playbackData(for: item.playback),
@@ -259,6 +261,15 @@ struct LibrarySyncService {
     }
     if book.seriesIndex != item.seriesPosition {
       book.seriesIndex = item.seriesPosition
+      updated += 1
+    }
+    let nextSeriesMembershipsJSON = podibleSeriesMembershipsData(item.series)
+    if book.seriesMembershipsJSON != nextSeriesMembershipsJSON {
+      book.seriesMembershipsJSON = nextSeriesMembershipsJSON
+      updated += 1
+    }
+    if book.fullPseudoProgress != item.fullPseudoProgress {
+      book.fullPseudoProgress = item.fullPseudoProgress
       updated += 1
     }
     let ebookRaw = (item.ebookStatus ?? item.status).rawValue

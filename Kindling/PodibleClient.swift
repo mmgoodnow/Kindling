@@ -146,6 +146,15 @@ struct PodibleBookSeriesMembership: Hashable, Codable {
   }
 }
 
+func podibleSeriesMembershipsData(_ memberships: [PodibleBookSeriesMembership]) -> Data? {
+  try? JSONEncoder().encode(memberships)
+}
+
+func podibleSeriesMemberships(from data: Data?) -> [PodibleBookSeriesMembership] {
+  guard let data else { return [] }
+  return (try? JSONDecoder().decode([PodibleBookSeriesMembership].self, from: data)) ?? []
+}
+
 struct PodibleOpenLibraryBook: Identifiable, Hashable {
   let openLibraryKey: String
   let title: String

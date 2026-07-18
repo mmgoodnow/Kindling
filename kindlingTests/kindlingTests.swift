@@ -108,7 +108,7 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
-  func testLibraryBookPersistsRichDescriptionHTML() throws {
+  func testLibraryBookPersistsRemotePresentationMetadata() throws {
     let schema = Schema([
       Author.self,
       Series.self,
@@ -120,11 +120,17 @@ final class kindlingTests: XCTestCase {
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: [configuration])
     let context = container.mainContext
+    let seriesMemberships = [
+      PodibleBookSeriesMembership(key: "OL123L", name: "The Series", position: "2"),
+      PodibleBookSeriesMembership(key: "OL456L", name: "The Crossover", position: "1"),
+    ]
     context.insert(
       LibraryBook(
         podibleId: "42",
         title: "The Second Book",
-        descriptionHTML: "<p>A <strong>rich</strong> description.</p>"
+        descriptionHTML: "<p>A <strong>rich</strong> description.</p>",
+        fullPseudoProgress: 63,
+        seriesMembershipsJSON: podibleSeriesMembershipsData(seriesMemberships)
       )
     )
     try context.save()
@@ -133,6 +139,11 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(
       persisted.descriptionHTML,
       "<p>A <strong>rich</strong> description.</p>"
+    )
+    XCTAssertEqual(persisted.fullPseudoProgress, 63)
+    XCTAssertEqual(
+      podibleSeriesMemberships(from: persisted.seriesMembershipsJSON),
+      seriesMemberships
     )
   }
 
