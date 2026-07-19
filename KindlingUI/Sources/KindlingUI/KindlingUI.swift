@@ -1309,7 +1309,7 @@ public struct MiniPlayerBarView<Artwork: View>: View {
             if player.secondaryText.isEmpty == false {
               Text(player.secondaryText)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondary)
                 .lineLimit(1)
             }
           }
@@ -1334,6 +1334,7 @@ public struct MiniPlayerBarView<Artwork: View>: View {
         )
       }
     }
+    .foregroundStyle(Color.primary)
     .padding(.horizontal, presentation == .inline ? 6 : 10)
     .frame(height: presentation == .inline ? 44 : 52)
   }
