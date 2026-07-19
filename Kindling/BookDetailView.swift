@@ -562,38 +562,31 @@ struct BookDetailView: View {
   // MARK: - Actions
 
   private var inlineActionGrid: some View {
-    LazyVGrid(
-      columns: [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
-      ],
-      spacing: 10
-    ) {
+    VStack(spacing: 10) {
       primaryActionButton
 
-      if let emailToKindle = actions.emailToKindle {
-        blockActionButton(
-          title: "Send to Kindle",
-          systemImage: "paperplane",
-          action: emailToKindle)
-      }
-      if let toggleFavorite = actions.toggleFavorite {
-        blockActionButton(
-          title: actions.isFavorite ? "Unfavorite" : "Favorite",
-          systemImage: actions.isFavorite ? "heart.fill" : "heart",
-          action: toggleFavorite)
-      }
-      if let toggleRead = actions.toggleRead {
-        blockActionButton(
-          title: actions.isRead ? "Mark Unread" : "Mark Read",
-          systemImage: actions.isRead ? "checkmark.circle.fill" : "circle",
-          action: toggleRead)
-      }
-      if let shareEbook = actions.shareEbook {
-        blockActionButton(
-          title: "Share eBook",
-          systemImage: "square.and.arrow.up",
-          action: shareEbook)
+      HStack(spacing: 10) {
+        if let emailToKindle = actions.emailToKindle {
+          compactActionButton(title: "Kindle", systemImage: "paperplane", action: emailToKindle)
+        }
+        if let toggleFavorite = actions.toggleFavorite {
+          compactActionButton(
+            title: actions.isFavorite ? "Unfavorite" : "Favorite",
+            systemImage: actions.isFavorite ? "heart.fill" : "heart",
+            action: toggleFavorite)
+        }
+        if let toggleRead = actions.toggleRead {
+          compactActionButton(
+            title: actions.isRead ? "Unread" : "Read",
+            systemImage: actions.isRead ? "checkmark.circle.fill" : "circle",
+            action: toggleRead)
+        }
+        if let shareEbook = actions.shareEbook {
+          compactActionButton(
+            title: "Share",
+            systemImage: "square.and.arrow.up",
+            action: shareEbook)
+        }
       }
     }
     .frame(maxWidth: .infinity)
@@ -603,7 +596,7 @@ struct BookDetailView: View {
   private var primaryActionButton: some View {
     switch actions.audioDownload {
     case .inProgress(let progress):
-      blockActionButton(
+      primaryCTAButton(
         title: progressLabel(progress),
         systemImage: "arrow.down.circle",
         isEnabled: false,
@@ -611,19 +604,19 @@ struct BookDetailView: View {
       )
     case .idle:
       if let play = actions.play {
-        blockActionButton(title: playActionTitle, systemImage: "play.fill", action: play)
+        primaryCTAButton(title: playActionTitle, systemImage: "play.fill", action: play)
       } else if let downloadAudio = actions.downloadAudio {
-        blockActionButton(
+        primaryCTAButton(
           title: "Download Audiobook",
           systemImage: "arrow.down.circle",
           action: downloadAudio)
       } else if canSearchReleases {
-        blockActionButton(
+        primaryCTAButton(
           title: "Find Audiobook",
           systemImage: "magnifyingglass",
           action: { openReleaseSearch(media: .audio) })
       } else {
-        blockActionButton(
+        primaryCTAButton(
           title: "Audio Unavailable",
           systemImage: "speaker.slash",
           isEnabled: false,
@@ -636,7 +629,7 @@ struct BookDetailView: View {
     (detailPlaybackProgress ?? 0) > 0 ? "Continue" : "Play"
   }
 
-  private func blockActionButton(
+  private func primaryCTAButton(
     title: String,
     systemImage: String,
     isEnabled: Bool = true,
@@ -654,8 +647,30 @@ struct BookDetailView: View {
 
     return
       button
-      .buttonStyle(.glass)
+      .buttonStyle(.borderedProminent)
       .buttonBorderShape(.roundedRectangle(radius: 10))
+      .tint(detailPalette.foreground)
+  }
+
+  private func compactActionButton(
+    title: String,
+    systemImage: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      VStack(spacing: 3) {
+        Image(systemName: systemImage)
+          .font(.body.weight(.semibold))
+        Text(title)
+          .font(.caption2.weight(.semibold))
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 52)
+    }
+    .buttonStyle(.glass)
+    .buttonBorderShape(.roundedRectangle(radius: 10))
   }
 
   private func progressLabel(_ progress: Double?) -> String {
