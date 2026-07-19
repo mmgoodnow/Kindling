@@ -818,16 +818,15 @@ public struct BookDetailSeriesBarView: View {
   }
 
   public var body: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: 3) {
       Text(text)
-        .frame(maxWidth: .infinity, alignment: .center)
       if showsDisclosureIndicator {
         Image(systemName: "chevron.right")
-          .font(.caption2.weight(.bold))
+          .font(.caption2.weight(.semibold))
           .accessibilityHidden(true)
       }
     }
-    .font(.caption)
+    .font(.subheadline)
     .foregroundStyle(.secondary)
     .padding(.vertical, 2)
     .contentShape(Rectangle())
