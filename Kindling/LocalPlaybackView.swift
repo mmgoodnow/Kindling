@@ -357,9 +357,13 @@ struct LocalPlaybackView: View {
   var body: some View {
     #if os(iOS)
       expandedPlayerView()
+        .glassEffect(
+          .regular,
+          in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
-        .presentationBackground(.ultraThinMaterial)
+        .presentationBackground(.clear)
         .presentationBackgroundInteraction(.enabled)
     #else
       expandedPlayerView()
