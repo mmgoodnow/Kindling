@@ -599,12 +599,18 @@ struct BookDetailView: View {
       primaryCTAButton(
         title: progressLabel(progress),
         systemImage: "arrow.down.circle",
+        progress: progress,
         isEnabled: false,
         action: {}
       )
     case .idle:
       if let play = actions.play {
-        primaryCTAButton(title: playActionTitle, systemImage: "play.fill", action: play)
+        primaryCTAButton(
+          title: playActionTitle,
+          systemImage: "play.fill",
+          progress: detailPlaybackProgress,
+          action: play
+        )
       } else if let downloadAudio = actions.downloadAudio {
         primaryCTAButton(
           title: "Download Audiobook",
@@ -632,24 +638,53 @@ struct BookDetailView: View {
   private func primaryCTAButton(
     title: String,
     systemImage: String,
+    progress: Double? = nil,
     isEnabled: Bool = true,
     action: @escaping () -> Void
   ) -> some View {
+    let clampedProgress = min(max(progress ?? 0, 0), 1)
+    let displayedProgress = clampedProgress > 0 ? clampedProgress : 1
     let button = Button(action: action) {
-      Label(title, systemImage: systemImage)
-        .font(.subheadline.weight(.semibold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.72)
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
+      GeometryReader { proxy in
+        ZStack {
+          Capsule()
+            .fill(detailPalette.background)
+
+          Capsule()
+            .fill(detailPalette.foreground)
+            .frame(width: proxy.size.width * displayedProgress)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(Capsule())
+
+          ctaLabel(title: title, systemImage: systemImage)
+            .foregroundStyle(detailPalette.foreground)
+
+          ctaLabel(title: title, systemImage: systemImage)
+            .foregroundStyle(.white)
+            .mask(alignment: .leading) {
+              Rectangle()
+                .frame(width: proxy.size.width * displayedProgress)
+            }
+        }
+      }
+      .frame(height: 38)
+      .contentShape(Capsule())
     }
     .disabled(isEnabled == false)
+    .accessibilityLabel(title)
 
     return
       button
-      .buttonStyle(.borderedProminent)
-      .buttonBorderShape(.capsule)
-      .tint(detailPalette.foreground)
+      .buttonStyle(.plain)
+      .opacity(isEnabled ? 1 : 0.55)
+  }
+
+  private func ctaLabel(title: String, systemImage: String) -> some View {
+    Label(title, systemImage: systemImage)
+      .font(.subheadline.weight(.semibold))
+      .lineLimit(1)
+      .minimumScaleFactor(0.72)
+      .frame(maxWidth: .infinity)
   }
 
   private func compactActionButton(
