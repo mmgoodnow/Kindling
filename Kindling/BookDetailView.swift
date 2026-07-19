@@ -103,6 +103,7 @@ struct BookDetailView: View {
       VStack(alignment: .leading, spacing: 20) {
         hero
         audioEditionSection
+        inlineActionGrid
         if let description = displayMarkdownDescription {
           Text(description)
             .font(.body)
@@ -141,13 +142,6 @@ struct BookDetailView: View {
     #endif
     .task(id: detailPaletteTaskID) {
       loadDetailPalette()
-    }
-    .safeAreaInset(edge: .bottom, spacing: 8) {
-      floatingActionDock
-        .padding(.leading, 20)
-        // Slightly more trailing padding keeps the dock visually centered
-        // against the floating tab bar's right-side optical weight.
-        .padding(.trailing, 28)
     }
     .sheet(isPresented: $isShowingCoverPicker) {
       BookCoverPickerSheet(
@@ -565,71 +559,71 @@ struct BookDetailView: View {
     return parts.joined(separator: " • ")
   }
 
-  // MARK: - Floating action dock
+  // MARK: - Actions
 
-  /// Bottom dock pinned via `.safeAreaInset` so scroll content insets behind
-  /// it. Uses `GlassEffectContainer` on iOS 26+ so the buttons sample the
-  /// background coherently and morph correctly during animations. Each
-  /// button gets its own glass shape via the system button styles.
-  private var floatingActionDock: some View {
-    GlassEffectContainer(spacing: 12) {
-      dockButtons
-    }
-  }
+  private var inlineActionGrid: some View {
+    LazyVGrid(
+      columns: [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+      ],
+      spacing: 10
+    ) {
+      primaryActionButton
 
-  private var dockButtons: some View {
-    HStack(spacing: 12) {
       if let emailToKindle = actions.emailToKindle {
-        secondaryGlassButton(
+        blockActionButton(
+          title: "Send to Kindle",
           systemImage: "paperplane",
-          accessibilityLabel: "Send to Kindle",
           action: emailToKindle)
       }
       if let toggleFavorite = actions.toggleFavorite {
-        secondaryGlassButton(
+        blockActionButton(
+          title: actions.isFavorite ? "Unfavorite" : "Favorite",
           systemImage: actions.isFavorite ? "heart.fill" : "heart",
-          accessibilityLabel: actions.isFavorite ? "Unfavorite" : "Favorite",
           action: toggleFavorite)
       }
       if let toggleRead = actions.toggleRead {
-        secondaryGlassButton(
+        blockActionButton(
+          title: actions.isRead ? "Mark Unread" : "Mark Read",
           systemImage: actions.isRead ? "checkmark.circle.fill" : "circle",
-          accessibilityLabel: actions.isRead ? "Mark as unread" : "Mark as read",
           action: toggleRead)
       }
       if let shareEbook = actions.shareEbook {
-        secondaryGlassButton(
+        blockActionButton(
+          title: "Share eBook",
           systemImage: "square.and.arrow.up",
-          accessibilityLabel: "Share eBook",
           action: shareEbook)
       }
-      primaryButton
     }
     .frame(maxWidth: .infinity)
   }
 
-  // MARK: Primary
-
   @ViewBuilder
-  private var primaryButton: some View {
+  private var primaryActionButton: some View {
     switch actions.audioDownload {
     case .inProgress(let progress):
-      downloadingCapsule(progress: progress)
+      blockActionButton(
+        title: progressLabel(progress),
+        systemImage: "arrow.down.circle",
+        isEnabled: false,
+        action: {}
+      )
     case .idle:
       if let play = actions.play {
-        secondaryGlassButton(systemImage: "play.fill", accessibilityLabel: "Play", action: play)
+        blockActionButton(title: playActionTitle, systemImage: "play.fill", action: play)
       } else if let downloadAudio = actions.downloadAudio {
-        primaryGlassButton(
+        blockActionButton(
           title: "Download Audiobook",
           systemImage: "arrow.down.circle",
           action: downloadAudio)
       } else if canSearchReleases {
-        primaryGlassButton(
+        blockActionButton(
           title: "Find Audiobook",
           systemImage: "magnifyingglass",
           action: { openReleaseSearch(media: .audio) })
       } else {
-        primaryGlassButton(
+        blockActionButton(
           title: "Audio Unavailable",
           systemImage: "speaker.slash",
           isEnabled: false,
@@ -638,74 +632,30 @@ struct BookDetailView: View {
     }
   }
 
-  @ViewBuilder
-  private func primaryGlassButton(
+  private var playActionTitle: String {
+    (detailPlaybackProgress ?? 0) > 0 ? "Continue" : "Play"
+  }
+
+  private func blockActionButton(
     title: String,
     systemImage: String,
     isEnabled: Bool = true,
     action: @escaping () -> Void
   ) -> some View {
     let button = Button(action: action) {
-      Label {
-        Text(title).font(.title3.weight(.semibold))
-      } icon: {
-        Image(systemName: systemImage).font(.title2.weight(.semibold))
-      }
-      .lineLimit(1)
-      .minimumScaleFactor(0.8)
-      .frame(maxWidth: .infinity)
+      Label(title, systemImage: systemImage)
+        .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
     }
-    .controlSize(.large)
     .disabled(isEnabled == false)
 
-    button
+    return
+      button
       .buttonStyle(.glass)
-      .buttonBorderShape(.capsule)
-  }
-
-  // MARK: Secondary
-
-  @ViewBuilder
-  private func secondaryGlassButton(
-    systemImage: String,
-    accessibilityLabel: String,
-    tint: Color? = nil,
-    action: @escaping () -> Void
-  ) -> some View {
-    let button = Button(action: action) {
-      Image(systemName: systemImage)
-        .font(.title2.weight(.semibold))
-    }
-    .controlSize(.large)
-    .accessibilityLabel(accessibilityLabel)
-    .tint(tint ?? .accentColor)
-
-    button
-      .buttonStyle(.glass)
-      .buttonBorderShape(.circle)
-  }
-
-  private func downloadingCapsule(progress: Double?) -> some View {
-    VStack(spacing: 6) {
-      HStack(spacing: 8) {
-        ProgressView()
-          .controlSize(.small)
-        Text(progressLabel(progress))
-          .font(.body.weight(.semibold))
-          .monospacedDigit()
-      }
-      if let progress {
-        ProgressView(value: progress, total: 1.0)
-          .progressViewStyle(.linear)
-      } else {
-        ProgressView()
-          .progressViewStyle(.linear)
-      }
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 14)
-    .frame(maxWidth: .infinity)
-    .glassEffect(.regular, in: Capsule())
+      .buttonBorderShape(.roundedRectangle(radius: 10))
   }
 
   private func progressLabel(_ progress: Double?) -> String {
@@ -716,9 +666,6 @@ struct BookDetailView: View {
   // MARK: - Overflow menu
 
   /// True if at least one of the menu-eligible actions is present.
-  /// Share + Kindle are duplicated in the overflow menu (they also live in
-  /// the dock as icons) so users have text-labelled access to them. Report
-  /// and Delete only live here.
   private var hasMenuActions: Bool {
     canChangeCover
       || canSearchReleases
