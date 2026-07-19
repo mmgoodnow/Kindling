@@ -84,6 +84,56 @@ private func playbackCurrentChapterProgress(
   return min(max(elapsed / duration, 0), 1)
 }
 
+func miniPlayerViewData(
+  bookTitle: String,
+  author: String,
+  isPlaying: Bool,
+  chapters: [AudioPlayerController.Chapter],
+  currentTime: Double,
+  totalDuration: Double
+) -> MiniPlayerViewData {
+  let secondaryText = [bookTitle, author]
+    .filter { $0.isEmpty == false }
+    .joined(separator: "  •  ")
+
+  guard
+    let chapterIndex = playbackCurrentChapterIndex(
+      time: currentTime,
+      chapters: chapters,
+      totalDuration: totalDuration
+    ),
+    chapters.indices.contains(chapterIndex)
+  else {
+    return MiniPlayerViewData(
+      primaryText: bookTitle,
+      secondaryText: author,
+      isPlaying: isPlaying
+    )
+  }
+
+  let chapter = chapters[chapterIndex]
+  let chapterDuration = playbackEffectiveDuration(
+    for: chapter,
+    at: chapterIndex,
+    chapters: chapters,
+    totalDuration: totalDuration
+  )
+  let remainingSeconds = max(chapterDuration - max(currentTime - chapter.startTime, 0), 0)
+  let remainingText: String
+  if remainingSeconds < 60 {
+    remainingText = "<1 min left"
+  } else {
+    let minutes = Int(ceil(remainingSeconds / 60))
+    remainingText = "\(minutes) \(minutes == 1 ? "min" : "mins") left"
+  }
+
+  return MiniPlayerViewData(
+    primaryText: "\(chapter.title)  •  \(remainingText)",
+    secondaryText: secondaryText,
+    isPlaying: isPlaying
+  )
+}
+
 private func playbackBookProgress(time: Double, totalDuration: Double) -> Double {
   guard totalDuration.isFinite, totalDuration > 1 else { return 0 }
   return min(max(time / totalDuration, 0), 1)
@@ -687,12 +737,19 @@ struct LocalPlaybackView: View {
 
 struct MiniPlaybackAccessory: View {
   @ObservedObject var player: AudioPlayerController
+  @ObservedObject private var progress: AudioPlayerController.PlaybackProgressState
   @EnvironmentObject private var userSettings: UserSettings
   @EnvironmentObject private var podibleAuth: PodibleAuthController
   #if os(iOS)
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
   #endif
   let onExpand: () -> Void
+
+  init(player: AudioPlayerController, onExpand: @escaping () -> Void) {
+    self.player = player
+    self._progress = ObservedObject(wrappedValue: player.progress)
+    self.onExpand = onExpand
+  }
 
   private var presentation: MiniPlayerPresentation {
     #if os(iOS)
@@ -704,10 +761,13 @@ struct MiniPlaybackAccessory: View {
 
   var body: some View {
     MiniPlayerBarView(
-      player: MiniPlayerViewData(
-        title: player.title,
+      player: miniPlayerViewData(
+        bookTitle: player.title,
         author: player.author,
-        isPlaying: player.isPlaying
+        isPlaying: player.isPlaying,
+        chapters: player.chapters,
+        currentTime: progress.currentTime,
+        totalDuration: progress.duration
       ),
       presentation: presentation,
       onOpen: onExpand,

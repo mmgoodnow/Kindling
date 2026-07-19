@@ -1155,13 +1155,13 @@ public enum MiniPlayerPresentation: Hashable, Sendable {
 }
 
 public struct MiniPlayerViewData: Hashable, Sendable {
-  public var title: String
-  public var author: String
+  public var primaryText: String
+  public var secondaryText: String
   public var isPlaying: Bool
 
-  public init(title: String, author: String, isPlaying: Bool) {
-    self.title = title
-    self.author = author
+  public init(primaryText: String, secondaryText: String, isPlaying: Bool) {
+    self.primaryText = primaryText
+    self.secondaryText = secondaryText
     self.isPlaying = isPlaying
   }
 }
@@ -1198,11 +1198,11 @@ public struct MiniPlayerBarView<Artwork: View>: View {
             .frame(width: presentation.artworkSize, height: presentation.artworkSize)
 
           VStack(alignment: .leading, spacing: 1) {
-            Text(player.title)
+            Text(player.primaryText)
               .font(.subheadline.weight(.semibold))
               .lineLimit(1)
-            if player.author.isEmpty == false {
-              Text(player.author)
+            if player.secondaryText.isEmpty == false {
+              Text(player.secondaryText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

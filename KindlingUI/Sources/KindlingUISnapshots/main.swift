@@ -332,8 +332,8 @@ private enum KindlingUISnapshots {
       Snapshot("mini-player-expanded", size: CGSize(width: 390, height: 64)) {
         MiniPlayerBarView(
           player: MiniPlayerViewData(
-            title: "Harry Potter and the Philosopher's Stone",
-            author: "J.K. Rowling",
+            primaryText: "Chapter 3  •  10 mins left",
+            secondaryText: "Wool  •  Hugh Howey",
             isPlaying: true
           ),
           presentation: .expanded
@@ -345,8 +345,8 @@ private enum KindlingUISnapshots {
       Snapshot("mini-player-inline", size: CGSize(width: 250, height: 52)) {
         MiniPlayerBarView(
           player: MiniPlayerViewData(
-            title: "Harry Potter and the Philosopher's Stone",
-            author: "J.K. Rowling",
+            primaryText: "Chapter 3  •  10 mins left",
+            secondaryText: "Wool  •  Hugh Howey",
             isPlaying: false
           ),
           presentation: .inline
