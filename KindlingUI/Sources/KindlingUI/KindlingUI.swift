@@ -827,12 +827,19 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
         .frame(maxWidth: .infinity, alignment: .center)
 
       VStack(alignment: .center, spacing: 4) {
-        Text(book.title)
-          .font(.headline.weight(.bold))
-          .multilineTextAlignment(.center)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          Text(book.title)
+            .font(.headline.weight(.bold))
+            .multilineTextAlignment(.center)
+          if let publishedYear = book.publishedYear {
+            Text(String(publishedYear))
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+        }
 
         ViewThatFits(in: .horizontal) {
-          HStack(spacing: 8) {
+          HStack(spacing: 16) {
             horizontalIdentityMetadata
           }
 
@@ -856,16 +863,7 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
   private var horizontalIdentityMetadata: some View {
     BookDetailAuthorView(author: book.author, onAuthor: onAuthor)
     if book.seriesTitle != nil {
-      Text("•")
-        .foregroundStyle(.tertiary)
       seriesBar
-    }
-    if let publishedYear = book.publishedYear {
-      Text("•")
-        .foregroundStyle(.tertiary)
-      Text(String(publishedYear))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
     }
   }
 
@@ -873,11 +871,6 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
   private var verticalIdentityMetadata: some View {
     BookDetailAuthorView(author: book.author, onAuthor: onAuthor)
     seriesBar
-    if let publishedYear = book.publishedYear {
-      Text(String(publishedYear))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-    }
   }
 }
 
