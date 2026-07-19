@@ -118,7 +118,7 @@ final class KindlingUITests: XCTestCase {
     )
 
     XCTAssertEqual(detail.metadataText, "Narrated by Narrator    2026")
-    XCTAssertEqual(detail.seriesText, "#3 in Series")
+    XCTAssertEqual(detail.seriesText, "Series 3")
     XCTAssertNil(
       BookDetailViewData(id: "missing", title: "Missing", author: "Author").metadataText)
   }

@@ -312,7 +312,7 @@ final class kindlingTests: XCTestCase {
   func testBookSeriesRouteFormatsNumericAndFreeformPositions() {
     XCTAssertEqual(
       BookSeriesRoute(id: "one", title: "Series", seriesKey: "one", position: "2").displayText,
-      "#2 in Series"
+      "Series 2"
     )
     XCTAssertEqual(
       BookSeriesRoute(
@@ -321,7 +321,7 @@ final class kindlingTests: XCTestCase {
         seriesKey: "two",
         position: "Prequel"
       ).displayText,
-      "Prequel in Series"
+      "Series Prequel"
     )
   }
 

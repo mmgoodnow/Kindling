@@ -238,7 +238,8 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
   public var seriesText: String? {
     guard let seriesTitle, seriesTitle.isEmpty == false else { return nil }
     if let seriesPosition {
-      return "\(KindlingUIFormatters.seriesPositionText(seriesPosition)) in \(seriesTitle)"
+      let position = KindlingUIFormatters.seriesPositionText(seriesPosition).dropFirst()
+      return "\(seriesTitle) \(position)"
     }
     return seriesTitle
   }
@@ -583,30 +584,17 @@ public struct BookGridTileView: View {
   }
 
   private var statusStrip: some View {
-    HStack(spacing: 6) {
-      Image(systemName: book.isInLibrary ? "music.note" : "books.vertical")
-      if let durationText = book.durationText {
-        Text(durationText)
-          .monospacedDigit()
-      }
-      Spacer(minLength: 0)
-      if book.isInLibrary {
-        Button(action: onToggleRead) {
-          Image(systemName: book.isRead ? "checkmark.circle.fill" : "circle")
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(book.isRead ? "Mark as unread" : "Mark as read")
-      } else {
-        Text("Not in Library")
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
-      }
-    }
-    .font(.caption2.weight(.semibold))
-    .foregroundStyle(book.palette.foreground)
-    .padding(.horizontal, 7)
-    .padding(.vertical, 4)
-    .background(book.palette.background, in: RoundedRectangle(cornerRadius: 3))
+    ArtworkMetadataStripView(
+      text: book.durationText,
+      palette: book.palette,
+      leadingSystemImage: book.isInLibrary ? "music.note" : "books.vertical",
+      trailingText: book.isInLibrary ? nil : "Not in Library",
+      trailingSystemImage: book.isInLibrary
+        ? (book.isRead ? "checkmark.circle.fill" : "circle") : nil,
+      trailingAccessibilityLabel: book.isInLibrary
+        ? (book.isRead ? "Mark as unread" : "Mark as read") : nil,
+      onTrailing: book.isInLibrary ? onToggleRead : nil
+    )
   }
 
   private var metadata: some View {
@@ -658,6 +646,67 @@ public struct BookGridTileView: View {
         cornerRadius: cornerRadius
       )
     }
+  }
+}
+
+public struct ArtworkMetadataStripView: View {
+  public let text: String?
+  public let palette: ArtworkPalette
+  public let leadingSystemImage: String
+  public let trailingText: String?
+  public let trailingSystemImage: String?
+  public let trailingAccessibilityLabel: String?
+  public let onTrailing: (() -> Void)?
+
+  public init(
+    text: String?,
+    palette: ArtworkPalette,
+    leadingSystemImage: String = "music.note",
+    trailingText: String? = nil,
+    trailingSystemImage: String? = nil,
+    trailingAccessibilityLabel: String? = nil,
+    onTrailing: (() -> Void)? = nil
+  ) {
+    self.text = text
+    self.palette = palette
+    self.leadingSystemImage = leadingSystemImage
+    self.trailingText = trailingText
+    self.trailingSystemImage = trailingSystemImage
+    self.trailingAccessibilityLabel = trailingAccessibilityLabel
+    self.onTrailing = onTrailing
+  }
+
+  public var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: leadingSystemImage)
+      if let text {
+        Text(text)
+          .monospacedDigit()
+      }
+      Spacer(minLength: 0)
+      if let trailingText {
+        Text(trailingText)
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+      }
+      if let trailingSystemImage {
+        if let onTrailing {
+          Button(action: onTrailing) {
+            Image(systemName: trailingSystemImage)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(trailingAccessibilityLabel ?? trailingText ?? "Action")
+        } else {
+          Image(systemName: trailingSystemImage)
+            .accessibilityLabel(trailingAccessibilityLabel ?? trailingText ?? "Status")
+        }
+      }
+    }
+    .font(.caption2.weight(.semibold))
+    .foregroundStyle(palette.foreground)
+    .padding(.horizontal, 7)
+    .padding(.vertical, 4)
+    .background(palette.background, in: RoundedRectangle(cornerRadius: 3))
   }
 }
 
@@ -778,18 +827,57 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
         .frame(maxWidth: .infinity, alignment: .center)
 
       VStack(alignment: .center, spacing: 4) {
-        BookDetailTitleBlockView(book: book, onAuthor: onAuthor)
-        seriesBar
-        if let metadataText = book.metadataText {
-          Text(metadataText)
+        Text(book.title)
+          .font(.headline.weight(.bold))
+          .multilineTextAlignment(.center)
+
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 8) {
+            horizontalIdentityMetadata
+          }
+
+          VStack(spacing: 4) {
+            verticalIdentityMetadata
+          }
+        }
+
+        if let narrator = book.narrator {
+          Text("Narrated by \(narrator)")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
         }
       }
     }
     .padding(.top, 8)
+  }
+
+  @ViewBuilder
+  private var horizontalIdentityMetadata: some View {
+    BookDetailAuthorView(author: book.author, onAuthor: onAuthor)
+    if book.seriesTitle != nil {
+      Text("•")
+        .foregroundStyle(.tertiary)
+      seriesBar
+    }
+    if let publishedYear = book.publishedYear {
+      Text("•")
+        .foregroundStyle(.tertiary)
+      Text(String(publishedYear))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  @ViewBuilder
+  private var verticalIdentityMetadata: some View {
+    BookDetailAuthorView(author: book.author, onAuthor: onAuthor)
+    seriesBar
+    if let publishedYear = book.publishedYear {
+      Text(String(publishedYear))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
   }
 }
 
@@ -847,28 +935,37 @@ public struct BookDetailTitleBlockView: View {
       Text(book.title)
         .font(.headline.weight(.bold))
         .multilineTextAlignment(.center)
-      if let onAuthor {
-        Button(action: onAuthor) {
-          HStack(spacing: 3) {
-            Text(book.author)
-            Image(systemName: "chevron.right")
-              .font(.caption2.weight(.semibold))
-          }
-          .contentShape(Rectangle())
+      BookDetailAuthorView(author: book.author, onAuthor: onAuthor)
+    }
+    .frame(maxWidth: .infinity)
+  }
+}
+
+private struct BookDetailAuthorView: View {
+  let author: String
+  let onAuthor: (() -> Void)?
+
+  var body: some View {
+    if let onAuthor {
+      Button(action: onAuthor) {
+        HStack(spacing: 3) {
+          Text(author)
+          Image(systemName: "chevron.right")
+            .font(.caption2.weight(.semibold))
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .font(.subheadline)
+      .foregroundStyle(.secondary)
+      .multilineTextAlignment(.center)
+      .accessibilityLabel("Works by \(author)")
+    } else {
+      Text(author)
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
-        .accessibilityLabel("Works by \(book.author)")
-      } else {
-        Text(book.author)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-      }
     }
-    .frame(maxWidth: .infinity)
   }
 }
 

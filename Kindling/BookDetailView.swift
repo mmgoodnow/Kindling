@@ -21,9 +21,12 @@ struct BookSeriesRoute: Hashable {
   var displayText: String {
     guard let position, position.isEmpty == false else { return title }
     if let numericPosition = Double(position) {
-      return "\(KindlingUIFormatters.seriesPositionText(numericPosition)) in \(title)"
+      let number =
+        numericPosition.rounded() == numericPosition
+        ? String(Int(numericPosition)) : String(format: "%.1f", numericPosition)
+      return "\(title) \(number)"
     }
-    return "\(position) in \(title)"
+    return "\(title) \(position)"
   }
 }
 
@@ -99,7 +102,6 @@ struct BookDetailView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         hero
-        metricsLine
         audioEditionSection
         if let description = displayMarkdownDescription {
           Text(description)
@@ -181,7 +183,7 @@ struct BookDetailView: View {
     let routes = seriesRoutes
     if routes.isEmpty == false {
       BookDetailHeroView(book: detailViewData, onAuthor: showAuthorAction) {
-        heroCover
+        detailArtwork
       } seriesBar: {
         VStack(spacing: 8) {
           ForEach(routes, id: \.self) { route in
@@ -197,9 +199,22 @@ struct BookDetailView: View {
       }
     } else {
       BookDetailHeroView(book: detailViewData, onAuthor: showAuthorAction) {
-        heroCover
+        detailArtwork
       }
     }
+  }
+
+  private var detailArtwork: some View {
+    VStack(spacing: 6) {
+      ArtworkMetadataStripView(
+        text: metricsText,
+        palette: detailPalette,
+        trailingSystemImage: isStreamOnly ? "cloud" : nil,
+        trailingAccessibilityLabel: isStreamOnly ? "Not downloaded" : nil
+      )
+      heroCover
+    }
+    .frame(width: 200)
   }
 
   private var showAuthorAction: (() -> Void)? {
@@ -308,29 +323,6 @@ struct BookDetailView: View {
         }
       }
       .frame(height: 3)
-    }
-  }
-
-  // MARK: - Metrics
-
-  @ViewBuilder
-  private var metricsLine: some View {
-    if metricsText != nil || isStreamOnly {
-      HStack(spacing: 8) {
-        if let text = metricsText {
-          Text(text)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-        }
-        if isStreamOnly {
-          Image(systemName: "cloud")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("Not downloaded")
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .center)
     }
   }
 
