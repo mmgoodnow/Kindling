@@ -359,7 +359,7 @@ struct LocalPlaybackView: View {
       expandedPlayerView()
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
-        .presentationBackground(.clear)
+        .presentationBackground(.ultraThinMaterial)
     #else
       expandedPlayerView()
         .frame(minWidth: 420, minHeight: 560)
