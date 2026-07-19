@@ -436,20 +436,6 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 14)
     .padding(.top, 4)
     .padding(.bottom, 4)
-    .background(alignment: .top) {
-      Rectangle()
-        .fill(.ultraThinMaterial)
-        .mask {
-          LinearGradient(
-            colors: [.clear, .black],
-            startPoint: .top,
-            endPoint: .bottom
-          )
-        }
-        .frame(height: 28)
-        .offset(y: -28)
-        .allowsHitTesting(false)
-    }
   }
 
   private var floatingControlsReservedHeight: CGFloat {
@@ -679,6 +665,17 @@ struct LocalPlaybackView: View {
       #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
       #endif
+      .mask {
+        LinearGradient(
+          stops: [
+            .init(color: .black, location: 0),
+            .init(color: .black, location: 0.92),
+            .init(color: .clear, location: 1),
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      }
     }
     .frame(height: playbackContentHeight, alignment: .top)
   }
