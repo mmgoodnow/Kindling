@@ -360,6 +360,7 @@ struct LocalPlaybackView: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
+        .presentationBackgroundInteraction(.enabled)
     #else
       expandedPlayerView()
         .frame(minWidth: 420, minHeight: 560)
@@ -644,7 +645,7 @@ struct LocalPlaybackView: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .center)
-      .padding(.top, 12)
+      .padding(.top, 24)
 
       BookCompletionProgressView(player: playerCoverViewData)
         .frame(maxWidth: playerArtworkSize)
