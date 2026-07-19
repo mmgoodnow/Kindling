@@ -67,6 +67,52 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testMiniPlayerUsesCurrentChapterAndRemainingTime() {
+    let chapters = [
+      AudioPlayerController.Chapter(id: 0, title: "Chapter 2", startTime: 0, duration: 600),
+      AudioPlayerController.Chapter(
+        id: 1,
+        title: "Chapter 3",
+        startTime: 600,
+        duration: 1_200
+      ),
+    ]
+
+    XCTAssertEqual(
+      miniPlayerViewData(
+        bookTitle: "Wool",
+        author: "Hugh Howey",
+        isPlaying: true,
+        chapters: chapters,
+        currentTime: 1_200,
+        totalDuration: 1_800
+      ),
+      MiniPlayerViewData(
+        primaryText: "Chapter 3  •  10 mins left",
+        secondaryText: "Wool  •  Hugh Howey",
+        isPlaying: true
+      )
+    )
+  }
+
+  func testMiniPlayerFallsBackToBookMetadataWithoutChapters() {
+    XCTAssertEqual(
+      miniPlayerViewData(
+        bookTitle: "Wool",
+        author: "Hugh Howey",
+        isPlaying: false,
+        chapters: [],
+        currentTime: 300,
+        totalDuration: 1_800
+      ),
+      MiniPlayerViewData(
+        primaryText: "Wool",
+        secondaryText: "Hugh Howey",
+        isPlaying: false
+      )
+    )
+  }
+
   func testLibraryItemDecodesSeriesMembership() throws {
     let data = try XCTUnwrap(
       """
