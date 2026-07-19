@@ -397,7 +397,7 @@ struct LocalPlaybackView: View {
   }
 
   private var expandedPlayerControls: some View {
-    VStack(spacing: 14) {
+    VStack(spacing: 6) {
       ChapterPlaybackProgressSectionView(player: player, progress: player.progress)
 
       HStack(spacing: 12) {
@@ -434,12 +434,12 @@ struct LocalPlaybackView: View {
       .foregroundStyle(.primary)
     }
     .padding(.horizontal, 14)
-    .padding(.top, 8)
+    .padding(.top, 4)
     .padding(.bottom, 4)
   }
 
   private var floatingControlsReservedHeight: CGFloat {
-    164
+    188
   }
 
   @ViewBuilder
@@ -609,7 +609,7 @@ struct LocalPlaybackView: View {
         heroSection
       }
       .padding(.top, 4)
-      .padding(.bottom, 8)
+      .padding(.bottom, 24)
     }
   }
 
