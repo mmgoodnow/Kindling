@@ -648,7 +648,7 @@ struct BookDetailView: View {
     return
       button
       .buttonStyle(.borderedProminent)
-      .buttonBorderShape(.roundedRectangle(radius: 10))
+      .buttonBorderShape(.capsule)
       .tint(detailPalette.foreground)
   }
 
@@ -670,7 +670,7 @@ struct BookDetailView: View {
       .frame(height: 52)
     }
     .buttonStyle(.glass)
-    .buttonBorderShape(.roundedRectangle(radius: 10))
+    .buttonBorderShape(.capsule)
   }
 
   private func progressLabel(_ progress: Double?) -> String {
