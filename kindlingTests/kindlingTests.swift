@@ -84,6 +84,13 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testPlaybackRemainingTextUsesFriendlyMinutes() {
+    XCTAssertEqual(playbackRemainingText(12 * 60 + 25), "12 mins left")
+    XCTAssertEqual(playbackRemainingText(12 * 60), "12 mins left")
+    XCTAssertEqual(playbackRemainingText(60), "1 min left")
+    XCTAssertEqual(playbackRemainingText(25), "<1 min left")
+  }
+
   func testMiniPlayerFallsBackToBookMetadataWithoutChapters() {
     XCTAssertEqual(
       miniPlayerViewData(

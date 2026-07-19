@@ -155,6 +155,15 @@ private func formatPlaybackTime(_ seconds: Double) -> String {
   return String(format: "%d:%02d", minutes, remainingSeconds)
 }
 
+func playbackRemainingText(_ seconds: Double) -> String {
+  let remainingSeconds = max(seconds, 0)
+  if remainingSeconds < 60 {
+    return "<1 min left"
+  }
+  let minutes = Int(remainingSeconds / 60)
+  return "\(minutes) \(minutes == 1 ? "min" : "mins") left"
+}
+
 private func playbackChapterRows(
   chapters: [AudioPlayerController.Chapter],
   currentTime: Double,
@@ -232,8 +241,6 @@ private struct ChapterPlaybackProgressSectionView: View {
     let currentChapterRemaining = max(currentChapterDuration - currentChapterElapsed, 0)
     let currentChapterProgress = min(
       max(currentChapterElapsed / max(currentChapterDuration, 1), 0), 1)
-    let currentChapterProgressPercent = Int((currentChapterProgress * 100).rounded())
-
     VStack(alignment: .leading, spacing: 8) {
       if let currentChapter {
         Text(currentChapter.title)
@@ -308,9 +315,7 @@ private struct ChapterPlaybackProgressSectionView: View {
       HStack {
         Text(formatPlaybackTime(currentChapterElapsed))
         Spacer()
-        Text("\(currentChapterProgressPercent)%")
-        Spacer()
-        Text("-\(formatPlaybackTime(currentChapterRemaining))")
+        Text(playbackRemainingText(currentChapterRemaining))
       }
       .font(.caption.monospacedDigit())
       .foregroundStyle(.secondary)
@@ -439,26 +444,25 @@ struct LocalPlaybackView: View {
 
   @ViewBuilder
   private var heroSection: some View {
-    #if os(iOS)
-      let artworkSize = min(activeScreenSize().width - 24, 368)
-    #else
-      let artworkSize: CGFloat = 296
-    #endif
-
     VStack(spacing: 0) {
       sharedPlaybackArtwork(
-        size: artworkSize,
+        size: playerArtworkSize,
         cornerRadius: 24,
         player: player,
         rpcURLString: userSettings.podibleRPCURL,
         accessToken: podibleAuth.accessToken
       )
-      #if os(iOS)
-        .padding(.horizontal, -16)
-      #endif
       .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
     }
+  }
+
+  private var playerArtworkSize: CGFloat {
+    #if os(iOS)
+      min(activeScreenSize().width - 56, 368)
+    #else
+      296
+    #endif
   }
 
   private var expandedPlayerBackground: some View {
@@ -550,6 +554,9 @@ struct LocalPlaybackView: View {
 
     return PlayerViewData(
       artworkURL: player.artworkURL,
+      bookTitle: player.title,
+      author: player.author,
+      bookDescription: player.bookDescription,
       bookCompletionPercent: playbackBookProgressPercent(
         time: currentTime,
         totalDuration: totalDuration
@@ -558,7 +565,7 @@ struct LocalPlaybackView: View {
       currentChapterTitle: currentChapter?.title,
       currentChapterProgress: currentChapterProgress,
       currentChapterElapsedText: formatPlaybackTime(currentChapterElapsed),
-      currentChapterRemainingText: "-\(formatPlaybackTime(currentChapterRemaining))",
+      currentChapterRemainingText: playbackRemainingText(currentChapterRemaining),
       isPlaying: player.isPlaying,
       playbackRateText: formatPlaybackRate(player.playbackRate),
       chapters: chapterRows
@@ -595,7 +602,8 @@ struct LocalPlaybackView: View {
     ScrollView(showsIndicators: false) {
       PlayerCoverContentView(
         player: playerCoverViewData,
-        artworkMaxWidth: nil,
+        artworkMaxWidth: playerArtworkSize,
+        showsBookProgress: false,
         showsChapterProgress: false
       ) {
         heroSection
@@ -636,6 +644,11 @@ struct LocalPlaybackView: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .center)
+      .padding(.top, 12)
+
+      BookCompletionProgressView(player: playerCoverViewData)
+        .frame(maxWidth: playerArtworkSize)
+        .frame(maxWidth: .infinity, alignment: .center)
 
       TabView(selection: selectedContentTabBinding) {
         artworkSection

@@ -272,6 +272,9 @@ public struct ChapterRowViewData: Identifiable, Hashable, Sendable {
 public struct PlayerViewData: Hashable, Sendable {
   public var artworkURL: URL?
   public var palette: ArtworkPalette
+  public var bookTitle: String
+  public var author: String
+  public var bookDescription: String
   public var bookCompletionPercent: Int
   public var bookProgress: Double
   public var currentChapterTitle: String?
@@ -286,6 +289,9 @@ public struct PlayerViewData: Hashable, Sendable {
   public init(
     artworkURL: URL? = nil,
     palette: ArtworkPalette = .fallback,
+    bookTitle: String = "",
+    author: String = "",
+    bookDescription: String = "",
     bookCompletionPercent: Int = 0,
     bookProgress: Double = 0,
     currentChapterTitle: String? = nil,
@@ -299,6 +305,9 @@ public struct PlayerViewData: Hashable, Sendable {
   ) {
     self.artworkURL = artworkURL
     self.palette = palette
+    self.bookTitle = bookTitle
+    self.author = author
+    self.bookDescription = bookDescription
     self.bookCompletionPercent = max(0, min(100, bookCompletionPercent))
     self.bookProgress = max(0, min(1, bookProgress))
     self.currentChapterTitle = currentChapterTitle
@@ -1260,37 +1269,51 @@ public enum PlayerContentTab: String, CaseIterable, Identifiable, Sendable {
 public struct PlayerCoverContentView<Artwork: View>: View {
   public let player: PlayerViewData
   public let artworkMaxWidth: CGFloat?
+  public let showsBookProgress: Bool
   public let showsChapterProgress: Bool
   private let artwork: Artwork
 
   public init(
     player: PlayerViewData,
     artworkMaxWidth: CGFloat? = 240,
+    showsBookProgress: Bool = true,
     showsChapterProgress: Bool = true,
     @ViewBuilder artwork: () -> Artwork
   ) {
     self.player = player
     self.artworkMaxWidth = artworkMaxWidth
+    self.showsBookProgress = showsBookProgress
     self.showsChapterProgress = showsChapterProgress
     self.artwork = artwork()
   }
 
   public var body: some View {
     VStack(spacing: 14) {
-      VStack(spacing: 6) {
-        Text("\(player.bookCompletionPercent)% of book completed")
-          .font(.caption.weight(.semibold))
-          .frame(maxWidth: .infinity, alignment: .center)
-        ProgressView(value: player.bookProgress)
-          .tint(.primary)
+      if showsBookProgress {
+        BookCompletionProgressView(player: player)
+          .frame(maxWidth: artworkMaxWidth)
       }
 
       framedArtwork
 
-      if let chapterTitle = player.currentChapterTitle {
-        Text(chapterTitle)
+      if player.bookTitle.isEmpty == false {
+        Text(player.bookTitle)
           .font(.headline)
           .multilineTextAlignment(.center)
+      }
+
+      if player.author.isEmpty == false {
+        Text(player.author)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+      }
+
+      if player.bookDescription.isEmpty == false {
+        Text(player.bookDescription)
+          .font(.body)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 8)
       }
 
       if showsChapterProgress {
@@ -1317,6 +1340,24 @@ public struct PlayerCoverContentView<Artwork: View>: View {
         .frame(maxWidth: artworkMaxWidth)
     } else {
       artwork
+    }
+  }
+}
+
+public struct BookCompletionProgressView: View {
+  public let player: PlayerViewData
+
+  public init(player: PlayerViewData) {
+    self.player = player
+  }
+
+  public var body: some View {
+    VStack(spacing: 6) {
+      Text("\(player.bookCompletionPercent)% of book completed")
+        .font(.caption.weight(.semibold))
+        .frame(maxWidth: .infinity, alignment: .center)
+      ProgressView(value: player.bookProgress)
+        .tint(.primary)
     }
   }
 }
