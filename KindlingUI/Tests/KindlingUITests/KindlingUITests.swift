@@ -123,6 +123,15 @@ final class KindlingUITests: XCTestCase {
       BookDetailViewData(id: "missing", title: "Missing", author: "Author").metadataText)
   }
 
+  func testMiniPlayerPresentationAdaptsControlsAndArtworkSize() {
+    XCTAssertTrue(MiniPlayerPresentation.expanded.showsSkipForward)
+    XCTAssertFalse(MiniPlayerPresentation.inline.showsSkipForward)
+    XCTAssertGreaterThan(
+      MiniPlayerPresentation.expanded.artworkSize,
+      MiniPlayerPresentation.inline.artworkSize
+    )
+  }
+
   func testAutoReadThreshold() {
     XCTAssertFalse(ReadProgressPolicy.shouldMarkRead(currentTime: 994, duration: 1_000))
     XCTAssertTrue(ReadProgressPolicy.shouldMarkRead(currentTime: 995, duration: 1_000))

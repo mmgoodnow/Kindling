@@ -1138,6 +1138,117 @@ public struct BookGroupContentView: View {
   }
 }
 
+public enum MiniPlayerPresentation: Hashable, Sendable {
+  case expanded
+  case inline
+
+  public var artworkSize: CGFloat {
+    switch self {
+    case .expanded: 36
+    case .inline: 30
+    }
+  }
+
+  public var showsSkipForward: Bool {
+    self == .expanded
+  }
+}
+
+public struct MiniPlayerViewData: Hashable, Sendable {
+  public var title: String
+  public var author: String
+  public var isPlaying: Bool
+
+  public init(title: String, author: String, isPlaying: Bool) {
+    self.title = title
+    self.author = author
+    self.isPlaying = isPlaying
+  }
+}
+
+public struct MiniPlayerBarView<Artwork: View>: View {
+  public let player: MiniPlayerViewData
+  public let presentation: MiniPlayerPresentation
+  public let onOpen: () -> Void
+  public let onTogglePlayback: () -> Void
+  public let onSkipForward: () -> Void
+  private let artwork: Artwork
+
+  public init(
+    player: MiniPlayerViewData,
+    presentation: MiniPlayerPresentation,
+    onOpen: @escaping () -> Void = {},
+    onTogglePlayback: @escaping () -> Void = {},
+    onSkipForward: @escaping () -> Void = {},
+    @ViewBuilder artwork: () -> Artwork
+  ) {
+    self.player = player
+    self.presentation = presentation
+    self.onOpen = onOpen
+    self.onTogglePlayback = onTogglePlayback
+    self.onSkipForward = onSkipForward
+    self.artwork = artwork()
+  }
+
+  public var body: some View {
+    HStack(spacing: presentation == .inline ? 8 : 10) {
+      Button(action: onOpen) {
+        HStack(spacing: 9) {
+          artwork
+            .frame(width: presentation.artworkSize, height: presentation.artworkSize)
+
+          VStack(alignment: .leading, spacing: 1) {
+            Text(player.title)
+              .font(.subheadline.weight(.semibold))
+              .lineLimit(1)
+            if player.author.isEmpty == false {
+              Text(player.author)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Open Now Playing")
+
+      miniPlayerButton(
+        player.isPlaying ? "pause.fill" : "play.fill",
+        label: player.isPlaying ? "Pause" : "Play",
+        action: onTogglePlayback
+      )
+
+      if presentation.showsSkipForward {
+        miniPlayerButton(
+          "goforward.30",
+          label: "Skip Forward 30 Seconds",
+          action: onSkipForward
+        )
+      }
+    }
+    .padding(.horizontal, presentation == .inline ? 6 : 10)
+    .frame(height: presentation == .inline ? 44 : 52)
+  }
+
+  private func miniPlayerButton(
+    _ systemImage: String,
+    label: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.body.weight(.semibold))
+        .frame(width: 36, height: 40)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(label)
+  }
+}
+
 public enum PlayerContentTab: String, CaseIterable, Identifiable, Sendable {
   case cover = "Cover"
   case chapters = "Chapters"

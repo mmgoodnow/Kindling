@@ -329,6 +329,32 @@ private enum KindlingUISnapshots {
       Snapshot("player-cover") {
         PlayerContentView(player: SnapshotFixtures.player, selectedTab: .cover)
       },
+      Snapshot("mini-player-expanded", size: CGSize(width: 390, height: 64)) {
+        MiniPlayerBarView(
+          player: MiniPlayerViewData(
+            title: "Harry Potter and the Philosopher's Stone",
+            author: "J.K. Rowling",
+            isPlaying: true
+          ),
+          presentation: .expanded
+        ) {
+          RoundedRectangle(cornerRadius: 8)
+            .fill(.quaternary)
+        }
+      },
+      Snapshot("mini-player-inline", size: CGSize(width: 250, height: 52)) {
+        MiniPlayerBarView(
+          player: MiniPlayerViewData(
+            title: "Harry Potter and the Philosopher's Stone",
+            author: "J.K. Rowling",
+            isPlaying: false
+          ),
+          presentation: .inline
+        ) {
+          RoundedRectangle(cornerRadius: 6)
+            .fill(.quaternary)
+        }
+      },
       Snapshot("player-chapters") {
         PlayerContentView(player: SnapshotFixtures.player, selectedTab: .chapters)
       },

@@ -7,26 +7,47 @@ struct ContentView: View {
   @State private var libraryNavigationPath = NavigationPath()
   @State private var favoritesNavigationPath = NavigationPath()
   @State private var searchNavigationPath = NavigationPath()
+  @State private var isShowingPlayer = false
 
   private enum AppTab: Hashable {
     case library
     case favorites
-    case player
     case search
   }
 
   private var playerTabBinding: Binding<Bool> {
-    Binding(
-      get: { selectedTab == .player },
-      set: { isShowing in
-        if isShowing, player.hasLoadedItem {
-          selectedTab = .player
-        }
-      }
-    )
+    $isShowingPlayer
   }
 
   var body: some View {
+    Group {
+      #if os(iOS)
+        appTabs
+          .tabBarMinimizeBehavior(.onScrollDown)
+          .tabViewSearchActivation(.searchTabSelection)
+          .tabViewBottomAccessory {
+            if player.hasLoadedItem {
+              miniPlayer
+            }
+          }
+      #else
+        appTabs
+          .safeAreaInset(edge: .bottom, spacing: 0) {
+            if player.hasLoadedItem {
+              miniPlayer
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.bar)
+            }
+          }
+      #endif
+    }
+    .sheet(isPresented: $isShowingPlayer) {
+      LocalPlaybackView(player: player)
+    }
+  }
+
+  private var appTabs: some View {
     TabView(selection: $selectedTab) {
       Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
         NavigationStack(path: $libraryNavigationPath) {
@@ -48,15 +69,7 @@ struct ContentView: View {
         }
       }
 
-      if player.hasLoadedItem {
-        Tab(
-          "Player", systemImage: player.isPlaying ? "pause.fill" : "play.fill", value: AppTab.player
-        ) {
-          LocalPlaybackView(player: player)
-        }
-      }
-
-      Tab("Search", systemImage: "magnifyingglass", value: AppTab.search) {
+      Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
         NavigationStack(path: $searchNavigationPath) {
           RemoteLibraryView(
             mode: .library,
@@ -66,11 +79,13 @@ struct ContentView: View {
           )
         }
       }
+      .tabPlacement(.pinned)
     }
-    .onChange(of: player.hasLoadedItem) { _, hasLoadedItem in
-      if hasLoadedItem == false, selectedTab == .player {
-        selectedTab = .library
-      }
+  }
+
+  private var miniPlayer: some View {
+    MiniPlaybackAccessory(player: player) {
+      isShowingPlayer = true
     }
   }
 }

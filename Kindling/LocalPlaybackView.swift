@@ -685,6 +685,46 @@ struct LocalPlaybackView: View {
   }
 #endif
 
+struct MiniPlaybackAccessory: View {
+  @ObservedObject var player: AudioPlayerController
+  @EnvironmentObject private var userSettings: UserSettings
+  @EnvironmentObject private var podibleAuth: PodibleAuthController
+  #if os(iOS)
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+  #endif
+  let onExpand: () -> Void
+
+  private var presentation: MiniPlayerPresentation {
+    #if os(iOS)
+      placement == .inline ? .inline : .expanded
+    #else
+      .expanded
+    #endif
+  }
+
+  var body: some View {
+    MiniPlayerBarView(
+      player: MiniPlayerViewData(
+        title: player.title,
+        author: player.author,
+        isPlaying: player.isPlaying
+      ),
+      presentation: presentation,
+      onOpen: onExpand,
+      onTogglePlayback: player.togglePlayback,
+      onSkipForward: { player.skip(by: 30) }
+    ) {
+      sharedPlaybackArtwork(
+        size: presentation.artworkSize,
+        cornerRadius: presentation == .inline ? 6 : 8,
+        player: player,
+        rpcURLString: userSettings.podibleRPCURL,
+        accessToken: podibleAuth.accessToken
+      )
+    }
+  }
+}
+
 @MainActor
 @ViewBuilder
 private func sharedPlaybackArtwork(
