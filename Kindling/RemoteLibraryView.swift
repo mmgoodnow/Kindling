@@ -4,16 +4,6 @@ import Kingfisher
 import SwiftData
 import SwiftUI
 
-func librarySyncRelativeText(syncedAt: Date, relativeTo now: Date = .now) -> String {
-  if abs(now.timeIntervalSince(syncedAt)) < 60 {
-    return "just now"
-  }
-
-  let formatter = RelativeDateTimeFormatter()
-  formatter.unitsStyle = .short
-  return formatter.localizedString(for: syncedAt, relativeTo: now)
-}
-
 func relatedBookIdentity(title: String, author: String) -> String {
   [title, author]
     .map {
@@ -350,7 +340,6 @@ struct PodibleLibraryView: View {
         List {
           searchStatusRows(client: client)
           searchListing(query: query, client: client)
-          searchFooterRow
         }
       }
     }
@@ -549,9 +538,6 @@ struct PodibleLibraryView: View {
 
           collectionStatusMessages(client: client)
         }
-        .overlay(alignment: .bottom) {
-          syncFooter
-        }
       #else
         VStack(spacing: 0) {
           collectionStatusMessages(client: client)
@@ -565,22 +551,8 @@ struct PodibleLibraryView: View {
             onToggleRead: toggleRead(_:),
             onToggleFavorite: toggleFavorite(_:)
           )
-          syncFooter
         }
       #endif
-    }
-  }
-
-  @ViewBuilder
-  private var syncFooter: some View {
-    if let syncFooterText {
-      Text(syncFooterText)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
   }
 
@@ -1201,36 +1173,6 @@ struct PodibleLibraryView: View {
     syncStates.first
   }
 
-  private var lastSync: Date? {
-    syncState?.lastSync
-  }
-
-  private var lastSummary: LibrarySyncService.Summary? {
-    guard let syncState else { return nil }
-    return LibrarySyncService.Summary(
-      insertedBooks: syncState.insertedBooks,
-      updatedBooks: syncState.updatedBooks,
-      insertedAuthors: syncState.insertedAuthors,
-      updatedAuthors: syncState.updatedAuthors
-    )
-  }
-
-  private var syncFooterText: String? {
-    let summary = lastSummary
-    let added = summary.map { $0.insertedBooks + $0.insertedAuthors }
-    let updated = summary.map { $0.updatedBooks + $0.updatedAuthors }
-
-    var parts: [String] = []
-    if let lastSync {
-      parts.append("Synced \(librarySyncRelativeText(syncedAt: lastSync))")
-    }
-    if let added, let updated {
-      parts.append("\(added) added")
-      parts.append("\(updated) updated")
-    }
-    return parts.isEmpty ? nil : parts.joined(separator: "  •  ")
-  }
-
   private var listBackgroundColor: Color {
     if colorScheme == .dark {
       return .black
@@ -1240,18 +1182,6 @@ struct PodibleLibraryView: View {
     #else
       return Color(nsColor: .windowBackgroundColor)
     #endif
-  }
-
-  @ViewBuilder
-  private func summaryRow(_ summary: LibrarySyncService.Summary) -> some View {
-    let totalAdded = summary.insertedBooks + summary.insertedAuthors
-    let totalUpdated = summary.updatedBooks + summary.updatedAuthors
-    HStack(spacing: 8) {
-      Text("Last sync result")
-      Text("\(totalAdded) added, \(totalUpdated) updated")
-        .foregroundStyle(.secondary)
-    }
-    .font(.caption)
   }
 
   @ViewBuilder
@@ -1338,23 +1268,6 @@ struct PodibleLibraryView: View {
       Text(syncErrorMessage)
         .foregroundStyle(.red)
         .font(.caption)
-    }
-  }
-
-  @ViewBuilder
-  private var searchFooterRow: some View {
-    if let syncFooterText {
-      HStack {
-        Spacer(minLength: 0)
-        Text(syncFooterText)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-        Spacer(minLength: 0)
-      }
-      .listRowSeparator(.hidden)
-      .listRowBackground(Color.clear)
     }
   }
 
