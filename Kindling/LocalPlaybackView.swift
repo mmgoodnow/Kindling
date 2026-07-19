@@ -436,6 +436,20 @@ struct LocalPlaybackView: View {
     .padding(.horizontal, 14)
     .padding(.top, 4)
     .padding(.bottom, 4)
+    .background(alignment: .top) {
+      Rectangle()
+        .fill(.ultraThinMaterial)
+        .mask {
+          LinearGradient(
+            colors: [.clear, .black],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+        }
+        .frame(height: 28)
+        .offset(y: -28)
+        .allowsHitTesting(false)
+    }
   }
 
   private var floatingControlsReservedHeight: CGFloat {
