@@ -1614,9 +1614,9 @@ public struct ChapterRowView: View {
 
   private var rowBackground: Color {
     if chapter.isCurrent {
-      palette.currentHighlight
+      palette.progressFill
     } else if chapter.isCompleted {
-      palette.completedHighlight
+      palette.background
     } else {
       Color.primary.opacity(0.04)
     }

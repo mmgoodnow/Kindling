@@ -341,6 +341,7 @@ struct LocalPlaybackView: View {
   @ObservedObject var player: AudioPlayerController
   @EnvironmentObject private var userSettings: UserSettings
   @EnvironmentObject private var podibleAuth: PodibleAuthController
+  @State private var artworkPalette: ArtworkPalette = .fallback
 
   private var selectedContentTab: ContentTab {
     get { ContentTab(rawValue: selectedContentTabRawValue) ?? .artwork }
@@ -360,6 +361,9 @@ struct LocalPlaybackView: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
+        .task(id: player.artworkURL?.absoluteString) {
+          loadArtworkPalette()
+        }
     #else
       expandedPlayerView()
         .frame(minWidth: 420, minHeight: 560)
@@ -450,7 +454,8 @@ struct LocalPlaybackView: View {
         cornerRadius: 24,
         player: player,
         rpcURLString: userSettings.podibleRPCURL,
-        accessToken: podibleAuth.accessToken
+        accessToken: podibleAuth.accessToken,
+        onSuccess: sampleAndCacheArtworkPalette
       )
       .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
@@ -554,6 +559,7 @@ struct LocalPlaybackView: View {
 
     return PlayerViewData(
       artworkURL: player.artworkURL,
+      palette: artworkPalette,
       bookTitle: player.title,
       author: player.author,
       bookDescription: player.bookDescription,
@@ -573,9 +579,31 @@ struct LocalPlaybackView: View {
   }
 
   private var chapterListContent: some View {
-    KindlingUI.ChapterListView(chapters: chapterRows) { row in
+    KindlingUI.ChapterListView(chapters: chapterRows, palette: artworkPalette) { row in
       guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
       player.seek(to: chapter.startTime)
+    }
+  }
+
+  @MainActor
+  private func loadArtworkPalette() {
+    guard let key = player.artworkURL?.absoluteString else {
+      artworkPalette = .fallback
+      return
+    }
+    artworkPalette = ArtworkPaletteCache().palette(for: key) ?? .fallback
+  }
+
+  @MainActor
+  private func sampleAndCacheArtworkPalette(from image: KFCrossPlatformImage) {
+    guard let artworkURL = player.artworkURL else { return }
+    Task {
+      let palette = await Task.detached(priority: .utility) {
+        ArtworkPaletteSampler.palette(from: image)
+      }.value
+      guard let palette, player.artworkURL == artworkURL else { return }
+      ArtworkPaletteCache().store(palette, for: artworkURL.absoluteString)
+      artworkPalette = palette
     }
   }
 
@@ -816,7 +844,8 @@ private func sharedPlaybackArtwork(
   cornerRadius: CGFloat,
   player: AudioPlayerController,
   rpcURLString: String,
-  accessToken: String?
+  accessToken: String?,
+  onSuccess: ((KFCrossPlatformImage) -> Void)? = nil
 )
   -> some View
 {
@@ -825,7 +854,8 @@ private func sharedPlaybackArtwork(
       AuthenticatedRemoteImage(
         url: artworkURL,
         rpcURLString: rpcURLString,
-        accessToken: accessToken
+        accessToken: accessToken,
+        onSuccess: onSuccess
       ) {
         sharedPlaybackArtworkPlaceholder(size: size, cornerRadius: cornerRadius)
       }
