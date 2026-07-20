@@ -246,7 +246,7 @@ private struct ChapterPlaybackProgressSectionView: View {
       if let currentChapter {
         Text(currentChapter.title)
           .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.secondary)
+          .foregroundStyle(palette.foreground.opacity(0.65))
           .frame(maxWidth: .infinity, alignment: .center)
           .multilineTextAlignment(.center)
           .lineLimit(2)
@@ -319,7 +319,7 @@ private struct ChapterPlaybackProgressSectionView: View {
         Text(playbackRemainingText(currentChapterRemaining))
       }
       .font(.caption.monospacedDigit())
-      .foregroundStyle(.secondary)
+      .foregroundStyle(palette.foreground.opacity(0.65))
     }
   }
 }
@@ -360,6 +360,7 @@ struct LocalPlaybackView: View {
     #if os(iOS)
       expandedPlayerView()
         .tint(artworkPalette.foreground)
+        .foregroundStyle(artworkPalette.foreground)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
@@ -369,6 +370,7 @@ struct LocalPlaybackView: View {
     #else
       expandedPlayerView()
         .tint(artworkPalette.foreground)
+        .foregroundStyle(artworkPalette.foreground)
         .frame(minWidth: 420, minHeight: 560)
         .padding(28)
         .background(macPlayerBackground)
@@ -618,12 +620,12 @@ struct LocalPlaybackView: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Chapters")
         .font(.subheadline.weight(.semibold))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(artworkPalette.foreground.opacity(0.65))
 
       if player.chapters.isEmpty {
         Text("No chapters available yet.")
           .font(.body)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(artworkPalette.foreground.opacity(0.65))
       } else {
         chapterListContent
       }
@@ -661,7 +663,10 @@ struct LocalPlaybackView: View {
               HStack(spacing: 4) {
                 Text(tab.rawValue)
                   .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                  .foregroundStyle(isSelected ? artworkPalette.foreground : .secondary)
+                  .foregroundStyle(
+                    isSelected
+                      ? artworkPalette.foreground : artworkPalette.foreground.opacity(0.65)
+                  )
 
                 if tab == .transcript {
                   transcriptTabStatusBadge
@@ -737,7 +742,7 @@ struct LocalPlaybackView: View {
     case .unavailable:
       Image(systemName: "minus.circle.fill")
         .font(.system(size: 9, weight: .semibold))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(artworkPalette.foreground.opacity(0.65))
     case .failed:
       Image(systemName: "exclamationmark.circle.fill")
         .font(.system(size: 9, weight: .semibold))

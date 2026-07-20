@@ -1399,7 +1399,7 @@ public struct PlayerCoverContentView<Artwork: View>: View {
       if player.author.isEmpty == false {
         Text(player.author)
           .font(.subheadline)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(player.palette.foreground.opacity(0.65))
           .multilineTextAlignment(.center)
       }
 
@@ -1420,10 +1420,11 @@ public struct PlayerCoverContentView<Artwork: View>: View {
             Text(player.currentChapterRemainingText)
           }
           .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
+          .foregroundStyle(player.palette.foreground.opacity(0.65))
         }
       }
     }
+    .foregroundStyle(player.palette.foreground)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
@@ -1449,6 +1450,7 @@ public struct BookCompletionProgressView: View {
     VStack(spacing: 6) {
       Text("\(player.bookCompletionPercent)% of book completed")
         .font(.caption.weight(.semibold))
+        .foregroundStyle(player.palette.foreground)
         .frame(maxWidth: .infinity, alignment: .center)
       ProgressView(value: player.bookProgress)
         .tint(player.palette.foreground)
@@ -1515,7 +1517,7 @@ public struct PlayerContentView: View {
       case .transcript:
         Text(player.transcriptStatusText ?? "Transcript")
           .font(.body)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(player.palette.foreground.opacity(0.65))
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
 
@@ -1544,7 +1546,7 @@ public struct PlayerContentView: View {
         .monospacedDigit()
         .frame(width: 42)
     }
-    .foregroundStyle(.primary)
+    .foregroundStyle(player.palette.foreground)
   }
 }
 
@@ -1603,11 +1605,12 @@ public struct ChapterRowView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
         Text(chapter.durationText)
           .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
+          .foregroundStyle(palette.foreground.opacity(0.65))
       }
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
       .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+      .foregroundStyle(palette.foreground)
     }
     .buttonStyle(.plain)
   }
