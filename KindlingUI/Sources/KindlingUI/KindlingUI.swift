@@ -717,10 +717,9 @@ public struct BookRailView: View {
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 8) {
+      HStack(spacing: 2) {
         Text(title)
           .font(.title3.weight(.bold))
-        Spacer(minLength: 0)
         if let onSeeAll {
           Button(action: onSeeAll) {
             Image(systemName: "chevron.right")
