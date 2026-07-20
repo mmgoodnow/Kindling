@@ -78,6 +78,10 @@ public struct ArtworkPalette: Hashable, Sendable {
     Color(red: red, green: green, blue: blue).opacity(0.16)
   }
 
+  public var progressFill: Color {
+    Color(red: red, green: green, blue: blue).opacity(0.38)
+  }
+
   public var foreground: Color {
     Color(red: red * 0.64, green: green * 0.64, blue: blue * 0.64)
   }

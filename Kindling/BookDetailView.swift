@@ -651,20 +651,13 @@ struct BookDetailView: View {
             .fill(detailPalette.background)
 
           Capsule()
-            .fill(detailPalette.foreground)
+            .fill(detailPalette.progressFill)
             .frame(width: proxy.size.width * displayedProgress)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipShape(Capsule())
 
           ctaLabel(title: title, systemImage: systemImage)
             .foregroundStyle(detailPalette.foreground)
-
-          ctaLabel(title: title, systemImage: systemImage)
-            .foregroundStyle(.white)
-            .mask(alignment: .leading) {
-              Rectangle()
-                .frame(width: proxy.size.width * displayedProgress)
-            }
         }
       }
       .frame(height: 38)
