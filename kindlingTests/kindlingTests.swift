@@ -387,6 +387,14 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(belongsInContinueReading(progress: 1, isRead: false))
   }
 
+  func testTBRExcludesBooksWithPersistedProgress() {
+    XCTAssertTrue(belongsInTBR(isFavorite: true, isRead: false, progress: nil))
+    XCTAssertTrue(belongsInTBR(isFavorite: true, isRead: false, progress: 0))
+    XCTAssertFalse(belongsInTBR(isFavorite: true, isRead: false, progress: 0.25))
+    XCTAssertFalse(belongsInTBR(isFavorite: true, isRead: true, progress: 0))
+    XCTAssertFalse(belongsInTBR(isFavorite: false, isRead: false, progress: 0))
+  }
+
   func testMarkingReadFavoritesBookWithoutChangingProgress() {
     let resumeKey = resumePositionKeyPrefix + "book"
     UserDefaults.standard.set(1_234.5, forKey: resumeKey)

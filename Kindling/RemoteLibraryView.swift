@@ -23,6 +23,10 @@ func belongsInContinueReading(progress: Double?, isRead: Bool) -> Bool {
   return progress > 0 && progress < ReadProgressPolicy.completionThreshold && isRead == false
 }
 
+func belongsInTBR(isFavorite: Bool, isRead: Bool, progress: Double?) -> Bool {
+  isFavorite && isRead == false && (progress ?? 0) == 0
+}
+
 enum PodibleLibraryScreenMode {
   case home
   case library
@@ -540,7 +544,11 @@ struct PodibleLibraryView: View {
         }
     case .tbr:
       localBooks.filter {
-        $0.localState?.isFavorite == true && $0.localState?.isRead != true
+        belongsInTBR(
+          isFavorite: $0.localState?.isFavorite == true,
+          isRead: $0.localState?.isRead == true,
+          progress: playbackProgress(for: $0)
+        )
       }
     case .newOnPodible:
       localBooks
