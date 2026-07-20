@@ -675,6 +675,7 @@ struct BookDetailView: View {
     return
       button
       .buttonStyle(.plain)
+      .glassEffect(.regular, in: Capsule())
       .opacity(isEnabled ? 1 : 0.55)
   }
 
@@ -701,7 +702,7 @@ struct BookDetailView: View {
           .minimumScaleFactor(0.7)
       }
       .frame(maxWidth: .infinity)
-      .frame(height: 52)
+      .frame(height: 48)
     }
     .buttonStyle(.glass)
     .buttonBorderShape(.capsule)
