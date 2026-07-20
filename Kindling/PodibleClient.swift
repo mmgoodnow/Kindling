@@ -534,6 +534,10 @@ protocol PodibleLibraryServing {
     selection: PodibleManifestationSearchSelection
   ) async throws -> PodibleCreateManifestationResult
   func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript?
+  func requestTranscription(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
+  func fetchTranscriptStatus(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
   func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker]
   func downloadEpub(playback: PodiblePlaybackEbook, progress: @escaping (Double) -> Void)
     async throws -> URL
@@ -627,6 +631,22 @@ extension PodibleLibraryServing {
   func fetchTranscript(playback: PodiblePlaybackAudio) async throws -> PodibleTranscript? {
     _ = playback
     return nil
+  }
+
+  func requestTranscription(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
+  {
+    _ = bookID
+    _ = manifestationID
+    throw PodibleError.unsupported("This backend does not support transcript generation.")
+  }
+
+  func fetchTranscriptStatus(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
+  {
+    _ = bookID
+    _ = manifestationID
+    throw PodibleError.unsupported("This backend does not support transcript generation.")
   }
 
   func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker] {
@@ -1590,6 +1610,17 @@ struct PodibleTranscript: Decodable, Equatable {
   let utterances: [Utterance]?
 }
 
+struct PodibleTranscriptStatus: Decodable, Equatable {
+  enum State: String, Decodable {
+    case current, stale, pending, running, failed
+    case missingAudio = "missing_audio"
+    case missingConfig = "missing_config"
+  }
+
+  let status: State
+  let error: String?
+}
+
 private struct PodibleChaptersResponse: Decodable {
   let version: String
   let chapters: [PodibleChapterMarker]
@@ -1952,6 +1983,38 @@ struct PodibleClient: PodibleLibraryServing {
     } catch let error as PodibleHTTPError where error.statusCode == 404 {
       return nil
     }
+  }
+
+  func requestTranscription(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
+  {
+    try await transcriptRPC(
+      method: "library.requestTranscription",
+      bookID: bookID,
+      manifestationID: manifestationID
+    )
+  }
+
+  func fetchTranscriptStatus(bookID: String, manifestationID: Int?) async throws
+    -> PodibleTranscriptStatus
+  {
+    try await transcriptRPC(
+      method: "library.transcriptStatus",
+      bookID: bookID,
+      manifestationID: manifestationID
+    )
+  }
+
+  private func transcriptRPC(
+    method: String,
+    bookID: String,
+    manifestationID: Int?
+  ) async throws -> PodibleTranscriptStatus {
+    var params: [String: Any] = ["bookId": try parseBookID(bookID)]
+    if let manifestationID {
+      params["manifestationId"] = manifestationID
+    }
+    return try await rpcCall(method: method, params: params)
   }
 
   func fetchChapters(playback: PodiblePlaybackAudio) async throws -> [PodibleChapterMarker] {

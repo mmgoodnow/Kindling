@@ -27,6 +27,8 @@ final class AudioPlayerController: ObservableObject {
 
   private struct PersistedSession: Codable {
     let resumeID: String
+    let podibleID: String?
+    let manifestationID: Int?
     let fileRelativePath: String?
     let streamingURLString: String?
     let title: String
@@ -47,6 +49,7 @@ final class AudioPlayerController: ObservableObject {
   enum TranscriptLoadState: Equatable {
     case idle
     case loading
+    case generating
     case loaded(wordCount: Int)
     case unavailable(String)
     case failed(String)
@@ -404,6 +407,10 @@ final class AudioPlayerController: ObservableObject {
     player != nil && title.isEmpty == false
   }
 
+  var activePlaybackIdentity: PlaybackIdentity? {
+    currentPlaybackIdentity
+  }
+
   var currentTime: Double {
     progress.currentTime
   }
@@ -430,7 +437,11 @@ final class AudioPlayerController: ObservableObject {
 
       load(
         url: url,
-        identity: PlaybackIdentity(canonicalID: session.resumeID),
+        identity: PlaybackIdentity(
+          canonicalID: session.resumeID,
+          podibleID: session.podibleID,
+          manifestationID: session.manifestationID
+        ),
         title: session.title,
         author: session.author.isEmpty ? nil : session.author,
         description: session.description.isEmpty ? nil : session.description,
@@ -452,7 +463,11 @@ final class AudioPlayerController: ObservableObject {
     loadStreaming(
       httpURL: streamingURL,
       accessToken: accessToken,
-      identity: PlaybackIdentity(canonicalID: session.resumeID),
+      identity: PlaybackIdentity(
+        canonicalID: session.resumeID,
+        podibleID: session.podibleID,
+        manifestationID: session.manifestationID
+      ),
       title: session.title,
       author: session.author.isEmpty ? nil : session.author,
       description: session.description.isEmpty ? nil : session.description,
@@ -471,6 +486,13 @@ final class AudioPlayerController: ObservableObject {
     guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
     transcript = nil
     transcriptLoadState = .loading
+  }
+
+  @MainActor
+  func beginRemoteTranscriptGeneration(for identity: PlaybackIdentity) {
+    guard currentPlaybackIdentity?.matches(identity.canonicalID) == true else { return }
+    transcript = nil
+    transcriptLoadState = .generating
   }
 
   @MainActor
@@ -834,6 +856,8 @@ final class AudioPlayerController: ObservableObject {
 
     let session = PersistedSession(
       resumeID: currentPlaybackIdentity.canonicalID,
+      podibleID: currentPlaybackIdentity.podibleID,
+      manifestationID: currentPlaybackIdentity.manifestationID,
       fileRelativePath: relativePath,
       streamingURLString: streamingURLString,
       title: title,

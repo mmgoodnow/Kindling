@@ -103,6 +103,26 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(restoredPlayer.playbackRate, 1.5)
   }
 
+  func testTranscriptStatusDecodesGenerationState() throws {
+    let status = try JSONDecoder().decode(
+      PodibleTranscriptStatus.self,
+      from: Data(#"{"status":"running","error":null}"#.utf8)
+    )
+
+    XCTAssertEqual(status, PodibleTranscriptStatus(status: .running, error: nil))
+  }
+
+  func testPlaybackIdentityRetainsTranscriptRequestTarget() {
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "42",
+      manifestationID: 7
+    )
+
+    XCTAssertEqual(identity.podibleID, "42")
+    XCTAssertEqual(identity.manifestationID, 7)
+  }
+
   func testMiniPlayerFallsBackToBookMetadataWithoutChapters() {
     XCTAssertEqual(
       miniPlayerViewData(

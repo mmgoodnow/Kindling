@@ -726,8 +726,62 @@ struct LocalPlaybackView: View {
     TranscriptView(
       player: player,
       progress: player.progress,
-      isTabActive: selectedContentTab == .transcript
+      isTabActive: selectedContentTab == .transcript,
+      onGenerateTranscript: canGenerateTranscript ? requestTranscriptGeneration : nil
     )
+  }
+
+  private var canGenerateTranscript: Bool {
+    player.activePlaybackIdentity?.podibleID != nil && configuredClient != nil
+  }
+
+  private var configuredClient: RemoteLibraryServing? {
+    guard let url = URL(string: userSettings.podibleRPCURL),
+      let accessToken = podibleAuth.accessToken,
+      accessToken.isEmpty == false
+    else { return nil }
+    return PodibleClient(rpcURL: url, accessToken: accessToken)
+  }
+
+  private func requestTranscriptGeneration() {
+    guard let client = configuredClient,
+      let identity = player.activePlaybackIdentity,
+      let bookID = identity.podibleID
+    else { return }
+
+    player.beginRemoteTranscriptGeneration(for: identity)
+    Task {
+      do {
+        var status = try await client.requestTranscription(
+          bookID: bookID,
+          manifestationID: identity.manifestationID
+        )
+        while [.pending, .running, .stale].contains(status.status) {
+          try await Task.sleep(for: .seconds(3))
+          status = try await client.fetchTranscriptStatus(
+            bookID: bookID,
+            manifestationID: identity.manifestationID
+          )
+        }
+        guard status.status == .current else {
+          throw PodibleError.badResponse
+        }
+        let item = try await client.fetchLibraryItems().first { $0.id == bookID }
+        let audio =
+          item?.playback?.audioOptions.first {
+            $0.manifestationId == identity.manifestationID
+          } ?? item?.playback?.audio
+        guard let audio, let transcript = try await client.fetchTranscript(playback: audio) else {
+          throw PodibleError.badResponse
+        }
+        player.applyRemoteTranscript(transcript, for: identity)
+      } catch {
+        player.applyRemoteTranscriptFailure(
+          "Transcript generation failed: \(error.localizedDescription)",
+          for: identity
+        )
+      }
+    }
   }
 
   @ViewBuilder
@@ -735,7 +789,7 @@ struct LocalPlaybackView: View {
     switch player.transcriptLoadState {
     case .idle:
       EmptyView()
-    case .loading:
+    case .loading, .generating:
       ProgressView()
         .controlSize(.mini)
         .frame(width: 10, height: 10)

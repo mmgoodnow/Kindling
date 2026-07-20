@@ -4,6 +4,19 @@ struct TranscriptView: View {
   @ObservedObject var player: AudioPlayerController
   let progress: AudioPlayerController.PlaybackProgressState
   let isTabActive: Bool
+  let onGenerateTranscript: (() -> Void)?
+
+  init(
+    player: AudioPlayerController,
+    progress: AudioPlayerController.PlaybackProgressState,
+    isTabActive: Bool,
+    onGenerateTranscript: (() -> Void)? = nil
+  ) {
+    self.player = player
+    self.progress = progress
+    self.isTabActive = isTabActive
+    self.onGenerateTranscript = onGenerateTranscript
+  }
 
   @State private var segments: [TranscriptSegment] = []
   @State private var activeID: Int?
@@ -82,6 +95,16 @@ struct TranscriptView: View {
           .font(.footnote)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
+      case .generating:
+        ProgressView()
+          .controlSize(.regular)
+        Text("Generating transcript...")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text("This can take a while for a full audiobook.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
       case .loaded:
         Image(systemName: "text.page")
           .font(.title2)
@@ -100,6 +123,7 @@ struct TranscriptView: View {
           .font(.footnote)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
+        generateTranscriptButton
       case .failed(let message):
         Image(systemName: "exclamationmark.triangle")
           .font(.title2)
@@ -111,11 +135,24 @@ struct TranscriptView: View {
           .font(.footnote)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
+        generateTranscriptButton
       }
       Spacer()
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 24)
+  }
+
+  @ViewBuilder
+  private var generateTranscriptButton: some View {
+    if let onGenerateTranscript {
+      Button(action: onGenerateTranscript) {
+        Label("Generate Transcript", systemImage: "waveform.badge.mic")
+      }
+      .buttonStyle(.glass)
+      .buttonBorderShape(.capsule)
+      .padding(.top, 6)
+    }
   }
 
   private func transcriptScroll(

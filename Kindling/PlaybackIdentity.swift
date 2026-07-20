@@ -2,10 +2,19 @@ import Foundation
 
 struct PlaybackIdentity: Hashable, Sendable {
   let canonicalID: String
+  let podibleID: String?
+  let manifestationID: Int?
   private let explicitAliases: [String]
 
-  init(canonicalID: String, aliases: [String] = []) {
+  init(
+    canonicalID: String,
+    aliases: [String] = [],
+    podibleID: String? = nil,
+    manifestationID: Int? = nil
+  ) {
     self.canonicalID = canonicalID
+    self.podibleID = podibleID
+    self.manifestationID = manifestationID
     self.explicitAliases = Self.normalized([canonicalID] + aliases)
       .filter { $0 != canonicalID }
   }
@@ -29,6 +38,8 @@ struct PlaybackIdentity: Hashable, Sendable {
     aliases.append(Self.manifestationID(base: podibleID, manifestationID: manifestationID))
 
     self.canonicalID = canonicalID
+    self.podibleID = podibleID
+    self.manifestationID = manifestationID
     self.explicitAliases = Self.normalized(aliases)
       .filter { $0 != canonicalID }
   }
