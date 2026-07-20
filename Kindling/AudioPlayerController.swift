@@ -22,6 +22,7 @@ final class AudioPlayerController: ObservableObject {
   private enum ResumeStore {
     static let keyPrefix = "audioPlayer.resumePosition."
     static let sessionKey = "audioPlayer.lastSession"
+    static let playbackRateKey = "audioPlayer.playbackRate"
   }
 
   private struct PersistedSession: Codable {
@@ -59,7 +60,7 @@ final class AudioPlayerController: ObservableObject {
   @Published var chapters: [Chapter] = []
   @Published var transcript: PodibleTranscript?
   @Published var transcriptLoadState: TranscriptLoadState = .idle
-  @Published var playbackRate: Double = 1.0
+  @Published var playbackRate: Double
   @Published private(set) var seekHistory: [Double] = []
   @Published private(set) var activeResumeID: String?
   /// True when AVPlayer wants to play but is waiting on the network (typical
@@ -69,6 +70,7 @@ final class AudioPlayerController: ObservableObject {
   let progress = PlaybackProgressState()
 
   private var player: AVPlayer?
+  private let defaults: UserDefaults
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
@@ -92,7 +94,10 @@ final class AudioPlayerController: ObservableObject {
     private var lastNowPlayingInfoUpdateAt: TimeInterval = 0
   #endif
 
-  init() {
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    let savedRate = defaults.object(forKey: ResumeStore.playbackRateKey) as? NSNumber
+    self.playbackRate = Self.clampedPlaybackRate(savedRate?.doubleValue ?? 1)
     #if os(iOS)
       configureRemoteCommands()
       observeAudioInterruptions()
@@ -310,14 +315,19 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func setPlaybackRate(_ rate: Double) {
-    let clampedRate = min(max(rate, 0.5), 3.0)
+    let clampedRate = Self.clampedPlaybackRate(rate)
     playbackRate = clampedRate
+    defaults.set(clampedRate, forKey: ResumeStore.playbackRateKey)
     if isPlaying {
       player?.rate = Float(clampedRate)
     }
     #if os(iOS)
       updateNowPlayingInfo()
     #endif
+  }
+
+  private static func clampedPlaybackRate(_ rate: Double) -> Double {
+    min(max(rate, 0.5), 3.0)
   }
 
   func seek(to seconds: Double, recordHistory: Bool = true) {
