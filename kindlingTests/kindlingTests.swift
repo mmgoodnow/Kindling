@@ -703,6 +703,29 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
+  func testPlaybackRepositoryIndexesNewStateForRepeatedReads() throws {
+    let defaults = try isolatedDefaults(named: "IndexedReads")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(canonicalID: "indexed-book")
+
+    repository.checkpoint(
+      identity: identity,
+      position: 321,
+      duration: 1_000,
+      playbackRate: 1,
+      flush: true
+    )
+
+    for _ in 0..<100 {
+      XCTAssertEqual(repository.position(for: identity), 321)
+    }
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.map(\.canonicalID), ["indexed-book"])
+  }
+
+  @MainActor
   func testPlaybackRepositoryReplaysRecoveryJournal() throws {
     let defaults = try isolatedDefaults(named: "Recovery")
     defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }

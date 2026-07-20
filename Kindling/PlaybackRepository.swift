@@ -28,10 +28,17 @@ final class PlaybackRepository {
 
   private let context: ModelContext
   private let defaults: UserDefaults
+  private var cachedStates: [PlaybackState]
+  private var statesByCanonicalID: [String: PlaybackState]
 
   init(context: ModelContext, defaults: UserDefaults = .standard) {
     self.context = context
     self.defaults = defaults
+    let states = (try? context.fetch(FetchDescriptor<PlaybackState>())) ?? []
+    self.cachedStates = states
+    self.statesByCanonicalID = states.reduce(into: [:]) { result, state in
+      result[state.canonicalID] = state
+    }
   }
 
   func migrateLegacyState() throws {
@@ -168,6 +175,8 @@ final class PlaybackRepository {
     )
     if createIfNeeded {
       context.insert(state)
+      cachedStates.append(state)
+      statesByCanonicalID[state.canonicalID] = state
     }
     return state
   }
@@ -201,7 +210,7 @@ final class PlaybackRepository {
   }
 
   private func exactState(for canonicalID: String) -> PlaybackState? {
-    allStates().first { $0.canonicalID == canonicalID }
+    statesByCanonicalID[canonicalID]
   }
 
   private func aliasState(for identity: PlaybackIdentity) -> PlaybackState? {
@@ -217,7 +226,7 @@ final class PlaybackRepository {
   }
 
   private func allStates() -> [PlaybackState] {
-    (try? context.fetch(FetchDescriptor<PlaybackState>())) ?? []
+    cachedStates
   }
 
   private func legacyPosition(for identity: PlaybackIdentity) -> Double {
