@@ -14,19 +14,16 @@ struct KindlingApp: App {
   @StateObject private var podibleAuth = PodibleAuthController()
   @StateObject private var audioPlayer = AudioPlayerController()
   var sharedModelContainer: ModelContainer = {
-    let schema = Schema([
-      Author.self,
-      Series.self,
-      LibraryBook.self,
-      LibraryBookFile.self,
-      LocalBookState.self,
-      LibrarySyncState.self,
-    ])
+    let schema = Schema(versionedSchema: KindlingSchemaV2.self)
     let modelConfiguration = ModelConfiguration(
       schema: schema, isStoredInMemoryOnly: false)
 
     do {
-      return try ModelContainer(for: schema, configurations: [modelConfiguration])
+      return try ModelContainer(
+        for: schema,
+        migrationPlan: KindlingMigrationPlan.self,
+        configurations: [modelConfiguration]
+      )
     } catch {
       fatalError("Could not create ModelContainer: \(error)")
     }

@@ -558,6 +558,56 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(identity.matches("other-book"))
   }
 
+  @MainActor
+  func testV1StoreMigratesToPlaybackStateSchemaWithoutLosingLibraryState() throws {
+    let storeURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("KindlingMigration-\(UUID().uuidString).sqlite")
+    defer {
+      for suffix in ["", "-shm", "-wal"] {
+        try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
+      }
+    }
+
+    do {
+      let configuration = ModelConfiguration(
+        "migration-test",
+        schema: Schema(versionedSchema: KindlingSchemaV1.self),
+        url: storeURL
+      )
+      let container = try ModelContainer(
+        for: Schema(versionedSchema: KindlingSchemaV1.self),
+        configurations: [configuration]
+      )
+      let book = LibraryBook(podibleId: "book", title: "Preserved Book")
+      let state = LocalBookState(
+        bookPodibleId: "book",
+        isFavorite: true,
+        progressSeconds: 987.5,
+        book: book
+      )
+      container.mainContext.insert(book)
+      container.mainContext.insert(state)
+      try container.mainContext.save()
+    }
+
+    let configuration = ModelConfiguration(
+      "migration-test",
+      schema: Schema(versionedSchema: KindlingSchemaV2.self),
+      url: storeURL
+    )
+    let container = try ModelContainer(
+      for: Schema(versionedSchema: KindlingSchemaV2.self),
+      migrationPlan: KindlingMigrationPlan.self,
+      configurations: [configuration]
+    )
+
+    let book = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<LibraryBook>()).first)
+    XCTAssertEqual(book.title, "Preserved Book")
+    XCTAssertEqual(book.localState?.isFavorite, true)
+    XCTAssertEqual(book.localState?.progressSeconds, 987.5)
+    XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<PlaybackState>()).isEmpty)
+  }
+
   private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {
     let width = 8
     let height = 8

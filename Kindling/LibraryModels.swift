@@ -231,6 +231,64 @@ func isSavedBookState(_ state: LocalBookState?, progress: Double? = nil) -> Bool
 }
 
 @Model
+final class PlaybackState {
+  @Attribute(.unique) var canonicalID: String
+  var aliasesJSON: Data?
+  var bookPodibleID: String?
+  var manifestationID: Int?
+  var positionSeconds: Double
+  var durationSeconds: Double?
+  var playbackRate: Double
+  var lastPlayedAt: Date?
+  var updatedAt: Date
+
+  init(
+    canonicalID: String,
+    aliasesJSON: Data? = nil,
+    bookPodibleID: String? = nil,
+    manifestationID: Int? = nil,
+    positionSeconds: Double = 0,
+    durationSeconds: Double? = nil,
+    playbackRate: Double = 1,
+    lastPlayedAt: Date? = nil,
+    updatedAt: Date = Date()
+  ) {
+    self.canonicalID = canonicalID
+    self.aliasesJSON = aliasesJSON
+    self.bookPodibleID = bookPodibleID
+    self.manifestationID = manifestationID
+    self.positionSeconds = positionSeconds
+    self.durationSeconds = durationSeconds
+    self.playbackRate = playbackRate
+    self.lastPlayedAt = lastPlayedAt
+    self.updatedAt = updatedAt
+  }
+}
+
+enum KindlingSchemaV1: VersionedSchema {
+  static let versionIdentifier = Schema.Version(1, 0, 0)
+  static let models: [any PersistentModel.Type] = [
+    Author.self, Series.self, LibraryBook.self, LibraryBookFile.self, LocalBookState.self,
+    LibrarySyncState.self,
+  ]
+}
+
+enum KindlingSchemaV2: VersionedSchema {
+  static let versionIdentifier = Schema.Version(2, 0, 0)
+  static let models: [any PersistentModel.Type] = [
+    Author.self, Series.self, LibraryBook.self, LibraryBookFile.self, LocalBookState.self,
+    PlaybackState.self, LibrarySyncState.self,
+  ]
+}
+
+enum KindlingMigrationPlan: SchemaMigrationPlan {
+  static let schemas: [any VersionedSchema.Type] = [KindlingSchemaV1.self, KindlingSchemaV2.self]
+  static let stages: [MigrationStage] = [
+    .lightweight(fromVersion: KindlingSchemaV1.self, toVersion: KindlingSchemaV2.self)
+  ]
+}
+
+@Model
 final class LibrarySyncState {
   static let libraryScope = "library"
 
