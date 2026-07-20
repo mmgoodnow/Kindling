@@ -632,7 +632,12 @@ struct BookDetailView: View {
   }
 
   private var playActionTitle: String {
-    (detailPlaybackProgress ?? 0) > 0 ? "Continue" : "Play"
+    guard let progress = detailPlaybackProgress, progress > 0 else {
+      return "Play"
+    }
+
+    let percentage = Int((min(progress, 1) * 100).rounded())
+    return "Continue • \(percentage)% done"
   }
 
   private func primaryCTAButton(
@@ -650,15 +655,16 @@ struct BookDetailView: View {
           Capsule()
             .fill(detailPalette.background)
 
-          Capsule()
+          Rectangle()
             .fill(detailPalette.progressFill)
             .frame(width: proxy.size.width * displayedProgress)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .clipShape(Capsule())
 
           ctaLabel(title: title, systemImage: systemImage)
             .foregroundStyle(detailPalette.foreground)
+
         }
+        .clipShape(Capsule())
       }
       .frame(height: 38)
       .contentShape(Capsule())
