@@ -117,14 +117,14 @@ final class AudioPlayerController: ObservableObject {
     chapterLoadTask?.cancel()
     MainActor.assumeIsolated {
       resetObservers()
+      #if os(iOS)
+        artworkLoadTask?.cancel()
+        teardownRemoteCommands()
+        if let interruptionObserver {
+          NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+      #endif
     }
-    #if os(iOS)
-      artworkLoadTask?.cancel()
-      teardownRemoteCommands()
-      if let interruptionObserver {
-        NotificationCenter.default.removeObserver(interruptionObserver)
-      }
-    #endif
   }
 
   func load(
