@@ -435,6 +435,13 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(isSavedBookState(state, progress: nil))
   }
 
+  func testLibraryCollectionsHaveStableTitles() {
+    XCTAssertEqual(
+      LibraryCollection.allCases.map(\.title),
+      ["Continue reading", "TBR", "New on Podible", "Recently Viewed", "Read"]
+    )
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
@@ -607,6 +614,48 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(book.localState?.isFavorite, true)
     XCTAssertEqual(book.localState?.progressSeconds, 987.5)
     XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<PlaybackState>()).isEmpty)
+  }
+
+  @MainActor
+  func testV2StoreMigratesToBookActivitySchemaWithoutLosingPlayback() throws {
+    let storeURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("KindlingActivityMigration-\(UUID().uuidString).sqlite")
+    defer {
+      for suffix in ["", "-shm", "-wal"] {
+        try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
+      }
+    }
+    do {
+      let configuration = ModelConfiguration(
+        "activity-migration-test",
+        schema: Schema(versionedSchema: KindlingSchemaV2.self),
+        url: storeURL
+      )
+      let container = try ModelContainer(
+        for: Schema(versionedSchema: KindlingSchemaV2.self),
+        migrationPlan: KindlingMigrationPlan.self,
+        configurations: [configuration]
+      )
+      container.mainContext.insert(
+        PlaybackState(canonicalID: "book", positionSeconds: 456, playbackRate: 1.5)
+      )
+      try container.mainContext.save()
+    }
+
+    let configuration = ModelConfiguration(
+      "activity-migration-test",
+      schema: Schema(versionedSchema: KindlingSchemaV3.self),
+      url: storeURL
+    )
+    let container = try ModelContainer(
+      for: Schema(versionedSchema: KindlingSchemaV3.self),
+      migrationPlan: KindlingMigrationPlan.self,
+      configurations: [configuration]
+    )
+    let playback = try XCTUnwrap(
+      container.mainContext.fetch(FetchDescriptor<PlaybackState>()).first)
+    XCTAssertEqual(playback.positionSeconds, 456)
+    XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<BookActivityState>()).isEmpty)
   }
 
   @MainActor

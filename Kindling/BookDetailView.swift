@@ -48,11 +48,34 @@ enum BookGroupRoute: Hashable {
       route.title
     }
   }
+
 }
 
 enum LibraryNavigationRoute: Hashable {
   case book(PodibleLibraryItem)
   case group(BookGroupRoute)
+  case homeRail(LibraryCollection)
+}
+
+enum LibraryCollection: String, CaseIterable, Hashable, Identifiable {
+  case continueReading
+  case tbr
+  case newOnPodible
+  case recentlyViewed
+  case read
+
+  var id: Self { self }
+
+  var title: String {
+    switch self {
+    case .continueReading: "Continue reading"
+    case .tbr: "TBR"
+    case .newOnPodible: "New on Podible"
+    case .recentlyViewed: "Recently Viewed"
+    case .read: "Read"
+    }
+  }
+
 }
 
 struct BookDetailActions {

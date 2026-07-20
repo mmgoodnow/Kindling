@@ -54,6 +54,7 @@ struct PodibleLibraryView: View {
     ]
   )
   private var localBooks: [LibraryBook]
+  @Query private var bookActivities: [BookActivityState]
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
   @StateObject private var viewModel = RemoteLibraryViewModel()
@@ -87,7 +88,8 @@ struct PodibleLibraryView: View {
     BookCollectionLayout.grid.rawValue
   @AppStorage("library.seriesLayout") private var seriesLayoutRawValue =
     BookCollectionLayout.seriesDefault.rawValue
-  @AppStorage("library.recentlyViewedBookIDs") private var recentlyViewedBookIDsRawValue = ""
+  @AppStorage("library.homeCollectionLayout") private var homeCollectionLayoutRawValue =
+    BookCollectionLayout.grid.rawValue
 
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
@@ -157,6 +159,8 @@ struct PodibleLibraryView: View {
           bookDetailView(for: item)
         case .group(let groupRoute):
           relatedBooksContent(for: groupRoute)
+        case .homeRail(let rail):
+          homeRailContent(for: rail)
         }
       }
       .navigationDestination(isPresented: $isShowingSettings) {
@@ -164,6 +168,9 @@ struct PodibleLibraryView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
         markFinishedPlaybackRead($0)
+      }
+      .task {
+        migrateLegacyActivityState()
       }
   }
 
@@ -464,6 +471,10 @@ struct PodibleLibraryView: View {
     BookCollectionLayout(rawValue: seriesLayoutRawValue) ?? .seriesDefault
   }
 
+  private var homeCollectionLayout: BookCollectionLayout {
+    BookCollectionLayout(rawValue: homeCollectionLayoutRawValue) ?? .grid
+  }
+
   private var navigationTitle: String {
     searchQuery == nil ? mode.title : "Search"
   }
@@ -489,6 +500,13 @@ struct PodibleLibraryView: View {
     )
   }
 
+  private var homeCollectionLayoutBinding: Binding<BookCollectionLayout> {
+    Binding(
+      get: { homeCollectionLayout },
+      set: { homeCollectionLayoutRawValue = $0.rawValue }
+    )
+  }
+
   private var collectionBooks: [LibraryBook] {
     switch mode {
     case .home:
@@ -500,78 +518,99 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private var recentlyViewedBookIDs: [String] {
-    recentlyViewedBookIDsRawValue.split(separator: "\n").map(String.init)
-  }
-
   @MainActor
   private func recordRecentlyViewed(bookID: String) {
-    var ids = recentlyViewedBookIDs.filter { $0 != bookID }
-    ids.insert(bookID, at: 0)
-    recentlyViewedBookIDsRawValue = ids.prefix(30).joined(separator: "\n")
+    let activity = activityState(for: bookID)
+    activity.lastViewedAt = Date()
+    saveModelContext()
   }
 
-  private var homeRails: [(String, [LibraryBook])] {
-    let continueReading =
+  private func books(for collection: LibraryCollection) -> [LibraryBook] {
+    return switch collection {
+    case .continueReading:
       localBooks
-      .filter {
-        belongsInContinueReading(
-          progress: playbackProgress(for: $0),
-          isRead: $0.localState?.isRead == true
-        )
+        .filter {
+          belongsInContinueReading(
+            progress: playbackProgress(for: $0),
+            isRead: $0.localState?.isRead == true
+          )
+        }
+        .sorted {
+          playbackLastPlayedAt(for: $0) > playbackLastPlayedAt(for: $1)
+        }
+    case .tbr:
+      localBooks.filter {
+        $0.localState?.isFavorite == true && $0.localState?.isRead != true
       }
-      .sorted {
-        ($0.localState?.lastPlayedAt ?? .distantPast)
-          > ($1.localState?.lastPlayedAt ?? .distantPast)
-      }
-    let tbr = localBooks.filter {
-      isSavedBook($0) && $0.localState?.isRead != true
+    case .newOnPodible:
+      localBooks
+        .filter {
+          belongsInNewOnPodible(
+            isFavorite: isSavedBook($0),
+            isRead: $0.localState?.isRead == true
+          )
+        }
+        .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+    case .recentlyViewed:
+      localBooks.filter { activityStateIfPresent(for: $0.podibleId)?.lastViewedAt != nil }
+        .sorted {
+          (activityStateIfPresent(for: $0.podibleId)?.lastViewedAt ?? .distantPast)
+            > (activityStateIfPresent(for: $1.podibleId)?.lastViewedAt ?? .distantPast)
+        }
+    case .read:
+      localBooks
+        .filter { $0.localState?.isRead == true }
+        .sorted {
+          (activityStateIfPresent(for: $0.podibleId)?.readAt ?? .distantPast)
+            > (activityStateIfPresent(for: $1.podibleId)?.readAt ?? .distantPast)
+        }
     }
-    let newOnPodible =
-      localBooks
-      .filter {
-        belongsInNewOnPodible(
-          isFavorite: isSavedBook($0),
-          isRead: $0.localState?.isRead == true
-        )
-      }
-      .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
-    let byID = Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
-    let recentlyViewed = recentlyViewedBookIDs.compactMap { byID[$0] }
-    let read =
-      localBooks
-      .filter { $0.localState?.isRead == true }
-      .sorted {
-        ($0.localState?.lastPlayedAt ?? $0.updatedAt ?? .distantPast)
-          > ($1.localState?.lastPlayedAt ?? $1.updatedAt ?? .distantPast)
-      }
-    return [
-      ("Continue reading", continueReading),
-      ("TBR", tbr),
-      ("New on Podible", newOnPodible),
-      ("Recently Viewed", recentlyViewed),
-      ("Read", read),
-    ]
   }
 
   private func homeContent(client: RemoteLibraryServing?) -> some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 28) {
         collectionStatusMessages(client: client)
-        ForEach(homeRails, id: \.0) { title, books in
+        ForEach(LibraryCollection.allCases) { collection in
           BookRailView(
-            title: title,
-            books: books.map(bookTileViewData(for:)),
-            emptyMessage: homeRailEmptyMessage(title: title),
+            title: collection.title,
+            books: books(for: collection).map(bookTileViewData(for:)),
+            emptyMessage: homeRailEmptyMessage(title: collection.title),
             artwork: collectionArtwork(for:cornerRadius:),
             onSelect: selectCollectionBook(_:),
             onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:)
+            onToggleFavorite: toggleFavorite(_:),
+            onSeeAll: { navigationPath.append(LibraryNavigationRoute.homeRail(collection)) }
           )
         }
       }
       .padding(.top, 12)
       .padding(.bottom, 20)
+    }
+  }
+
+  private func homeRailContent(for collection: LibraryCollection) -> some View {
+    BookGroupContentView(
+      title: collection.title,
+      books: books(for: collection).map(bookTileViewData(for:)),
+      layout: homeCollectionLayout,
+      filter: collectionFilter,
+      artwork: collectionArtwork(for:cornerRadius:),
+      onSelect: selectCollectionBook(_:),
+      onToggleRead: toggleRead(_:),
+      onToggleFavorite: toggleFavorite(_:)
+    )
+    .navigationTitle(collection.title)
+    .toolbar {
+      #if os(iOS)
+        ToolbarItem(placement: .topBarTrailing) {
+          homeCollectionOptionsMenu
+        }
+      #else
+        ToolbarItem(placement: .primaryAction) {
+          homeCollectionOptionsMenu
+        }
+      #endif
     }
   }
 
@@ -798,6 +837,25 @@ struct PodibleLibraryView: View {
         .imageScale(.large)
     }
     .accessibilityLabel("Book list options")
+  }
+
+  private var homeCollectionOptionsMenu: some View {
+    Menu {
+      Picker("Read filter", selection: collectionFilterBinding) {
+        ForEach(BookCollectionFilter.allCases) { filter in
+          Text(filter.title).tag(filter)
+        }
+      }
+      Picker("Layout", selection: homeCollectionLayoutBinding) {
+        ForEach(BookCollectionLayout.allCases) { layout in
+          Label(layout.title, systemImage: layout.systemImage).tag(layout)
+        }
+      }
+    } label: {
+      Image(systemName: "ellipsis")
+        .imageScale(.large)
+    }
+    .accessibilityLabel("Collection options")
   }
 
   private func syncButton(client: RemoteLibraryServing?) -> some View {
@@ -1249,6 +1307,7 @@ struct PodibleLibraryView: View {
     guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
     setReadState(!(state.isRead ?? false), on: state)
+    activityState(for: bookID).readAt = state.isRead == true ? Date() : nil
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -1269,6 +1328,13 @@ struct PodibleLibraryView: View {
     isSavedBookState(book.localState, progress: playbackProgress(for: book))
   }
 
+  private func playbackLastPlayedAt(for book: LibraryBook) -> Date {
+    player.persistedLastPlayedAt(identity: playbackIdentity(for: book))
+      ?? book.localState?.lastPlayedAt
+      ?? book.updatedAt
+      ?? .distantPast
+  }
+
   @MainActor
   private func markFinishedPlaybackRead(_ notification: Notification) {
     guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
@@ -1278,6 +1344,7 @@ struct PodibleLibraryView: View {
     let state = ensureLocalState(for: book)
     guard state.isRead != true else { return }
     setReadState(true, on: state)
+    activityState(for: book.podibleId).readAt = Date()
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -2226,6 +2293,7 @@ struct PodibleLibraryView: View {
   @MainActor
   private func startPlayback(for book: LibraryBook, url: URL) {
     let localState = ensureLocalState(for: book)
+    localState.isFavorite = true
     localState.lastPlayedAt = Date()
     try? modelContext.save()
     let identity = playbackIdentity(for: book)
@@ -2276,7 +2344,10 @@ struct PodibleLibraryView: View {
   ) {
     isShowingPlayer = true
     let identity = streamingIdentity(for: item, playbackAudio: playbackAudio)
-    let localBookID = ensureLocalBook(for: item).podibleId
+    let localBook = ensureLocalBook(for: item)
+    ensureLocalState(for: localBook).isFavorite = true
+    saveModelContext()
+    let localBookID = localBook.podibleId
     Task {
       do {
         let httpURL = try client.audiobookStreamURL(playback: playbackAudio)
@@ -2692,6 +2763,42 @@ struct PodibleLibraryView: View {
     modelContext.insert(state)
     book.localState = state
     return state
+  }
+
+  private func activityStateIfPresent(for bookID: String) -> BookActivityState? {
+    bookActivities.first { $0.bookPodibleID == bookID }
+  }
+
+  private func activityState(for bookID: String) -> BookActivityState {
+    if let existing = activityStateIfPresent(for: bookID) {
+      return existing
+    }
+    let activity = BookActivityState(bookPodibleID: bookID)
+    modelContext.insert(activity)
+    return activity
+  }
+
+  private func migrateLegacyActivityState() {
+    let key = "library.recentlyViewedBookIDs"
+    let ids =
+      UserDefaults.standard.string(forKey: key)?.split(separator: "\n").map(String.init) ?? []
+    let now = Date()
+    for (index, id) in ids.enumerated() {
+      let activity = activityState(for: id)
+      if activity.lastViewedAt == nil {
+        activity.lastViewedAt = now.addingTimeInterval(Double(-index))
+      }
+    }
+    for book in localBooks where book.localState?.isRead == true {
+      let activity = activityState(for: book.podibleId)
+      activity.readAt = activity.readAt ?? book.localState?.lastPlayedAt ?? book.updatedAt ?? now
+    }
+    if modelContext.hasChanges {
+      saveModelContext()
+    }
+    if ids.isEmpty == false {
+      UserDefaults.standard.removeObject(forKey: key)
+    }
   }
 
   @MainActor
@@ -3343,6 +3450,8 @@ private struct RemoteLibrarySearchBindingModifier: ViewModifier {
       LibraryBook.self,
       LibraryBookFile.self,
       LocalBookState.self,
+      PlaybackState.self,
+      BookActivityState.self,
       LibrarySyncState.self,
     ],
     inMemory: true

@@ -20,6 +20,12 @@ final class PlaybackRepository {
     let updatedAt: Date
   }
 
+  private struct LegacySession: Codable {
+    let resumeID: String
+    let podibleID: String?
+    let manifestationID: Int?
+  }
+
   private let context: ModelContext
   private let defaults: UserDefaults
 
@@ -43,6 +49,19 @@ final class PlaybackRepository {
       state.playbackRate = rate
       state.updatedAt = max(state.updatedAt, .distantPast)
     }
+    if let data = defaults.data(forKey: "audioPlayer.lastSession"),
+      let session = try? JSONDecoder().decode(LegacySession.self, from: data)
+    {
+      let identity = PlaybackIdentity(
+        canonicalID: session.resumeID,
+        podibleID: session.podibleID,
+        manifestationID: session.manifestationID
+      )
+      let state = state(for: identity, createIfNeeded: true)
+      state.bookPodibleID = session.podibleID ?? state.bookPodibleID
+      state.manifestationID = session.manifestationID ?? state.manifestationID
+    }
+    favoriteBooksWithPlaybackProgress()
     try reconcileRecoveryCheckpoint()
     try saveIfNeeded()
   }
@@ -221,6 +240,24 @@ final class PlaybackRepository {
   private func saveIfNeeded() throws {
     if context.hasChanges {
       try context.save()
+    }
+  }
+
+  private func favoriteBooksWithPlaybackProgress() {
+    let progressedBookIDs = Set(
+      allStates().compactMap { state in
+        state.positionSeconds > 0 ? state.bookPodibleID : nil
+      })
+    guard progressedBookIDs.isEmpty == false else { return }
+    let books = (try? context.fetch(FetchDescriptor<LibraryBook>())) ?? []
+    for book in books where progressedBookIDs.contains(book.podibleId) {
+      if let localState = book.localState {
+        localState.isFavorite = true
+      } else {
+        let localState = LocalBookState(bookPodibleId: book.podibleId, isFavorite: true, book: book)
+        context.insert(localState)
+        book.localState = localState
+      }
     }
   }
 }

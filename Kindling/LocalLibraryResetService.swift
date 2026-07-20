@@ -14,6 +14,8 @@ struct LocalLibraryResetService {
     try deleteAll(LibraryBook.self, modelContext: modelContext)
     try deleteAll(LibraryBookFile.self, modelContext: modelContext)
     try deleteAll(LocalBookState.self, modelContext: modelContext)
+    try deleteAll(PlaybackState.self, modelContext: modelContext)
+    try deleteAll(BookActivityState.self, modelContext: modelContext)
     try deleteAll(Series.self, modelContext: modelContext)
     try deleteAll(Author.self, modelContext: modelContext)
   }

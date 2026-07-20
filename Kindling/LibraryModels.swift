@@ -265,6 +265,19 @@ final class PlaybackState {
   }
 }
 
+@Model
+final class BookActivityState {
+  @Attribute(.unique) var bookPodibleID: String
+  var lastViewedAt: Date?
+  var readAt: Date?
+
+  init(bookPodibleID: String, lastViewedAt: Date? = nil, readAt: Date? = nil) {
+    self.bookPodibleID = bookPodibleID
+    self.lastViewedAt = lastViewedAt
+    self.readAt = readAt
+  }
+}
+
 enum KindlingSchemaV1: VersionedSchema {
   static let versionIdentifier = Schema.Version(1, 0, 0)
   static let models: [any PersistentModel.Type] = [
@@ -281,10 +294,21 @@ enum KindlingSchemaV2: VersionedSchema {
   ]
 }
 
+enum KindlingSchemaV3: VersionedSchema {
+  static let versionIdentifier = Schema.Version(3, 0, 0)
+  static let models: [any PersistentModel.Type] = [
+    Author.self, Series.self, LibraryBook.self, LibraryBookFile.self, LocalBookState.self,
+    PlaybackState.self, BookActivityState.self, LibrarySyncState.self,
+  ]
+}
+
 enum KindlingMigrationPlan: SchemaMigrationPlan {
-  static let schemas: [any VersionedSchema.Type] = [KindlingSchemaV1.self, KindlingSchemaV2.self]
+  static let schemas: [any VersionedSchema.Type] = [
+    KindlingSchemaV1.self, KindlingSchemaV2.self, KindlingSchemaV3.self,
+  ]
   static let stages: [MigrationStage] = [
-    .lightweight(fromVersion: KindlingSchemaV1.self, toVersion: KindlingSchemaV2.self)
+    .lightweight(fromVersion: KindlingSchemaV1.self, toVersion: KindlingSchemaV2.self),
+    .lightweight(fromVersion: KindlingSchemaV2.self, toVersion: KindlingSchemaV3.self),
   ]
 }
 

@@ -692,6 +692,7 @@ public struct BookRailView: View {
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   public let onToggleFavorite: (BookTileViewData) -> Void
+  public let onSeeAll: (() -> Void)?
   private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
 
   public init(
@@ -701,7 +702,8 @@ public struct BookRailView: View {
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
-    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
+    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in },
+    onSeeAll: (() -> Void)? = nil
   ) {
     self.title = title
     self.books = books
@@ -710,13 +712,27 @@ public struct BookRailView: View {
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
+    self.onSeeAll = onSeeAll
   }
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text(title)
-        .font(.title3.weight(.bold))
-        .padding(.horizontal, 18)
+      HStack(spacing: 8) {
+        Text(title)
+          .font(.title3.weight(.bold))
+        Spacer(minLength: 0)
+        if let onSeeAll {
+          Button(action: onSeeAll) {
+            Image(systemName: "chevron.right")
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(.secondary)
+              .frame(width: 32, height: 32)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("See all \(title)")
+        }
+      }
+      .padding(.horizontal, 18)
 
       if books.isEmpty {
         Text(emptyMessage ?? "No books.")

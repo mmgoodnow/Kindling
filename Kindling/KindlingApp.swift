@@ -27,7 +27,7 @@ struct KindlingApp: App {
   }
 
   private static func makeModelContainer() -> ModelContainer {
-    let schema = Schema(versionedSchema: KindlingSchemaV2.self)
+    let schema = Schema(versionedSchema: KindlingSchemaV3.self)
     let modelConfiguration = ModelConfiguration(
       schema: schema, isStoredInMemoryOnly: false)
 
