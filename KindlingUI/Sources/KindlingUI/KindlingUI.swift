@@ -552,6 +552,18 @@ public struct BookCollectionView: View {
   }
 }
 
+public enum BookDoubleTapAction: Equatable, Sendable {
+  case favorite
+  case markRead
+  case none
+}
+
+public func bookDoubleTapAction(for book: BookTileViewData) -> BookDoubleTapAction {
+  guard book.isInLibrary else { return .none }
+  if book.isRead { return .none }
+  return book.isFavorite ? .markRead : .favorite
+}
+
 public struct BookGridTileView: View {
   public let book: BookTileViewData
   public let onSelect: () -> Void
@@ -576,13 +588,25 @@ public struct BookGridTileView: View {
   public var body: some View {
     Group {
       if book.isInLibrary {
-        Button(action: onSelect) {
-          tileContent
-        }
-        .buttonStyle(.plain)
+        tileContent
+          .onTapGesture(count: 2, perform: performDoubleTapAction)
+          .onTapGesture(perform: onSelect)
+          .accessibilityAddTraits(.isButton)
+          .accessibilityAction(named: "Open", onSelect)
       } else {
         tileContent
       }
+    }
+  }
+
+  private func performDoubleTapAction() {
+    switch bookDoubleTapAction(for: book) {
+    case .favorite:
+      onToggleFavorite()
+    case .markRead:
+      onToggleRead()
+    case .none:
+      break
     }
   }
 
@@ -667,6 +691,7 @@ public struct BookRailView: View {
   public let emptyMessage: String?
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
+  public let onToggleFavorite: (BookTileViewData) -> Void
   private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
 
   public init(
@@ -675,7 +700,8 @@ public struct BookRailView: View {
     emptyMessage: String? = nil,
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
-    onToggleRead: @escaping (BookTileViewData) -> Void = { _ in }
+    onToggleRead: @escaping (BookTileViewData) -> Void = { _ in },
+    onToggleFavorite: @escaping (BookTileViewData) -> Void = { _ in }
   ) {
     self.title = title
     self.books = books
@@ -683,6 +709,7 @@ public struct BookRailView: View {
     self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
+    self.onToggleFavorite = onToggleFavorite
   }
 
   public var body: some View {
@@ -706,7 +733,8 @@ public struct BookRailView: View {
                   { cornerRadius in provider(book, cornerRadius) }
                 },
                 onSelect: { onSelect(book) },
-                onToggleRead: { onToggleRead(book) }
+                onToggleRead: { onToggleRead(book) },
+                onToggleFavorite: { onToggleFavorite(book) }
               )
               .frame(width: 140)
             }
@@ -803,13 +831,25 @@ public struct BookListRowView: View {
   public var body: some View {
     Group {
       if book.isInLibrary {
-        Button(action: onSelect) {
-          rowContent
-        }
-        .buttonStyle(.plain)
+        rowContent
+          .onTapGesture(count: 2, perform: performDoubleTapAction)
+          .onTapGesture(perform: onSelect)
+          .accessibilityAddTraits(.isButton)
+          .accessibilityAction(named: "Open", onSelect)
       } else {
         rowContent
       }
+    }
+  }
+
+  private func performDoubleTapAction() {
+    switch bookDoubleTapAction(for: book) {
+    case .favorite:
+      onToggleFavorite()
+    case .markRead:
+      onToggleRead()
+    case .none:
+      break
     }
   }
 

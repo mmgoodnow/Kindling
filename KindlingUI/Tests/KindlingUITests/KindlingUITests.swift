@@ -3,6 +3,33 @@ import XCTest
 @testable import KindlingUI
 
 final class KindlingUITests: XCTestCase {
+  func testDoubleTapAdvancesBookThroughSavedStates() {
+    XCTAssertEqual(bookDoubleTapAction(for: book(isFavorite: false, isRead: false)), .favorite)
+    XCTAssertEqual(bookDoubleTapAction(for: book(isFavorite: true, isRead: false)), .markRead)
+    XCTAssertEqual(bookDoubleTapAction(for: book(isFavorite: true, isRead: true)), .none)
+  }
+
+  func testDoubleTapDoesNothingForRemoteOnlyBook() {
+    XCTAssertEqual(
+      bookDoubleTapAction(for: book(isFavorite: false, isRead: false, isInLibrary: false)),
+      .none
+    )
+  }
+
+  private func book(
+    isFavorite: Bool,
+    isRead: Bool,
+    isInLibrary: Bool = true
+  ) -> BookTileViewData {
+    BookTileViewData(
+      id: "book",
+      title: "Book",
+      author: "Author",
+      isInLibrary: isInLibrary,
+      isRead: isRead,
+      isFavorite: isFavorite
+    )
+  }
   private let books: [BookTileViewData] = [
     BookTileViewData(
       id: "second",

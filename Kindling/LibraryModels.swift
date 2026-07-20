@@ -219,6 +219,17 @@ final class LocalBookState {
   }
 }
 
+func setReadState(_ isRead: Bool, on state: LocalBookState) {
+  state.isRead = isRead
+  if isRead {
+    state.isFavorite = true
+  }
+}
+
+func isSavedBookState(_ state: LocalBookState?, progress: Double? = nil) -> Bool {
+  state?.isFavorite == true || state?.isRead == true || (progress ?? 0) > 0
+}
+
 @Model
 final class LibrarySyncState {
   static let libraryScope = "library"

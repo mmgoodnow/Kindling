@@ -210,7 +210,7 @@ struct PodibleLibraryView: View {
       && isLocalDownloading == false
 
     var actions = BookDetailActions()
-    actions.isFavorite = localBook?.localState?.isFavorite == true
+    actions.isFavorite = localBook.map(isSavedBook(_:)) ?? false
     actions.isRead = localBook?.localState?.isRead == true
     if localBook != nil {
       actions.toggleFavorite = { toggleFavorite(bookID: item.id) }
@@ -496,7 +496,7 @@ struct PodibleLibraryView: View {
     case .library:
       localBooks
     case .favorites:
-      localBooks.filter { $0.localState?.isFavorite == true }
+      localBooks.filter(isSavedBook(_:))
     }
   }
 
@@ -525,13 +525,13 @@ struct PodibleLibraryView: View {
           > ($1.localState?.lastPlayedAt ?? .distantPast)
       }
     let tbr = localBooks.filter {
-      $0.localState?.isFavorite == true && $0.localState?.isRead != true
+      isSavedBook($0) && $0.localState?.isRead != true
     }
     let newOnPodible =
       localBooks
       .filter {
         belongsInNewOnPodible(
-          isFavorite: $0.localState?.isFavorite == true,
+          isFavorite: isSavedBook($0),
           isRead: $0.localState?.isRead == true
         )
       }
@@ -565,7 +565,8 @@ struct PodibleLibraryView: View {
             emptyMessage: homeRailEmptyMessage(title: title),
             artwork: collectionArtwork(for:cornerRadius:),
             onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:)
+            onToggleRead: toggleRead(_:),
+            onToggleFavorite: toggleFavorite(_:)
           )
         }
       }
@@ -1004,7 +1005,7 @@ struct PodibleLibraryView: View {
       durationText: book.runtimeSeconds.map(formatRuntime(seconds:)),
       progress: playbackProgress(for: book),
       isRead: book.localState?.isRead == true,
-      isFavorite: book.localState?.isFavorite == true,
+      isFavorite: isSavedBook(book),
       palette: artworkPalette(for: artworkURL),
       seriesKey: book.series?.podibleId,
       seriesTitle: book.series?.title,
@@ -1247,7 +1248,7 @@ struct PodibleLibraryView: View {
   private func toggleRead(bookID: String) {
     guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
-    state.isRead = !(state.isRead ?? false)
+    setReadState(!(state.isRead ?? false), on: state)
     if modelContext.hasChanges {
       saveModelContext()
     }
@@ -1257,10 +1258,15 @@ struct PodibleLibraryView: View {
   private func toggleFavorite(bookID: String) {
     guard let localBook = localBooksById[bookID] else { return }
     let state = ensureLocalState(for: localBook)
+    guard state.isRead != true, (playbackProgress(for: localBook) ?? 0) == 0 else { return }
     state.isFavorite = !(state.isFavorite ?? false)
     if modelContext.hasChanges {
       saveModelContext()
     }
+  }
+
+  private func isSavedBook(_ book: LibraryBook) -> Bool {
+    isSavedBookState(book.localState, progress: playbackProgress(for: book))
   }
 
   @MainActor
@@ -1271,7 +1277,7 @@ struct PodibleLibraryView: View {
     }
     let state = ensureLocalState(for: book)
     guard state.isRead != true else { return }
-    state.isRead = true
+    setReadState(true, on: state)
     if modelContext.hasChanges {
       saveModelContext()
     }

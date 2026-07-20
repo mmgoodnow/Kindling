@@ -386,6 +386,54 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(belongsInContinueReading(progress: 1, isRead: false))
   }
 
+  func testMarkingReadFavoritesBookWithoutChangingProgress() {
+    let resumeKey = resumePositionKeyPrefix + "book"
+    UserDefaults.standard.set(1_234.5, forKey: resumeKey)
+    defer { UserDefaults.standard.removeObject(forKey: resumeKey) }
+    let state = LocalBookState(
+      bookPodibleId: "book",
+      isFavorite: false,
+      isRead: false,
+      progressSeconds: 1_234.5
+    )
+
+    setReadState(true, on: state)
+
+    XCTAssertEqual(state.isRead, true)
+    XCTAssertEqual(state.isFavorite, true)
+    XCTAssertEqual(state.progressSeconds, 1_234.5)
+    XCTAssertEqual(UserDefaults.standard.double(forKey: resumeKey), 1_234.5)
+  }
+
+  func testMarkingUnreadKeepsBookFavoritedAndPreservesProgress() {
+    let state = LocalBookState(
+      bookPodibleId: "book",
+      isFavorite: true,
+      isRead: true,
+      progressSeconds: 1_234.5
+    )
+
+    setReadState(false, on: state)
+
+    XCTAssertEqual(state.isRead, false)
+    XCTAssertEqual(state.isFavorite, true)
+    XCTAssertEqual(state.progressSeconds, 1_234.5)
+  }
+
+  func testReadBookIsSavedEvenWithLegacyFavoriteState() {
+    let state = LocalBookState(bookPodibleId: "book", isFavorite: false, isRead: true)
+
+    XCTAssertTrue(isSavedBookState(state))
+  }
+
+  func testBookInProgressIsSavedWithoutExplicitFavoriteState() {
+    let state = LocalBookState(bookPodibleId: "book", isFavorite: false, isRead: false)
+
+    XCTAssertTrue(isSavedBookState(state, progress: 0.25))
+    XCTAssertFalse(isSavedBookState(state, progress: 0))
+    XCTAssertFalse(isSavedBookState(state, progress: nil))
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
