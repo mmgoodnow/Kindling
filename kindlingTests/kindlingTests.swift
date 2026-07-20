@@ -6,6 +6,7 @@ import XCTest
 
 @testable import Kindling
 
+@MainActor
 final class kindlingTests: XCTestCase {
   private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
 
@@ -606,6 +607,97 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(book.localState?.isFavorite, true)
     XCTAssertEqual(book.localState?.progressSeconds, 987.5)
     XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<PlaybackState>()).isEmpty)
+  }
+
+  @MainActor
+  func testPlaybackRepositoryImportsLegacyPositionIdempotently() throws {
+    let defaults = try isolatedDefaults(named: "LegacyImport")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    defaults.set(432.1, forKey: resumePositionKeyPrefix + "book#manifestation-7")
+    defaults.set(1.5, forKey: "audioPlayer.playbackRate")
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+
+    try repository.migrateLegacyState()
+    try repository.migrateLegacyState()
+
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.first?.positionSeconds, 432.1)
+    XCTAssertEqual(states.first?.playbackRate, 1.5)
+  }
+
+  @MainActor
+  func testPlaybackRepositoryKeepsManifestationsIndependent() throws {
+    let defaults = try isolatedDefaults(named: "Manifestations")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let first = PlaybackIdentity(canonicalID: "book#manifestation-1")
+    let second = PlaybackIdentity(canonicalID: "book#manifestation-2")
+
+    repository.checkpoint(
+      identity: first, position: 100, duration: 1_000, playbackRate: 1, flush: true)
+    repository.checkpoint(
+      identity: second, position: 250, duration: 1_000, playbackRate: 1.25, flush: true)
+
+    XCTAssertEqual(repository.position(for: first), 100)
+    XCTAssertEqual(repository.position(for: second), 250)
+  }
+
+  @MainActor
+  func testPlaybackRepositoryReplaysRecoveryJournal() throws {
+    let defaults = try isolatedDefaults(named: "Recovery")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let identity = PlaybackIdentity(canonicalID: "book")
+    PlaybackRepository(context: container.mainContext, defaults: defaults).checkpoint(
+      identity: identity, position: 321, duration: 900, playbackRate: 1.25, flush: false)
+
+    let restored = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    try restored.migrateLegacyState()
+
+    XCTAssertEqual(restored.position(for: identity), 321)
+  }
+
+  @MainActor
+  func testMarkReadDoesNotChangeRepositoryPosition() throws {
+    let defaults = try isolatedDefaults(named: "MarkRead")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(canonicalID: "book")
+    repository.checkpoint(
+      identity: identity, position: 654, duration: 1_000, playbackRate: 1, flush: true)
+    let localState = LocalBookState(bookPodibleId: "book")
+
+    setReadState(true, on: localState)
+
+    XCTAssertEqual(repository.position(for: identity), 654)
+  }
+
+  @MainActor
+  private func playbackTestContainer() throws -> ModelContainer {
+    let configuration = ModelConfiguration(
+      schema: Schema(versionedSchema: KindlingSchemaV2.self),
+      isStoredInMemoryOnly: true
+    )
+    return try ModelContainer(
+      for: Schema(versionedSchema: KindlingSchemaV2.self),
+      migrationPlan: KindlingMigrationPlan.self,
+      configurations: [configuration]
+    )
+  }
+
+  private func isolatedDefaults(named name: String) throws -> UserDefaults {
+    let suite = "KindlingTests.\(name).\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.set(suite, forKey: "test.suiteName")
+    return defaults
+  }
+
+  private func defaultsSuiteName(_ defaults: UserDefaults) -> String {
+    defaults.string(forKey: "test.suiteName") ?? ""
   }
 
   private func solidImage(red: UInt8, green: UInt8, blue: UInt8) throws -> CGImage {

@@ -48,6 +48,7 @@
 		51A0C1062F02000000123456 /* StreamingAssetLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C1072F02000000123456 /* StreamingAssetLoader.swift */; };
 		51A0C10A2F04000000123456 /* StreamingAudioCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C10B2F04000000123456 /* StreamingAudioCache.swift */; };
 		51A0C10C2F05000000123456 /* PlaybackIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C10D2F05000000123456 /* PlaybackIdentity.swift */; };
+		51A0C10E2F05000000123456 /* PlaybackRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A0C10F2F05000000123456 /* PlaybackRepository.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,6 +107,7 @@
 		51A0C1072F02000000123456 /* StreamingAssetLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAssetLoader.swift; sourceTree = "<group>"; };
 		51A0C10B2F04000000123456 /* StreamingAudioCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioCache.swift; sourceTree = "<group>"; };
 		51A0C10D2F05000000123456 /* PlaybackIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackIdentity.swift; sourceTree = "<group>"; };
+		51A0C10F2F05000000123456 /* PlaybackRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackRepository.swift; sourceTree = "<group>"; };
 		51A0C1092F03000000123456 /* LocalLibraryResetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibraryResetService.swift; sourceTree = "<group>"; };
 		514A16C22CB124E500B6F94E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		514A16C32CB19C2300B6F94E /* ExportViewModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewModifier.swift; sourceTree = "<group>"; };
@@ -219,6 +221,7 @@
 				51A0C1072F02000000123456 /* StreamingAssetLoader.swift */,
 				51A0C10B2F04000000123456 /* StreamingAudioCache.swift */,
 				51A0C10D2F05000000123456 /* PlaybackIdentity.swift */,
+				51A0C10F2F05000000123456 /* PlaybackRepository.swift */,
 				51792FC42C93CF90004B6E71 /* EBookDownloader.swift */,
 				51929E222C9A5F3A00D77429 /* SearchResult.swift */,
 				51792F962C900EEB004B6E71 /* Assets.xcassets */,
@@ -456,6 +459,7 @@
 				51A0C1062F02000000123456 /* StreamingAssetLoader.swift in Sources */,
 				51A0C10A2F04000000123456 /* StreamingAudioCache.swift in Sources */,
 				51A0C10C2F05000000123456 /* PlaybackIdentity.swift in Sources */,
+				51A0C10E2F05000000123456 /* PlaybackRepository.swift in Sources */,
 				51929E2A2CA0072600D77429 /* MailComposerView.swift in Sources */,
 				51792F912C900EEA004B6E71 /* KindlingApp.swift in Sources */,
 				514A16BF2CB1017200B6F94E /* UserSettings.swift in Sources */,

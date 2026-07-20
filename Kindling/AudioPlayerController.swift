@@ -10,6 +10,7 @@ extension Notification.Name {
   static let audioPlayerDidFinishItem = Notification.Name("AudioPlayerController.didFinishItem")
 }
 
+@MainActor
 final class AudioPlayerController: ObservableObject {
   final class PlaybackProgressState: ObservableObject {
     @Published var currentTime: Double = 0
@@ -74,6 +75,7 @@ final class AudioPlayerController: ObservableObject {
 
   private var player: AVPlayer?
   private let defaults: UserDefaults
+  private let playbackRepository: PlaybackRepository?
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
   private var chapterLoadTask: Task<Void, Never>?
@@ -97,10 +99,14 @@ final class AudioPlayerController: ObservableObject {
     private var lastNowPlayingInfoUpdateAt: TimeInterval = 0
   #endif
 
-  init(defaults: UserDefaults = .standard) {
+  init(defaults: UserDefaults = .standard, repository: PlaybackRepository? = nil) {
     self.defaults = defaults
-    let savedRate = defaults.object(forKey: ResumeStore.playbackRateKey) as? NSNumber
-    self.playbackRate = Self.clampedPlaybackRate(savedRate?.doubleValue ?? 1)
+    self.playbackRepository = repository
+    let savedRate =
+      repository?.playbackRate(for: nil)
+      ?? (defaults.object(forKey: ResumeStore.playbackRateKey) as? NSNumber)?.doubleValue
+      ?? 1
+    self.playbackRate = Self.clampedPlaybackRate(savedRate)
     #if os(iOS)
       configureRemoteCommands()
       observeAudioInterruptions()
@@ -109,7 +115,9 @@ final class AudioPlayerController: ObservableObject {
 
   deinit {
     chapterLoadTask?.cancel()
-    resetObservers()
+    MainActor.assumeIsolated {
+      resetObservers()
+    }
     #if os(iOS)
       artworkLoadTask?.cancel()
       teardownRemoteCommands()
@@ -224,12 +232,16 @@ final class AudioPlayerController: ObservableObject {
     artworkURL: URL?,
     artworkAccessToken: String?
   ) {
+    persistCurrentPosition(force: true)
     resetObservers()
     chapterLoadTask?.cancel()
     #if os(iOS)
       artworkLoadTask?.cancel()
     #endif
     currentPlaybackIdentity = identity
+    playbackRate = Self.clampedPlaybackRate(
+      playbackRepository?.playbackRate(for: identity) ?? playbackRate
+    )
     activeResumeID = identity.canonicalID
     currentFileURL = url
     self.title = title
@@ -321,6 +333,7 @@ final class AudioPlayerController: ObservableObject {
     let clampedRate = Self.clampedPlaybackRate(rate)
     playbackRate = clampedRate
     defaults.set(clampedRate, forKey: ResumeStore.playbackRateKey)
+    playbackRepository?.setPlaybackRate(clampedRate, identity: currentPlaybackIdentity)
     if isPlaying {
       player?.rate = Float(clampedRate)
     }
@@ -787,10 +800,17 @@ final class AudioPlayerController: ObservableObject {
     return min(max(position / duration, 0), 1)
   }
 
+  func persistedLastPlayedAt(identity: PlaybackIdentity) -> Date? {
+    playbackRepository?.lastPlayedAt(for: identity)
+  }
+
   private func persistedPosition(
     for identity: PlaybackIdentity,
     migrateAliases: Bool = true
   ) -> Double {
+    if let playbackRepository {
+      return playbackRepository.position(for: identity)
+    }
     let savedPositions = identity.allResumeIDs.compactMap { candidateResumeID in
       storedPersistedPosition(for: candidateResumeID).map { position in
         (resumeID: candidateResumeID, position: position)
@@ -801,7 +821,7 @@ final class AudioPlayerController: ObservableObject {
     if migrateAliases {
       for resumeID in identity.allResumeIDs where resumeID != restored.resumeID {
         guard storedPersistedPosition(for: resumeID) != restored.position else { continue }
-        UserDefaults.standard.set(restored.position, forKey: resumePositionKey(for: resumeID))
+        defaults.set(restored.position, forKey: resumePositionKey(for: resumeID))
       }
     }
     return restored.position
@@ -812,8 +832,15 @@ final class AudioPlayerController: ObservableObject {
     let now = Date.timeIntervalSinceReferenceDate
     guard force || now - lastPersistedPositionAt >= 10 else { return }
     lastPersistedPositionAt = now
+    playbackRepository?.checkpoint(
+      identity: currentPlaybackIdentity,
+      position: progress.currentTime,
+      duration: progress.duration > 0 ? progress.duration : nil,
+      playbackRate: playbackRate,
+      flush: force
+    )
     for resumeID in currentPlaybackIdentity.allResumeIDs {
-      UserDefaults.standard.set(progress.currentTime, forKey: resumePositionKey(for: resumeID))
+      defaults.set(progress.currentTime, forKey: resumePositionKey(for: resumeID))
     }
   }
 
@@ -823,8 +850,9 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func clearPersistedPosition(for identity: PlaybackIdentity) {
+    playbackRepository?.clear(identity: identity)
     for resumeID in identity.allResumeIDs {
-      UserDefaults.standard.removeObject(forKey: resumePositionKey(for: resumeID))
+      defaults.removeObject(forKey: resumePositionKey(for: resumeID))
     }
   }
 
@@ -833,7 +861,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func storedPersistedPosition(for resumeID: String) -> Double? {
-    guard let value = UserDefaults.standard.object(forKey: resumePositionKey(for: resumeID)) else {
+    guard let value = defaults.object(forKey: resumePositionKey(for: resumeID)) else {
       return nil
     }
     if let number = value as? NSNumber {

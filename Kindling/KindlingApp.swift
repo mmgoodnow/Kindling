@@ -10,10 +10,23 @@ import SwiftUI
 
 @main
 struct KindlingApp: App {
+  @Environment(\.scenePhase) private var scenePhase
   @StateObject private var userSettings = UserSettings()
   @StateObject private var podibleAuth = PodibleAuthController()
-  @StateObject private var audioPlayer = AudioPlayerController()
-  var sharedModelContainer: ModelContainer = {
+  @StateObject private var audioPlayer: AudioPlayerController
+  let sharedModelContainer: ModelContainer
+  private let playbackRepository: PlaybackRepository
+
+  init() {
+    let container = Self.makeModelContainer()
+    let repository = PlaybackRepository(context: container.mainContext)
+    try? repository.migrateLegacyState()
+    sharedModelContainer = container
+    playbackRepository = repository
+    _audioPlayer = StateObject(wrappedValue: AudioPlayerController(repository: repository))
+  }
+
+  private static func makeModelContainer() -> ModelContainer {
     let schema = Schema(versionedSchema: KindlingSchemaV2.self)
     let modelConfiguration = ModelConfiguration(
       schema: schema, isStoredInMemoryOnly: false)
@@ -27,7 +40,7 @@ struct KindlingApp: App {
     } catch {
       fatalError("Could not create ModelContainer: \(error)")
     }
-  }()
+  }
 
   var body: some Scene {
     WindowGroup {
@@ -42,6 +55,11 @@ struct KindlingApp: App {
           await podibleAuth.refreshStoredSession(rpcURLString: userSettings.podibleRPCURL)
           if audioPlayer.hasLoadedItem == false {
             _ = audioPlayer.restoreLastSession(accessToken: podibleAuth.accessToken)
+          }
+        }
+        .onChange(of: scenePhase) { _, phase in
+          if phase != .active {
+            playbackRepository.flushRecoveryJournal()
           }
         }
     }
