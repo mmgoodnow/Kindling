@@ -88,7 +88,8 @@ public struct ArtworkPalette: Hashable, Sendable {
   }
 
   public var foreground: Color {
-    Color(red: red * 0.64, green: green * 0.64, blue: blue * 0.64)
+    Color(red: red, green: green, blue: blue)
+      .mix(with: .primary, by: 0.36)
   }
 
   public var currentHighlight: Color {
