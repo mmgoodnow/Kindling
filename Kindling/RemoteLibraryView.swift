@@ -1062,6 +1062,7 @@ struct PodibleLibraryView: View {
       path: book.coverURLString,
       versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
     )
+    let progress = playbackProgress(for: book)
 
     return BookTileViewData(
       id: book.podibleId,
@@ -1069,9 +1070,9 @@ struct PodibleLibraryView: View {
       author: book.author?.name ?? "Unknown Author",
       artworkURL: artworkURL,
       durationText: book.runtimeSeconds.map(formatRuntime(seconds:)),
-      progress: playbackProgress(for: book),
+      progress: progress,
       isRead: book.localState?.isRead == true,
-      isFavorite: isSavedBook(book),
+      isFavorite: isSavedBookState(book.localState, progress: progress),
       palette: artworkPalette(for: artworkURL),
       seriesKey: book.series?.podibleId,
       seriesTitle: book.series?.title,
