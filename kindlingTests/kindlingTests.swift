@@ -378,6 +378,14 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(belongsInNewOnPodible(isFavorite: true, isRead: true))
   }
 
+  func testContinueReadingUsesPersistedProgress() {
+    XCTAssertTrue(belongsInContinueReading(progress: 0.25, isRead: false))
+    XCTAssertFalse(belongsInContinueReading(progress: nil, isRead: false))
+    XCTAssertFalse(belongsInContinueReading(progress: 0, isRead: false))
+    XCTAssertFalse(belongsInContinueReading(progress: 0.25, isRead: true))
+    XCTAssertFalse(belongsInContinueReading(progress: 1, isRead: false))
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

@@ -18,6 +18,11 @@ func belongsInNewOnPodible(isFavorite: Bool, isRead: Bool) -> Bool {
   isFavorite == false && isRead == false
 }
 
+func belongsInContinueReading(progress: Double?, isRead: Bool) -> Bool {
+  guard let progress else { return false }
+  return progress > 0 && progress < ReadProgressPolicy.completionThreshold && isRead == false
+}
+
 enum PodibleLibraryScreenMode {
   case home
   case library
@@ -509,7 +514,12 @@ struct PodibleLibraryView: View {
   private var homeRails: [(String, [LibraryBook])] {
     let continueReading =
       localBooks
-      .filter { ($0.localState?.progressSeconds ?? 0) > 0 && $0.localState?.isRead != true }
+      .filter {
+        belongsInContinueReading(
+          progress: playbackProgress(for: $0),
+          isRead: $0.localState?.isRead == true
+        )
+      }
       .sorted {
         ($0.localState?.lastPlayedAt ?? .distantPast)
           > ($1.localState?.lastPlayedAt ?? .distantPast)
@@ -549,19 +559,33 @@ struct PodibleLibraryView: View {
       LazyVStack(alignment: .leading, spacing: 28) {
         collectionStatusMessages(client: client)
         ForEach(homeRails, id: \.0) { title, books in
-          if books.isEmpty == false {
-            BookRailView(
-              title: title,
-              books: books.map(bookTileViewData(for:)),
-              artwork: collectionArtwork(for:cornerRadius:),
-              onSelect: selectCollectionBook(_:),
-              onToggleRead: toggleRead(_:)
-            )
-          }
+          BookRailView(
+            title: title,
+            books: books.map(bookTileViewData(for:)),
+            emptyMessage: homeRailEmptyMessage(title: title),
+            artwork: collectionArtwork(for:cornerRadius:),
+            onSelect: selectCollectionBook(_:),
+            onToggleRead: toggleRead(_:)
+          )
         }
       }
       .padding(.top, 12)
       .padding(.bottom, 20)
+    }
+  }
+
+  private func homeRailEmptyMessage(title: String) -> String {
+    switch title {
+    case "Continue reading":
+      "No books in progress."
+    case "TBR":
+      "No unread favorites."
+    case "New on Podible":
+      "No new books."
+    case "Recently Viewed":
+      "No recently viewed books."
+    default:
+      "No read books."
     }
   }
 

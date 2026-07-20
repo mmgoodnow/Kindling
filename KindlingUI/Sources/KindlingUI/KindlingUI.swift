@@ -664,6 +664,7 @@ public struct BookGridTileView: View {
 public struct BookRailView: View {
   public let title: String
   public let books: [BookTileViewData]
+  public let emptyMessage: String?
   public let onSelect: (BookTileViewData) -> Void
   public let onToggleRead: (BookTileViewData) -> Void
   private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
@@ -671,12 +672,14 @@ public struct BookRailView: View {
   public init(
     title: String,
     books: [BookTileViewData],
+    emptyMessage: String? = nil,
     artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
     onSelect: @escaping (BookTileViewData) -> Void = { _ in },
     onToggleRead: @escaping (BookTileViewData) -> Void = { _ in }
   ) {
     self.title = title
     self.books = books
+    self.emptyMessage = emptyMessage
     self.artwork = artwork
     self.onSelect = onSelect
     self.onToggleRead = onToggleRead
@@ -688,21 +691,28 @@ public struct BookRailView: View {
         .font(.title3.weight(.bold))
         .padding(.horizontal, 18)
 
-      ScrollView(.horizontal, showsIndicators: false) {
-        LazyHStack(alignment: .top, spacing: 14) {
-          ForEach(books) { book in
-            BookGridTileView(
-              book: book,
-              artwork: artwork.map { provider in
-                { cornerRadius in provider(book, cornerRadius) }
-              },
-              onSelect: { onSelect(book) },
-              onToggleRead: { onToggleRead(book) }
-            )
-            .frame(width: 140)
+      if books.isEmpty {
+        Text(emptyMessage ?? "No books.")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 18)
+      } else {
+        ScrollView(.horizontal, showsIndicators: false) {
+          LazyHStack(alignment: .top, spacing: 14) {
+            ForEach(books) { book in
+              BookGridTileView(
+                book: book,
+                artwork: artwork.map { provider in
+                  { cornerRadius in provider(book, cornerRadius) }
+                },
+                onSelect: { onSelect(book) },
+                onToggleRead: { onToggleRead(book) }
+              )
+              .frame(width: 140)
+            }
           }
+          .padding(.horizontal, 18)
         }
-        .padding(.horizontal, 18)
       }
     }
   }
