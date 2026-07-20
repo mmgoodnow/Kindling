@@ -626,7 +626,7 @@ struct PodibleLibraryView: View {
         }
       }
       .pickerStyle(.segmented)
-      .frame(width: 96)
+      .frame(width: 144)
     }
   }
 
@@ -770,7 +770,7 @@ struct PodibleLibraryView: View {
             }
           }
           .pickerStyle(.segmented)
-          .frame(width: 96)
+          .frame(width: 144)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

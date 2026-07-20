@@ -67,6 +67,11 @@ final class KindlingUITests: XCTestCase {
     XCTAssertEqual(BookCollectionLayout.seriesDefault, .list)
   }
 
+  func testThreeColumnGridIsAvailable() {
+    XCTAssertTrue(BookCollectionLayout.allCases.contains(.threeColumnGrid))
+    XCTAssertEqual(BookCollectionLayout.threeColumnGrid.title, "3 Columns")
+  }
+
   func testFavoritesFilteringKeepsLocalFavorites() {
     XCTAssertEqual(
       BookCollectionHelpers.favorites(from: books).map(\.id),

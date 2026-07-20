@@ -37,6 +37,7 @@ public enum BookCollectionFilter: String, CaseIterable, Identifiable, Sendable {
 
 public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
   case grid
+  case threeColumnGrid
   case list
 
   public var id: String { rawValue }
@@ -46,6 +47,8 @@ public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .grid:
       "Grid"
+    case .threeColumnGrid:
+      "3 Columns"
     case .list:
       "List"
     }
@@ -55,6 +58,8 @@ public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .grid:
       "square.grid.2x2"
+    case .threeColumnGrid:
+      "square.grid.3x3"
     case .list:
       "list.bullet"
     }
@@ -464,14 +469,16 @@ public struct BookCollectionView: View {
         ContentUnavailableView("No Books", systemImage: "books.vertical")
       } else {
         switch layout {
-        case .grid:
+        case .grid, .threeColumnGrid:
+          let columnCount = layout == .threeColumnGrid ? 3 : 2
+          let columnSpacing: CGFloat = layout == .threeColumnGrid ? 10 : 18
           ScrollView {
             LazyVGrid(
-              columns: [
-                GridItem(.flexible(), spacing: 18),
-                GridItem(.flexible(), spacing: 18),
-              ],
-              spacing: 20
+              columns: Array(
+                repeating: GridItem(.flexible(), spacing: columnSpacing),
+                count: columnCount
+              ),
+              spacing: layout == .threeColumnGrid ? 16 : 20
             ) {
               ForEach(filteredBooks) { book in
                 BookGridTileView(
@@ -483,7 +490,7 @@ public struct BookCollectionView: View {
                 )
               }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, layout == .threeColumnGrid ? 12 : 18)
             .padding(.top, contentTopPadding + 12)
             .padding(.bottom, 12)
           }
