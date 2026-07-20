@@ -1413,7 +1413,7 @@ public struct PlayerCoverContentView<Artwork: View>: View {
       if showsChapterProgress {
         VStack(spacing: 6) {
           ProgressView(value: player.currentChapterProgress)
-            .tint(.primary)
+            .tint(player.palette.foreground)
           HStack {
             Text(player.currentChapterElapsedText)
             Spacer()
@@ -1451,7 +1451,7 @@ public struct BookCompletionProgressView: View {
         .font(.caption.weight(.semibold))
         .frame(maxWidth: .infinity, alignment: .center)
       ProgressView(value: player.bookProgress)
-        .tint(.primary)
+        .tint(player.palette.foreground)
     }
   }
 }

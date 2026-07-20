@@ -205,6 +205,7 @@ private func playbackChapterRows(
 
 private struct ChapterPlaybackProgressSectionView: View {
   let player: AudioPlayerController
+  let palette: ArtworkPalette
   @ObservedObject var progress: AudioPlayerController.PlaybackProgressState
 
   @State private var chapterScrubOriginTime: Double?
@@ -255,10 +256,10 @@ private struct ChapterPlaybackProgressSectionView: View {
         GeometryReader { proxy in
           ZStack(alignment: .leading) {
             Capsule(style: .continuous)
-              .fill(Color.primary.opacity(0.10))
+              .fill(palette.background)
 
             Capsule(style: .continuous)
-              .fill(Color.primary)
+              .fill(palette.foreground)
               .frame(width: max(proxy.size.width * currentChapterProgress, 10))
           }
           .frame(height: 8)
@@ -308,7 +309,7 @@ private struct ChapterPlaybackProgressSectionView: View {
               .frame(width: 28, height: 28)
           }
           .buttonStyle(.plain)
-          .foregroundStyle(.primary)
+          .foregroundStyle(palette.foreground)
         }
       }
 
@@ -358,6 +359,7 @@ struct LocalPlaybackView: View {
   var body: some View {
     #if os(iOS)
       expandedPlayerView()
+        .tint(artworkPalette.foreground)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground(.ultraThinMaterial)
@@ -366,6 +368,7 @@ struct LocalPlaybackView: View {
         }
     #else
       expandedPlayerView()
+        .tint(artworkPalette.foreground)
         .frame(minWidth: 420, minHeight: 560)
         .padding(28)
         .background(macPlayerBackground)
@@ -402,11 +405,15 @@ struct LocalPlaybackView: View {
 
   private var expandedPlayerControls: some View {
     VStack(spacing: 6) {
-      ChapterPlaybackProgressSectionView(player: player, progress: player.progress)
+      ChapterPlaybackProgressSectionView(
+        player: player,
+        palette: artworkPalette,
+        progress: player.progress
+      )
 
       HStack(spacing: 12) {
         #if os(iOS)
-          AirPlayRouteButton()
+          AirPlayRouteButton(tintColor: UIColor(artworkPalette.foreground))
             .frame(width: 52, height: 52)
         #endif
 
@@ -422,7 +429,7 @@ struct LocalPlaybackView: View {
             if player.isStalled {
               ProgressView()
                 .controlSize(.large)
-                .tint(.primary)
+                .tint(artworkPalette.foreground)
             }
           }
           .frame(width: 68, height: 68)
@@ -435,7 +442,7 @@ struct LocalPlaybackView: View {
 
         playbackSpeedButton
       }
-      .foregroundStyle(.primary)
+      .foregroundStyle(artworkPalette.foreground)
     }
     .padding(.horizontal, 14)
     .padding(.top, 4)
@@ -654,7 +661,7 @@ struct LocalPlaybackView: View {
               HStack(spacing: 4) {
                 Text(tab.rawValue)
                   .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                  .foregroundStyle(isSelected ? .primary : .secondary)
+                  .foregroundStyle(isSelected ? artworkPalette.foreground : .secondary)
 
                 if tab == .transcript {
                   transcriptTabStatusBadge
@@ -663,7 +670,7 @@ struct LocalPlaybackView: View {
               .frame(height: 18)
 
               Rectangle()
-                .fill(isSelected ? Color.primary : .clear)
+                .fill(isSelected ? artworkPalette.foreground : .clear)
                 .frame(height: 2)
             }
             .frame(width: 84, alignment: .center)
@@ -771,18 +778,20 @@ struct LocalPlaybackView: View {
   }
 
   private struct AirPlayRouteButton: UIViewRepresentable {
+    let tintColor: UIColor
+
     func makeUIView(context: Context) -> AVRoutePickerView {
       let view = AVRoutePickerView()
-      view.activeTintColor = .label
-      view.tintColor = .label
+      view.activeTintColor = tintColor
+      view.tintColor = tintColor
       view.prioritizesVideoDevices = false
       view.backgroundColor = .clear
       return view
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
-      uiView.activeTintColor = .label
-      uiView.tintColor = .label
+      uiView.activeTintColor = tintColor
+      uiView.tintColor = tintColor
     }
   }
 #endif
