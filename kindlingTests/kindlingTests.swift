@@ -371,6 +371,13 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testNewOnPodibleExcludesFavoriteAndReadBooks() {
+    XCTAssertTrue(belongsInNewOnPodible(isFavorite: false, isRead: false))
+    XCTAssertFalse(belongsInNewOnPodible(isFavorite: true, isRead: false))
+    XCTAssertFalse(belongsInNewOnPodible(isFavorite: false, isRead: true))
+    XCTAssertFalse(belongsInNewOnPodible(isFavorite: true, isRead: true))
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

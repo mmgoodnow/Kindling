@@ -661,6 +661,53 @@ public struct BookGridTileView: View {
   }
 }
 
+public struct BookRailView: View {
+  public let title: String
+  public let books: [BookTileViewData]
+  public let onSelect: (BookTileViewData) -> Void
+  public let onToggleRead: (BookTileViewData) -> Void
+  private let artwork: ((BookTileViewData, CGFloat) -> AnyView)?
+
+  public init(
+    title: String,
+    books: [BookTileViewData],
+    artwork: ((BookTileViewData, CGFloat) -> AnyView)? = nil,
+    onSelect: @escaping (BookTileViewData) -> Void = { _ in },
+    onToggleRead: @escaping (BookTileViewData) -> Void = { _ in }
+  ) {
+    self.title = title
+    self.books = books
+    self.artwork = artwork
+    self.onSelect = onSelect
+    self.onToggleRead = onToggleRead
+  }
+
+  public var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(title)
+        .font(.title3.weight(.bold))
+        .padding(.horizontal, 18)
+
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 14) {
+          ForEach(books) { book in
+            BookGridTileView(
+              book: book,
+              artwork: artwork.map { provider in
+                { cornerRadius in provider(book, cornerRadius) }
+              },
+              onSelect: { onSelect(book) },
+              onToggleRead: { onToggleRead(book) }
+            )
+            .frame(width: 140)
+          }
+        }
+        .padding(.horizontal, 18)
+      }
+    }
+  }
+}
+
 public struct ArtworkMetadataStripView: View {
   public let text: String?
   public let palette: ArtworkPalette

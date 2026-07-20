@@ -14,12 +14,19 @@ func relatedBookIdentity(title: String, author: String) -> String {
     .joined(separator: "|")
 }
 
+func belongsInNewOnPodible(isFavorite: Bool, isRead: Bool) -> Bool {
+  isFavorite == false && isRead == false
+}
+
 enum PodibleLibraryScreenMode {
+  case home
   case library
   case favorites
 
   var title: String {
     switch self {
+    case .home:
+      "Home"
     case .library:
       "Library"
     case .favorites:
@@ -75,6 +82,7 @@ struct PodibleLibraryView: View {
     BookCollectionLayout.grid.rawValue
   @AppStorage("library.seriesLayout") private var seriesLayoutRawValue =
     BookCollectionLayout.seriesDefault.rawValue
+  @AppStorage("library.recentlyViewedBookIDs") private var recentlyViewedBookIDsRawValue = ""
 
   let mode: PodibleLibraryScreenMode
   let clientOverride: RemoteLibraryServing?
@@ -167,6 +175,9 @@ struct PodibleLibraryView: View {
       isStreamOnly: isStreamOnly(item: item, localBook: localBooksById[item.id]),
       isShowingPlayer: $isShowingPlayer
     )
+    .onAppear {
+      recordRecentlyViewed(bookID: item.id)
+    }
   }
 
   private func detailActions(
@@ -335,7 +346,11 @@ struct PodibleLibraryView: View {
     Group {
       let query = trimmedSearchQuery
       if query.isEmpty && searchQuery == nil {
-        collectionContent(client: client)
+        if mode == .home {
+          homeContent(client: client)
+        } else {
+          collectionContent(client: client)
+        }
       } else {
         List {
           searchStatusRows(client: client)
@@ -357,7 +372,9 @@ struct PodibleLibraryView: View {
           }
         }
         ToolbarItem(placement: .topBarTrailing) {
-          collectionOptionsMenu
+          if mode != .home {
+            collectionOptionsMenu
+          }
         }
       #endif
       #if os(macOS)
@@ -469,10 +486,82 @@ struct PodibleLibraryView: View {
 
   private var collectionBooks: [LibraryBook] {
     switch mode {
+    case .home:
+      localBooks
     case .library:
       localBooks
     case .favorites:
       localBooks.filter { $0.localState?.isFavorite == true }
+    }
+  }
+
+  private var recentlyViewedBookIDs: [String] {
+    recentlyViewedBookIDsRawValue.split(separator: "\n").map(String.init)
+  }
+
+  @MainActor
+  private func recordRecentlyViewed(bookID: String) {
+    var ids = recentlyViewedBookIDs.filter { $0 != bookID }
+    ids.insert(bookID, at: 0)
+    recentlyViewedBookIDsRawValue = ids.prefix(30).joined(separator: "\n")
+  }
+
+  private var homeRails: [(String, [LibraryBook])] {
+    let continueReading =
+      localBooks
+      .filter { ($0.localState?.progressSeconds ?? 0) > 0 && $0.localState?.isRead != true }
+      .sorted {
+        ($0.localState?.lastPlayedAt ?? .distantPast)
+          > ($1.localState?.lastPlayedAt ?? .distantPast)
+      }
+    let tbr = localBooks.filter {
+      $0.localState?.isFavorite == true && $0.localState?.isRead != true
+    }
+    let newOnPodible =
+      localBooks
+      .filter {
+        belongsInNewOnPodible(
+          isFavorite: $0.localState?.isFavorite == true,
+          isRead: $0.localState?.isRead == true
+        )
+      }
+      .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+    let byID = Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
+    let recentlyViewed = recentlyViewedBookIDs.compactMap { byID[$0] }
+    let read =
+      localBooks
+      .filter { $0.localState?.isRead == true }
+      .sorted {
+        ($0.localState?.lastPlayedAt ?? $0.updatedAt ?? .distantPast)
+          > ($1.localState?.lastPlayedAt ?? $1.updatedAt ?? .distantPast)
+      }
+    return [
+      ("Continue reading", continueReading),
+      ("TBR", tbr),
+      ("New on Podible", newOnPodible),
+      ("Recently Viewed", recentlyViewed),
+      ("Read", read),
+    ]
+  }
+
+  private func homeContent(client: RemoteLibraryServing?) -> some View {
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 28) {
+        collectionStatusMessages(client: client)
+        ForEach(homeRails, id: \.0) { title, books in
+          if books.isEmpty == false {
+            BookRailView(
+              title: title,
+              books: books.map(bookTileViewData(for:)),
+              artwork: collectionArtwork(for:cornerRadius:),
+              onSelect: selectCollectionBook(_:),
+              onToggleRead: toggleRead(_:)
+            )
+          }
+        }
+      }
+      .padding(.top, 12)
+      .padding(.bottom, 20)
     }
   }
 

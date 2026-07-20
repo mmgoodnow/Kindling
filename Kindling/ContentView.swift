@@ -2,14 +2,16 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
-  @State private var selectedTab: AppTab = .library
+  @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
+  @State private var homeNavigationPath = NavigationPath()
   @State private var favoritesNavigationPath = NavigationPath()
   @State private var searchNavigationPath = NavigationPath()
   @State private var isShowingPlayer = false
 
   private enum AppTab: Hashable {
+    case home
     case library
     case favorites
     case search
@@ -53,6 +55,16 @@ struct ContentView: View {
 
   private var appTabs: some View {
     TabView(selection: $selectedTab) {
+      Tab("Home", systemImage: "house.fill", value: AppTab.home) {
+        NavigationStack(path: $homeNavigationPath) {
+          RemoteLibraryView(
+            mode: .home,
+            navigationPath: $homeNavigationPath,
+            isShowingPlayer: playerTabBinding
+          )
+        }
+      }
+
       Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
         NavigationStack(path: $libraryNavigationPath) {
           RemoteLibraryView(
