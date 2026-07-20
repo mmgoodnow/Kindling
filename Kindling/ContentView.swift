@@ -22,14 +22,18 @@ struct ContentView: View {
   var body: some View {
     Group {
       #if os(iOS)
-        appTabs
-          .tabBarMinimizeBehavior(.onScrollDown)
-          .tabViewSearchActivation(.searchTabSelection)
-          .tabViewBottomAccessory {
-            if player.hasLoadedItem {
+        if player.hasLoadedItem {
+          appTabs
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .tabViewSearchActivation(.searchTabSelection)
+            .tabViewBottomAccessory {
               miniPlayer
             }
-          }
+        } else {
+          appTabs
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .tabViewSearchActivation(.searchTabSelection)
+        }
       #else
         appTabs
           .safeAreaInset(edge: .bottom, spacing: 0) {
