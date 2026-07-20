@@ -91,6 +91,18 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(playbackRemainingText(25), "<1 min left")
   }
 
+  func testPlaybackRatePersistsAcrossPlayerInstances() throws {
+    let suiteName = "KindlingTests.PlaybackRate.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let player = AudioPlayerController(defaults: defaults)
+    player.setPlaybackRate(1.5)
+
+    let restoredPlayer = AudioPlayerController(defaults: defaults)
+    XCTAssertEqual(restoredPlayer.playbackRate, 1.5)
+  }
+
   func testMiniPlayerFallsBackToBookMetadataWithoutChapters() {
     XCTAssertEqual(
       miniPlayerViewData(
