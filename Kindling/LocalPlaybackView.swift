@@ -430,19 +430,20 @@ struct LocalPlaybackView: View {
         }
 
         Button(action: player.togglePlayback) {
-          ZStack {
-            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-              .font(.system(size: 54, weight: .regular))
-              .opacity(player.isStalled ? 0.25 : 1)
+          Group {
             if player.isStalled {
               ProgressView()
                 .controlSize(.large)
                 .tint(artworkPalette.foreground)
+            } else {
+              Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 54, weight: .regular))
             }
           }
           .frame(width: 68, height: 68)
         }
         .buttonStyle(.plain)
+        .disabled(player.isStalled)
 
         transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
           player.skip(by: 30)
