@@ -340,9 +340,15 @@ struct LocalPlaybackView: View {
   }
 
   @ObservedObject var player: AudioPlayerController
+  @ObservedObject private var progress: AudioPlayerController.PlaybackProgressState
   @EnvironmentObject private var userSettings: UserSettings
   @EnvironmentObject private var podibleAuth: PodibleAuthController
   @State private var artworkPalette: ArtworkPalette = .fallback
+
+  init(player: AudioPlayerController) {
+    self._player = ObservedObject(wrappedValue: player)
+    self._progress = ObservedObject(wrappedValue: player.progress)
+  }
 
   private var selectedContentTab: ContentTab {
     get { ContentTab(rawValue: selectedContentTabRawValue) ?? .artwork }
@@ -531,15 +537,15 @@ struct LocalPlaybackView: View {
   private var chapterRows: [KindlingUI.ChapterRowViewData] {
     playbackChapterRows(
       chapters: player.chapters,
-      currentTime: player.progress.currentTime,
-      totalDuration: player.duration
+      currentTime: progress.currentTime,
+      totalDuration: progress.duration
     )
   }
 
   private var playerCoverViewData: PlayerViewData {
     let chapters = player.chapters
-    let currentTime = player.progress.currentTime
-    let totalDuration = player.progress.duration
+    let currentTime = progress.currentTime
+    let totalDuration = progress.duration
     let currentChapterIndex = playbackCurrentChapterIndex(
       time: currentTime,
       chapters: chapters,
@@ -618,10 +624,6 @@ struct LocalPlaybackView: View {
 
   private var chaptersSection: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Chapters")
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(artworkPalette.foreground.opacity(0.65))
-
       if player.chapters.isEmpty {
         Text("No chapters available yet.")
           .font(.body)

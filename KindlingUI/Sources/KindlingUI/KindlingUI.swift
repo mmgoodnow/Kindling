@@ -1452,8 +1452,19 @@ public struct BookCompletionProgressView: View {
         .font(.caption.weight(.semibold))
         .foregroundStyle(player.palette.foreground)
         .frame(maxWidth: .infinity, alignment: .center)
-      ProgressView(value: player.bookProgress)
-        .tint(player.palette.foreground)
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          Capsule(style: .continuous)
+            .fill(player.palette.background)
+          Rectangle()
+            .fill(player.palette.foreground)
+            .frame(width: proxy.size.width * player.bookProgress)
+        }
+        .clipShape(Capsule(style: .continuous))
+      }
+      .frame(height: 6)
+      .accessibilityLabel("Book progress")
+      .accessibilityValue("\(player.bookCompletionPercent) percent")
     }
   }
 }
