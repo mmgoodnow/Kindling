@@ -27,6 +27,43 @@ func belongsInTBR(isFavorite: Bool, isRead: Bool, progress: Double?) -> Bool {
   isFavorite && isRead == false && (progress ?? 0) == 0
 }
 
+final class PlaybackIdentityResolver: ObservableObject {
+  private struct CacheKey: Hashable {
+    let openLibraryWorkID: String?
+    let playbackJSON: Data?
+  }
+
+  private struct Entry {
+    let key: CacheKey
+    let identity: PlaybackIdentity
+  }
+
+  private var entriesByBookID: [String: Entry] = [:]
+  private(set) var decodeCount = 0
+
+  func identity(for book: LibraryBook) -> PlaybackIdentity {
+    let key = CacheKey(
+      openLibraryWorkID: book.openLibraryWorkID,
+      playbackJSON: book.playbackJSON
+    )
+    if let entry = entriesByBookID[book.podibleId], entry.key == key {
+      return entry.identity
+    }
+
+    let manifestationID = key.playbackJSON.flatMap { data in
+      decodeCount += 1
+      return try? JSONDecoder().decode(PodiblePlayback.self, from: data).audio?.manifestationId
+    }
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: key.openLibraryWorkID,
+      podibleID: book.podibleId,
+      manifestationID: manifestationID
+    )
+    entriesByBookID[book.podibleId] = Entry(key: key, identity: identity)
+    return identity
+  }
+}
+
 enum PodibleLibraryScreenMode {
   case home
   case library
@@ -62,6 +99,7 @@ struct PodibleLibraryView: View {
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
   @StateObject private var viewModel = RemoteLibraryViewModel()
+  @StateObject private var playbackIdentityResolver = PlaybackIdentityResolver()
   @State private var isShowingShareSheet = false
   @State private var shareURL: URL?
   @State private var isShowingKindleExporter = false
@@ -2542,11 +2580,7 @@ struct PodibleLibraryView: View {
   }
 
   private func playbackIdentity(for book: LibraryBook) -> PlaybackIdentity {
-    return PlaybackIdentity(
-      openLibraryWorkID: book.openLibraryWorkID,
-      podibleID: book.podibleId,
-      manifestationID: playback(from: book.playbackJSON)?.audio?.manifestationId
-    )
+    playbackIdentityResolver.identity(for: book)
   }
 
   private func playbackProgress(for book: LibraryBook) -> Double? {

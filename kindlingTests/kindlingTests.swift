@@ -726,6 +726,38 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
+  func testPlaybackIdentityResolverDecodesEachPlaybackPayloadOnce() throws {
+    let playbackJSON = try JSONEncoder().encode(
+      PodiblePlayback(
+        audio: PodiblePlaybackAudio(
+          manifestationId: 42,
+          label: nil,
+          editionNote: nil,
+          streamUrl: "https://example.com/audio",
+          chaptersUrl: "https://example.com/chapters",
+          transcriptUrl: nil,
+          mimeType: "audio/mpeg",
+          durationMs: 1_000,
+          sizeBytes: 100
+        ),
+        ebook: nil
+      )
+    )
+    let book = LibraryBook(
+      podibleId: "book",
+      openLibraryWorkID: "OL1W",
+      title: "Book",
+      playbackJSON: playbackJSON
+    )
+    let resolver = PlaybackIdentityResolver()
+
+    for _ in 0..<100 {
+      XCTAssertEqual(resolver.identity(for: book).manifestationID, 42)
+    }
+    XCTAssertEqual(resolver.decodeCount, 1)
+  }
+
+  @MainActor
   func testPlaybackRepositoryReplaysRecoveryJournal() throws {
     let defaults = try isolatedDefaults(named: "Recovery")
     defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
