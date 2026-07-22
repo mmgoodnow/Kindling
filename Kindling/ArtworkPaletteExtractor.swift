@@ -1,7 +1,54 @@
+import Combine
 import CoreGraphics
 import Foundation
 import KindlingUI
 import Kingfisher
+
+@MainActor
+final class ArtworkPaletteStore: ObservableObject {
+  @Published private var palettesByURL: [String: ArtworkPalette] = [:]
+  private var keysBeingSampled = Set<String>()
+  private let cache: ArtworkPaletteCache
+
+  init(cache: ArtworkPaletteCache = ArtworkPaletteCache()) {
+    self.cache = cache
+  }
+
+  func palette(for url: URL?) -> ArtworkPalette {
+    guard let key = url?.absoluteString else { return .fallback }
+    return palettesByURL[key] ?? .fallback
+  }
+
+  func loadCached(for urls: [URL]) {
+    let keys = Set(urls.map(\.absoluteString))
+    guard keys.isEmpty == false else {
+      palettesByURL = [:]
+      return
+    }
+    cache.removePalettes(excluding: keys)
+    palettesByURL = palettesByURL.filter { keys.contains($0.key) }
+    for key in keys where palettesByURL[key] == nil {
+      if let palette = cache.palette(for: key) {
+        palettesByURL[key] = palette
+      }
+    }
+  }
+
+  func sampleAndCache(from image: KFCrossPlatformImage, for url: URL) {
+    let key = url.absoluteString
+    guard palettesByURL[key] == nil else { return }
+    guard keysBeingSampled.insert(key).inserted else { return }
+    Task {
+      let palette = await Task.detached(priority: .utility) {
+        ArtworkPaletteSampler.palette(from: image)
+      }.value
+      keysBeingSampled.remove(key)
+      guard let palette else { return }
+      cache.store(palette, for: key)
+      palettesByURL[key] = palette
+    }
+  }
+}
 
 struct ArtworkPaletteCache {
   private struct StoredPalette: Codable {

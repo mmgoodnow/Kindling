@@ -103,6 +103,7 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var player: AudioPlayerController
   @EnvironmentObject private var libraryData: LibraryStore
   @EnvironmentObject private var viewModel: PodibleLibraryViewModel
+  @EnvironmentObject private var artworkPalettes: ArtworkPaletteStore
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
@@ -124,8 +125,6 @@ struct PodibleLibraryView: View {
   @State private var syncErrorMessage: String?
   @State private var localDownloadProgressByBookID: [String: Double] = [:]
   @State private var localDownloadingBookIDs: Set<String> = []
-  @State private var artworkPalettesByURL: [String: ArtworkPalette] = [:]
-  @State private var artworkPaletteKeysBeingSampled = Set<String>()
   @State private var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
   @State private var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
   @State private var relatedBooksErrors: [BookGroupRoute: String] = [:]
@@ -467,9 +466,6 @@ struct PodibleLibraryView: View {
     .task(id: activePlaybackMetadataTaskID(client: client)) {
       guard let client else { return }
       await loadMetadataForActivePlaybackIfNeeded(client: client)
-    }
-    .task(id: artworkPaletteTaskID) {
-      loadCachedArtworkPalettes()
     }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else { return }
@@ -1226,44 +1222,8 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private var artworkPaletteTaskID: Int {
-    artworkPaletteRevision(
-      baseURL: remoteAssetBaseURLString,
-      accessToken: podibleAuth.accessToken,
-      books: localBooks.map {
-        (id: $0.podibleId, coverURL: $0.coverURLString, updatedAt: $0.updatedAt)
-      }
-    )
-  }
-
   private func artworkPalette(for artworkURL: URL?) -> ArtworkPalette {
-    guard let key = artworkURL?.absoluteString else { return .fallback }
-    return artworkPalettesByURL[key] ?? .fallback
-  }
-
-  @MainActor
-  private func loadCachedArtworkPalettes() {
-    let requests = localBooks.compactMap { book -> URL? in
-      remoteLibraryAssetURL(
-        baseURLString: remoteAssetBaseURLString,
-        path: book.coverURLString,
-        versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
-      )
-    }
-    guard requests.isEmpty == false else {
-      artworkPalettesByURL = [:]
-      return
-    }
-    let currentKeys = Set(requests.map(\.absoluteString))
-    let cache = ArtworkPaletteCache()
-    cache.removePalettes(excluding: currentKeys)
-
-    artworkPalettesByURL = artworkPalettesByURL.filter { currentKeys.contains($0.key) }
-    for key in currentKeys where artworkPalettesByURL[key] == nil {
-      if let cached = cache.palette(for: key) {
-        artworkPalettesByURL[key] = cached
-      }
-    }
+    artworkPalettes.palette(for: artworkURL)
   }
 
   @MainActor
@@ -1271,19 +1231,7 @@ struct PodibleLibraryView: View {
     from image: KFCrossPlatformImage,
     for url: URL
   ) {
-    let key = url.absoluteString
-    guard artworkPalettesByURL[key] == nil else { return }
-    guard artworkPaletteKeysBeingSampled.insert(key).inserted else { return }
-
-    Task {
-      let palette = await Task.detached(priority: .utility) {
-        ArtworkPaletteSampler.palette(from: image)
-      }.value
-      artworkPaletteKeysBeingSampled.remove(key)
-      guard let palette else { return }
-      ArtworkPaletteCache().store(palette, for: key)
-      artworkPalettesByURL[key] = palette
-    }
+    artworkPalettes.sampleAndCache(from: image, for: url)
   }
 
   @MainActor

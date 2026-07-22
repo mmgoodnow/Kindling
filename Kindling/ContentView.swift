@@ -15,6 +15,7 @@ struct ContentView: View {
   private var syncStates: [LibrarySyncState]
   @StateObject private var libraryData = LibraryStore()
   @StateObject private var podibleLibrary = PodibleLibraryViewModel()
+  @StateObject private var artworkPalettes = ArtworkPaletteStore()
   @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
@@ -66,6 +67,7 @@ struct ContentView: View {
     }
     .environmentObject(libraryData)
     .environmentObject(podibleLibrary)
+    .environmentObject(artworkPalettes)
     .task(id: libraryDataRevision) {
       libraryData.update(
         books: localBooks,
@@ -73,6 +75,30 @@ struct ContentView: View {
         syncStates: syncStates
       )
     }
+    .task(id: artworkPaletteTaskID) {
+      artworkPalettes.loadCached(
+        for: localBooks.compactMap { book in
+          remoteLibraryAssetURL(
+            baseURLString: userSettings.podibleRPCURL,
+            path: book.coverURLString,
+            versionToken: book.updatedAt.map { String(Int($0.timeIntervalSince1970)) }
+          )
+        }
+      )
+    }
+  }
+
+  @EnvironmentObject private var userSettings: UserSettings
+  @EnvironmentObject private var podibleAuth: PodibleAuthController
+
+  private var artworkPaletteTaskID: Int {
+    artworkPaletteRevision(
+      baseURL: userSettings.podibleRPCURL,
+      accessToken: podibleAuth.accessToken,
+      books: localBooks.map {
+        (id: $0.podibleId, coverURL: $0.coverURLString, updatedAt: $0.updatedAt)
+      }
+    )
   }
 
   private var libraryDataRevision: Int {
