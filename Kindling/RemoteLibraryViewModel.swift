@@ -31,6 +31,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   @Published private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
 
   private var downloadPollingTasks: [String: Task<Void, Never>] = [:]
+  private var isLoadingLibrary = false
   private let downloadPollIntervalNanoseconds: UInt64 = 500_000_000
   private let searchCooldownInterval: TimeInterval = 20
   private var lastSearchByKey: [SearchCooldownKey: Date] = [:]
@@ -48,6 +49,9 @@ final class PodibleLibraryViewModel: ObservableObject {
   }
 
   func loadLibraryItems(using client: RemoteLibraryServing) async {
+    guard isLoadingLibrary == false else { return }
+    isLoadingLibrary = true
+    defer { isLoadingLibrary = false }
     isLoading = true
     errorMessage = nil
     do {

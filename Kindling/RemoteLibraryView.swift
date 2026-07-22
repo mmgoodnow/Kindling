@@ -102,10 +102,10 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
   @EnvironmentObject private var libraryData: LibraryStore
+  @EnvironmentObject private var viewModel: PodibleLibraryViewModel
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
-  @StateObject private var viewModel = RemoteLibraryViewModel()
   @StateObject private var playbackIdentityResolver = PlaybackIdentityResolver()
   @State private var isShowingShareSheet = false
   @State private var shareURL: URL?
