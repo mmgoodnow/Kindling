@@ -595,5 +595,4 @@ final class PodibleLibraryViewModel {
   }
 }
 
-typealias RemoteLibraryViewModel = PodibleLibraryViewModel
 typealias PodibleLibraryDownloadProgress = PodibleLibraryViewModel.DownloadProgress

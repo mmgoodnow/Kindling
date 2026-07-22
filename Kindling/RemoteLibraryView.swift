@@ -2454,8 +2454,6 @@ struct LibraryFeatureContainer: View {
 
 }
 
-typealias RemoteLibraryView = LibraryFeatureContainer
-
 extension PodibleLibraryDownloadProgress {
   var combinedProgressPercent: Int? {
     var values: [Int] = []
@@ -2794,7 +2792,7 @@ struct ActivityShareSheet: View {
 
 private struct RemoteLibrarySearchBindingModifier: ViewModifier {
   let searchQuery: Binding<String>?
-  @Bindable var viewModel: RemoteLibraryViewModel
+  @Bindable var viewModel: PodibleLibraryViewModel
   let onChange: (String) -> Void
 
   @ViewBuilder
@@ -2872,7 +2870,7 @@ private struct RemoteLibrarySearchBindingModifier: ViewModifier {
 
 #Preview {
   NavigationStack {
-    RemoteLibraryView(client: PodibleMockClient())
+    LibraryFeatureContainer(client: PodibleMockClient())
       .environmentObject(UserSettings())
       .environmentObject(AudioPlayerController())
   }
