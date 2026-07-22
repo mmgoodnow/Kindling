@@ -28,6 +28,12 @@ final class PodibleLibraryViewModel: ObservableObject {
   @Published var isLoading: Bool = false
   @Published var errorMessage: String?
   @Published var downloadProgressByBookID: [String: DownloadProgress] = [:]
+  @Published var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
+  @Published var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
+  @Published var relatedBooksErrors: [BookGroupRoute: String] = [:]
+  @Published var isSyncing = false
+  @Published var isSyncSpinnerVisible = false
+  @Published var syncErrorMessage: String?
   @Published private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
 
   private var downloadPollingTasks: [String: Task<Void, Never>] = [:]

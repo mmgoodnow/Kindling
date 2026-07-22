@@ -116,13 +116,7 @@ struct PodibleLibraryView: View {
   @State private var isKindleExported = false
   @State private var pendingSearchItemIDs: Set<String> = []
   @State private var searchTask: Task<Void, Never>?
-  @State private var isSyncing = false
-  @State private var isSyncSpinnerVisible = false
   @State private var syncSpinnerTask: Task<Void, Never>?
-  @State private var syncErrorMessage: String?
-  @State private var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
-  @State private var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
-  @State private var relatedBooksErrors: [BookGroupRoute: String] = [:]
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
@@ -182,6 +176,36 @@ struct PodibleLibraryView: View {
   private var localDownloadingBookIDs: Set<String> {
     get { libraryDownloads.localBookIDs }
     nonmutating set { libraryDownloads.localBookIDs = newValue }
+  }
+
+  private var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] {
+    get { viewModel.relatedBooksResults }
+    nonmutating set { viewModel.relatedBooksResults = newValue }
+  }
+
+  private var loadingRelatedBooksRoutes: Set<BookGroupRoute> {
+    get { viewModel.loadingRelatedBooksRoutes }
+    nonmutating set { viewModel.loadingRelatedBooksRoutes = newValue }
+  }
+
+  private var relatedBooksErrors: [BookGroupRoute: String] {
+    get { viewModel.relatedBooksErrors }
+    nonmutating set { viewModel.relatedBooksErrors = newValue }
+  }
+
+  private var isSyncing: Bool {
+    get { viewModel.isSyncing }
+    nonmutating set { viewModel.isSyncing = newValue }
+  }
+
+  private var isSyncSpinnerVisible: Bool {
+    get { viewModel.isSyncSpinnerVisible }
+    nonmutating set { viewModel.isSyncSpinnerVisible = newValue }
+  }
+
+  private var syncErrorMessage: String? {
+    get { viewModel.syncErrorMessage }
+    nonmutating set { viewModel.syncErrorMessage = newValue }
   }
 
   private var localBooks: [LibraryBook] { libraryData.books }
