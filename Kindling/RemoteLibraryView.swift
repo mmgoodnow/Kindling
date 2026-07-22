@@ -27,6 +27,22 @@ func belongsInTBR(isFavorite: Bool, isRead: Bool, progress: Double?) -> Bool {
   isFavorite && isRead == false && (progress ?? 0) == 0
 }
 
+func artworkPaletteRevision(
+  baseURL: String,
+  accessToken: String?,
+  books: [(id: String, coverURL: String?, updatedAt: Date?)]
+) -> Int {
+  var hasher = Hasher()
+  hasher.combine(baseURL)
+  hasher.combine(accessToken)
+  for book in books {
+    hasher.combine(book.id)
+    hasher.combine(book.coverURL)
+    hasher.combine(book.updatedAt)
+  }
+  return hasher.finalize()
+}
+
 final class PlaybackIdentityResolver: ObservableObject {
   private struct CacheKey: Hashable {
     let openLibraryWorkID: String?
@@ -64,7 +80,7 @@ final class PlaybackIdentityResolver: ObservableObject {
   }
 }
 
-enum PodibleLibraryScreenMode {
+enum PodibleLibraryScreenMode: Equatable {
   case home
   case library
   case favorites
@@ -1263,16 +1279,14 @@ struct PodibleLibraryView: View {
     }
   }
 
-  private var artworkPaletteTaskID: String {
-    let bookKeys = localBooks.map { book in
-      [
-        book.podibleId,
-        book.coverURLString ?? "",
-        book.updatedAt.map { String(Int($0.timeIntervalSince1970)) } ?? "",
-      ].joined(separator: ":")
-    }
-    return ([remoteAssetBaseURLString, podibleAuth.accessToken ?? ""] + bookKeys).joined(
-      separator: "|")
+  private var artworkPaletteTaskID: Int {
+    artworkPaletteRevision(
+      baseURL: remoteAssetBaseURLString,
+      accessToken: podibleAuth.accessToken,
+      books: localBooks.map {
+        (id: $0.podibleId, coverURL: $0.coverURLString, updatedAt: $0.updatedAt)
+      }
+    )
   }
 
   private func artworkPalette(for artworkURL: URL?) -> ArtworkPalette {

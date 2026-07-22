@@ -475,6 +475,33 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testArtworkPaletteRevisionIsStableAndTracksArtworkChanges() {
+    let updatedAt = Date(timeIntervalSince1970: 1_234)
+    let books = [(id: "book", coverURL: Optional("/cover.jpg"), updatedAt: Optional(updatedAt))]
+    let revision = artworkPaletteRevision(
+      baseURL: "https://podible.test",
+      accessToken: "token",
+      books: books
+    )
+
+    XCTAssertEqual(
+      revision,
+      artworkPaletteRevision(
+        baseURL: "https://podible.test",
+        accessToken: "token",
+        books: books
+      )
+    )
+    XCTAssertNotEqual(
+      revision,
+      artworkPaletteRevision(
+        baseURL: "https://podible.test",
+        accessToken: "token",
+        books: [(id: "book", coverURL: "/new-cover.jpg", updatedAt: updatedAt)]
+      )
+    )
+  }
+
   func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"

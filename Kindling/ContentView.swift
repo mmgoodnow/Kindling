@@ -56,44 +56,40 @@ struct ContentView: View {
   private var appTabs: some View {
     TabView(selection: $selectedTab) {
       Tab("Home", systemImage: "house.fill", value: AppTab.home) {
-        NavigationStack(path: $homeNavigationPath) {
-          RemoteLibraryView(
-            mode: .home,
-            navigationPath: $homeNavigationPath,
-            isShowingPlayer: playerTabBinding
-          )
-        }
+        LibraryTabRoot(
+          mode: .home,
+          navigationPath: $homeNavigationPath,
+          isShowingPlayer: playerTabBinding
+        )
+        .equatable()
       }
 
       Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
-        NavigationStack(path: $libraryNavigationPath) {
-          RemoteLibraryView(
-            mode: .library,
-            navigationPath: $libraryNavigationPath,
-            isShowingPlayer: playerTabBinding
-          )
-        }
+        LibraryTabRoot(
+          mode: .library,
+          navigationPath: $libraryNavigationPath,
+          isShowingPlayer: playerTabBinding
+        )
+        .equatable()
       }
 
       Tab("Favorites", systemImage: "heart.fill", value: AppTab.favorites) {
-        NavigationStack(path: $favoritesNavigationPath) {
-          RemoteLibraryView(
-            mode: .favorites,
-            navigationPath: $favoritesNavigationPath,
-            isShowingPlayer: playerTabBinding
-          )
-        }
+        LibraryTabRoot(
+          mode: .favorites,
+          navigationPath: $favoritesNavigationPath,
+          isShowingPlayer: playerTabBinding
+        )
+        .equatable()
       }
 
       Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
-        NavigationStack(path: $searchNavigationPath) {
-          RemoteLibraryView(
-            mode: .library,
-            searchQuery: $searchQuery,
-            navigationPath: $searchNavigationPath,
-            isShowingPlayer: playerTabBinding
-          )
-        }
+        LibraryTabRoot(
+          mode: .library,
+          searchQuery: $searchQuery,
+          navigationPath: $searchNavigationPath,
+          isShowingPlayer: playerTabBinding
+        )
+        .equatable()
       }
       .tabPlacement(.pinned)
     }
@@ -102,6 +98,40 @@ struct ContentView: View {
   private var miniPlayer: some View {
     MiniPlaybackAccessory(player: player) {
       isShowingPlayer = true
+    }
+  }
+}
+
+private struct LibraryTabRoot: View, Equatable {
+  let mode: PodibleLibraryScreenMode
+  var searchQuery: Binding<String>?
+  @Binding var navigationPath: NavigationPath
+  @Binding var isShowingPlayer: Bool
+
+  init(
+    mode: PodibleLibraryScreenMode,
+    searchQuery: Binding<String>? = nil,
+    navigationPath: Binding<NavigationPath>,
+    isShowingPlayer: Binding<Bool>
+  ) {
+    self.mode = mode
+    self.searchQuery = searchQuery
+    self._navigationPath = navigationPath
+    self._isShowingPlayer = isShowingPlayer
+  }
+
+  static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.mode == rhs.mode
+  }
+
+  var body: some View {
+    NavigationStack(path: $navigationPath) {
+      RemoteLibraryView(
+        mode: mode,
+        searchQuery: searchQuery,
+        navigationPath: $navigationPath,
+        isShowingPlayer: $isShowingPlayer
+      )
     }
   }
 }
