@@ -184,13 +184,86 @@ private struct LibraryTabRoot: View, Equatable {
 
   var body: some View {
     NavigationStack(path: $navigationPath) {
-      RemoteLibraryView(
-        mode: mode,
-        searchQuery: searchQuery,
-        navigationPath: $navigationPath,
-        isShowingPlayer: $isShowingPlayer
-      )
+      switch mode {
+      case .home:
+        HomeScreen(
+          navigationPath: $navigationPath,
+          isShowingPlayer: $isShowingPlayer
+        )
+      case .library:
+        if let searchQuery {
+          SearchScreen(
+            query: searchQuery,
+            navigationPath: $navigationPath,
+            isShowingPlayer: $isShowingPlayer
+          )
+        } else {
+          LibraryScreen(
+            navigationPath: $navigationPath,
+            isShowingPlayer: $isShowingPlayer
+          )
+        }
+      case .favorites:
+        FavoritesScreen(
+          navigationPath: $navigationPath,
+          isShowingPlayer: $isShowingPlayer
+        )
+      }
     }
+  }
+}
+
+private struct HomeScreen: View {
+  @Binding var navigationPath: NavigationPath
+  @Binding var isShowingPlayer: Bool
+
+  var body: some View {
+    LibraryFeatureContainer(
+      mode: .home,
+      navigationPath: $navigationPath,
+      isShowingPlayer: $isShowingPlayer
+    )
+  }
+}
+
+private struct LibraryScreen: View {
+  @Binding var navigationPath: NavigationPath
+  @Binding var isShowingPlayer: Bool
+
+  var body: some View {
+    LibraryFeatureContainer(
+      mode: .library,
+      navigationPath: $navigationPath,
+      isShowingPlayer: $isShowingPlayer
+    )
+  }
+}
+
+private struct FavoritesScreen: View {
+  @Binding var navigationPath: NavigationPath
+  @Binding var isShowingPlayer: Bool
+
+  var body: some View {
+    LibraryFeatureContainer(
+      mode: .favorites,
+      navigationPath: $navigationPath,
+      isShowingPlayer: $isShowingPlayer
+    )
+  }
+}
+
+private struct SearchScreen: View {
+  let query: Binding<String>
+  @Binding var navigationPath: NavigationPath
+  @Binding var isShowingPlayer: Bool
+
+  var body: some View {
+    LibraryFeatureContainer(
+      mode: .library,
+      searchQuery: query,
+      navigationPath: $navigationPath,
+      isShowingPlayer: $isShowingPlayer
+    )
   }
 }
 

@@ -97,7 +97,7 @@ enum PodibleLibraryScreenMode: Equatable {
   }
 }
 
-struct PodibleLibraryView: View {
+struct LibraryFeatureContainer: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
@@ -2957,7 +2957,7 @@ struct PodibleLibraryView: View {
   }
 }
 
-typealias RemoteLibraryView = PodibleLibraryView
+typealias RemoteLibraryView = LibraryFeatureContainer
 
 extension PodibleLibraryDownloadProgress {
   var combinedProgressPercent: Int? {
