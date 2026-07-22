@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum LibraryDownloadKind {
   case ebook
@@ -7,11 +7,12 @@ enum LibraryDownloadKind {
 }
 
 @MainActor
-final class LibraryDownloadController: ObservableObject {
-  @Published var errorMessage: String?
-  @Published var remoteBookID: String?
-  @Published var remoteProgress: Double?
-  @Published var remoteKind: LibraryDownloadKind?
-  @Published var localProgressByBookID: [String: Double] = [:]
-  @Published var localBookIDs: Set<String> = []
+@Observable
+final class LibraryDownloadController {
+  var errorMessage: String?
+  var remoteBookID: String?
+  var remoteProgress: Double?
+  var remoteKind: LibraryDownloadKind?
+  var localProgressByBookID: [String: Double] = [:]
+  var localBookIDs: Set<String> = []
 }

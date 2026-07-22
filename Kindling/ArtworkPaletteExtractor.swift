@@ -1,12 +1,13 @@
-import Combine
 import CoreGraphics
 import Foundation
 import KindlingUI
 import Kingfisher
+import Observation
 
 @MainActor
-final class ArtworkPaletteStore: ObservableObject {
-  @Published private var palettesByURL: [String: ArtworkPalette] = [:]
+@Observable
+final class ArtworkPaletteStore {
+  private var palettesByURL: [String: ArtworkPalette] = [:]
   private var keysBeingSampled = Set<String>()
   private let cache: ArtworkPaletteCache
 

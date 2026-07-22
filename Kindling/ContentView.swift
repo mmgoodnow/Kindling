@@ -13,10 +13,10 @@ struct ContentView: View {
   @Query private var bookActivities: [BookActivityState]
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
-  @StateObject private var libraryData = LibraryStore()
+  @State private var libraryData = LibraryStore()
   @StateObject private var podibleLibrary = PodibleLibraryViewModel()
-  @StateObject private var artworkPalettes = ArtworkPaletteStore()
-  @StateObject private var libraryDownloads = LibraryDownloadController()
+  @State private var artworkPalettes = ArtworkPaletteStore()
+  @State private var libraryDownloads = LibraryDownloadController()
   @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
@@ -66,10 +66,10 @@ struct ContentView: View {
     .sheet(isPresented: $isShowingPlayer) {
       LocalPlaybackView(player: player)
     }
-    .environmentObject(libraryData)
+    .environment(libraryData)
     .environmentObject(podibleLibrary)
-    .environmentObject(artworkPalettes)
-    .environmentObject(libraryDownloads)
+    .environment(artworkPalettes)
+    .environment(libraryDownloads)
     .task(id: libraryDataRevision) {
       libraryData.update(
         books: localBooks,

@@ -101,10 +101,10 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
-  @EnvironmentObject private var libraryData: LibraryStore
+  @Environment(LibraryStore.self) private var libraryData
   @EnvironmentObject private var viewModel: PodibleLibraryViewModel
-  @EnvironmentObject private var artworkPalettes: ArtworkPaletteStore
-  @EnvironmentObject private var libraryDownloads: LibraryDownloadController
+  @Environment(ArtworkPaletteStore.self) private var artworkPalettes
+  @Environment(LibraryDownloadController.self) private var libraryDownloads
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme

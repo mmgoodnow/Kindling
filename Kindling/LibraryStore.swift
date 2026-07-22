@@ -1,12 +1,13 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 
 @MainActor
-final class LibraryStore: ObservableObject {
-  @Published private(set) var books: [LibraryBook] = []
-  @Published private(set) var activities: [BookActivityState] = []
-  @Published private(set) var syncStates: [LibrarySyncState] = []
+@Observable
+final class LibraryStore {
+  private(set) var books: [LibraryBook] = []
+  private(set) var activities: [BookActivityState] = []
+  private(set) var syncStates: [LibrarySyncState] = []
 
   func update(
     books: [LibraryBook],
