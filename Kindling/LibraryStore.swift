@@ -8,6 +8,8 @@ final class LibraryStore {
   private(set) var books: [LibraryBook] = []
   private(set) var activities: [BookActivityState] = []
   private(set) var syncStates: [LibrarySyncState] = []
+  private(set) var booksByID: [String: LibraryBook] = [:]
+  private var activitiesByBookID: [String: BookActivityState] = [:]
 
   func update(
     books: [LibraryBook],
@@ -17,10 +19,16 @@ final class LibraryStore {
     self.books = books
     self.activities = activities
     self.syncStates = syncStates
+    self.booksByID = books.reduce(into: [:]) { result, book in
+      result[book.podibleId] = book
+    }
+    self.activitiesByBookID = activities.reduce(into: [:]) { result, activity in
+      result[activity.bookPodibleID] = activity
+    }
   }
 
   func book(for id: String) -> LibraryBook? {
-    books.first { $0.podibleId == id }
+    booksByID[id]
   }
 
   func books(
@@ -84,7 +92,7 @@ final class LibraryStore {
   }
 
   func activity(for bookID: String) -> BookActivityState? {
-    activities.first { $0.bookPodibleID == bookID }
+    activitiesByBookID[bookID]
   }
 
   func recordRecentlyViewed(
@@ -192,6 +200,7 @@ final class LibraryStore {
     let activity = BookActivityState(bookPodibleID: bookID)
     context.insert(activity)
     activities.append(activity)
+    activitiesByBookID[bookID] = activity
     return activity
   }
 

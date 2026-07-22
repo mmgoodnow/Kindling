@@ -1094,7 +1094,7 @@ struct LibraryFeatureContainer: View {
   }
 
   private var localBooksById: [String: LibraryBook] {
-    Dictionary(uniqueKeysWithValues: localBooks.map { ($0.podibleId, $0) })
+    libraryData.booksByID
   }
 
   private func bookTileViewData(for book: LibraryBook) -> BookTileViewData {
