@@ -468,6 +468,75 @@ final class kindlingTests: XCTestCase {
     XCTAssertFalse(isSavedBookState(state, progress: nil))
   }
 
+  @MainActor
+  func testLibraryStoreReadMutationPreservesProgressAndMakesBookSaved() throws {
+    let schema = Schema([
+      Author.self,
+      Series.self,
+      LibraryBook.self,
+      LibraryBookFile.self,
+      LocalBookState.self,
+      LibrarySyncState.self,
+      BookActivityState.self,
+    ])
+    let container = try ModelContainer(
+      for: schema,
+      configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+    )
+    let book = LibraryBook(podibleId: "book", title: "Book")
+    let state = LocalBookState(
+      bookPodibleId: "book",
+      isFavorite: false,
+      isRead: false,
+      progressSeconds: 321,
+      book: book
+    )
+    book.localState = state
+    container.mainContext.insert(book)
+    container.mainContext.insert(state)
+    let store = LibraryStore()
+    store.update(books: [book], activities: [], syncStates: [])
+
+    try store.toggleRead(
+      bookID: book.podibleId,
+      at: Date(timeIntervalSince1970: 123),
+      context: container.mainContext
+    )
+
+    XCTAssertEqual(state.isRead, true)
+    XCTAssertEqual(state.isFavorite, true)
+    XCTAssertEqual(state.progressSeconds, 321)
+    XCTAssertEqual(store.activity(for: book.podibleId)?.readAt, Date(timeIntervalSince1970: 123))
+  }
+
+  @MainActor
+  func testLibraryStoreDoesNotToggleFavoriteForBookInProgress() throws {
+    let schema = Schema([
+      Author.self,
+      Series.self,
+      LibraryBook.self,
+      LibraryBookFile.self,
+      LocalBookState.self,
+      LibrarySyncState.self,
+      BookActivityState.self,
+    ])
+    let container = try ModelContainer(
+      for: schema,
+      configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+    )
+    let book = LibraryBook(podibleId: "book", title: "Book")
+    let state = LocalBookState(bookPodibleId: "book", isFavorite: true, book: book)
+    book.localState = state
+    container.mainContext.insert(book)
+    container.mainContext.insert(state)
+    let store = LibraryStore()
+    store.update(books: [book], activities: [], syncStates: [])
+
+    try store.toggleFavorite(bookID: book.podibleId, progress: 0.25, context: container.mainContext)
+
+    XCTAssertEqual(state.isFavorite, true)
+  }
+
   func testLibraryCollectionsHaveStableTitles() {
     XCTAssertEqual(
       LibraryCollection.allCases.map(\.title),

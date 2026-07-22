@@ -101,7 +101,7 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
-  @EnvironmentObject private var libraryData: LibraryDataStore
+  @EnvironmentObject private var libraryData: LibraryStore
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
@@ -565,9 +565,7 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func recordRecentlyViewed(bookID: String) {
-    let activity = activityState(for: bookID)
-    activity.lastViewedAt = Date()
-    saveModelContext()
+    try? libraryData.recordRecentlyViewed(bookID: bookID, context: modelContext)
   }
 
   private func books(for collection: LibraryCollection) -> [LibraryBook] {
@@ -1314,24 +1312,17 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func toggleRead(bookID: String) {
-    guard let localBook = localBooksById[bookID] else { return }
-    let state = ensureLocalState(for: localBook)
-    setReadState(!(state.isRead ?? false), on: state)
-    activityState(for: bookID).readAt = state.isRead == true ? Date() : nil
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
+    try? libraryData.toggleRead(bookID: bookID, context: modelContext)
   }
 
   @MainActor
   private func toggleFavorite(bookID: String) {
     guard let localBook = localBooksById[bookID] else { return }
-    let state = ensureLocalState(for: localBook)
-    guard state.isRead != true, (playbackProgress(for: localBook) ?? 0) == 0 else { return }
-    state.isFavorite = !(state.isFavorite ?? false)
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
+    try? libraryData.toggleFavorite(
+      bookID: bookID,
+      progress: playbackProgress(for: localBook),
+      context: modelContext
+    )
   }
 
   private func isSavedBook(_ book: LibraryBook) -> Bool {
@@ -1348,16 +1339,11 @@ struct PodibleLibraryView: View {
   @MainActor
   private func markFinishedPlaybackRead(_ notification: Notification) {
     guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
-    guard let book = localBooks.first(where: { playbackIdentity(for: $0).matches(resumeID) }) else {
-      return
-    }
-    let state = ensureLocalState(for: book)
-    guard state.isRead != true else { return }
-    setReadState(true, on: state)
-    activityState(for: book.podibleId).readAt = Date()
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
+    try? libraryData.markFinishedPlaybackRead(
+      resumeID: resumeID,
+      identity: playbackIdentity(for:),
+      context: modelContext
+    )
   }
 
   private func activePlaybackMetadataTaskID(client: RemoteLibraryServing?) -> String {
@@ -2302,10 +2288,7 @@ struct PodibleLibraryView: View {
 
   @MainActor
   private func startPlayback(for book: LibraryBook, url: URL) {
-    let localState = ensureLocalState(for: book)
-    localState.isFavorite = true
-    localState.lastPlayedAt = Date()
-    try? modelContext.save()
+    try? libraryData.markStarted(book: book, context: modelContext)
     let identity = playbackIdentity(for: book)
     player.load(
       url: url,
@@ -2355,8 +2338,7 @@ struct PodibleLibraryView: View {
     isShowingPlayer = true
     let identity = streamingIdentity(for: item, playbackAudio: playbackAudio)
     let localBook = ensureLocalBook(for: item)
-    ensureLocalState(for: localBook).isFavorite = true
-    saveModelContext()
+    try? libraryData.markStarted(book: localBook, context: modelContext)
     let localBookID = localBook.podibleId
     Task {
       do {
@@ -2649,11 +2631,7 @@ struct PodibleLibraryView: View {
     fileRecord.downloadStatus = .completed
     fileRecord.lastError = nil
 
-    let localState = ensureLocalState(for: book)
-    localState.isDownloaded = true
-    localState.lastPlayedAt = localState.lastPlayedAt ?? Date()
-
-    try modelContext.save()
+    try libraryData.markDownloaded(book: book, context: modelContext)
   }
 
   private func audiobookFilename(
@@ -2761,50 +2739,12 @@ struct PodibleLibraryView: View {
     return record
   }
 
-  private func ensureLocalState(for book: LibraryBook) -> LocalBookState {
-    if let existing = book.localState {
-      return existing
-    }
-    let state = LocalBookState(bookPodibleId: book.podibleId, book: book)
-    modelContext.insert(state)
-    book.localState = state
-    return state
-  }
-
   private func activityStateIfPresent(for bookID: String) -> BookActivityState? {
     libraryData.activity(for: bookID)
   }
 
-  private func activityState(for bookID: String) -> BookActivityState {
-    if let existing = activityStateIfPresent(for: bookID) {
-      return existing
-    }
-    let activity = BookActivityState(bookPodibleID: bookID)
-    modelContext.insert(activity)
-    return activity
-  }
-
   private func migrateLegacyActivityState() {
-    let key = "library.recentlyViewedBookIDs"
-    let ids =
-      UserDefaults.standard.string(forKey: key)?.split(separator: "\n").map(String.init) ?? []
-    let now = Date()
-    for (index, id) in ids.enumerated() {
-      let activity = activityState(for: id)
-      if activity.lastViewedAt == nil {
-        activity.lastViewedAt = now.addingTimeInterval(Double(-index))
-      }
-    }
-    for book in localBooks where book.localState?.isRead == true {
-      let activity = activityState(for: book.podibleId)
-      activity.readAt = activity.readAt ?? book.localState?.lastPlayedAt ?? book.updatedAt ?? now
-    }
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
-    if ids.isEmpty == false {
-      UserDefaults.standard.removeObject(forKey: key)
-    }
+    try? libraryData.migrateLegacyActivityState(context: modelContext)
   }
 
   @MainActor
