@@ -31,7 +31,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   @Published private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
 
   private var downloadPollingTasks: [String: Task<Void, Never>] = [:]
-  private let downloadPollIntervalNanoseconds: UInt64 = 2_000_000_000
+  private let downloadPollIntervalNanoseconds: UInt64 = 500_000_000
   private let searchCooldownInterval: TimeInterval = 20
   private var lastSearchByKey: [SearchCooldownKey: Date] = [:]
   private var searchResultsByQuery: [String: [PodibleBook]] = [:]
