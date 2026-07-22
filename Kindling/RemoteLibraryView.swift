@@ -584,24 +584,22 @@ struct LibraryFeatureContainer: View {
     let tilesByID = Dictionary(
       uniqueKeysWithValues: localBooks.map { ($0.podibleId, tileFactory.make(for: $0)) }
     )
-    return ScrollView {
-      LazyVStack(alignment: .leading, spacing: 28) {
-        collectionStatusMessages(client: client)
-        ForEach(LibraryCollection.allCases) { collection in
-          BookRailView(
-            title: collection.title,
-            books: (collectionBooks[collection] ?? []).compactMap { tilesByID[$0.podibleId] },
-            emptyMessage: homeRailEmptyMessage(title: collection.title),
-            artwork: collectionArtwork(for:cornerRadius:),
-            onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:),
-            onSeeAll: { navigationPath.append(LibraryNavigationRoute.homeRail(collection)) }
-          )
-        }
-      }
-      .padding(.top, 12)
-      .padding(.bottom, 20)
+    let rails = LibraryCollection.allCases.map { collection in
+      LibraryHomeRailViewData(
+        collection: collection,
+        books: (collectionBooks[collection] ?? []).compactMap { tilesByID[$0.podibleId] },
+        emptyMessage: homeRailEmptyMessage(title: collection.title)
+      )
+    }
+    return LibraryHomeScreenContent(
+      rails: rails,
+      artwork: collectionArtwork(for:cornerRadius:),
+      onSelect: selectCollectionBook(_:),
+      onToggleRead: toggleRead(_:),
+      onToggleFavorite: toggleFavorite(_:),
+      onSeeAll: { navigationPath.append(LibraryNavigationRoute.homeRail($0)) }
+    ) {
+      collectionStatusMessages(client: client)
     }
   }
 
@@ -683,45 +681,22 @@ struct LibraryFeatureContainer: View {
 
   @ViewBuilder
   private func collectionContent(client: RemoteLibraryServing?) -> some View {
-    if collectionBooks.isEmpty {
-      VStack(spacing: 0) {
-        collectionStatusMessages(client: client)
-        collectionEmptyState(client: client)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      #if os(iOS)
-        ZStack(alignment: .top) {
-          BookCollectionView(
-            books: collectionTiles,
-            layout: collectionLayout,
-            filter: collectionFilter,
-            contentTopPadding: collectionContentTopPadding(client: client),
-            artwork: collectionArtwork(for:cornerRadius:),
-            onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:),
-            onScrolledPastHeader: setCollectionHeaderCollapsed(_:)
-          )
-
-          collectionStatusMessages(client: client)
-        }
-      #else
-        VStack(spacing: 0) {
-          collectionStatusMessages(client: client)
-          collectionControls
-          BookCollectionView(
-            books: collectionTiles,
-            layout: collectionLayout,
-            filter: collectionFilter,
-            artwork: collectionArtwork(for:cornerRadius:),
-            onSelect: selectCollectionBook(_:),
-            onToggleRead: toggleRead(_:),
-            onToggleFavorite: toggleFavorite(_:)
-          )
-        }
-      #endif
+    LibraryCollectionScreenContent(
+      books: collectionTiles,
+      layout: collectionLayout,
+      filter: collectionFilter,
+      contentTopPadding: collectionContentTopPadding(client: client),
+      artwork: collectionArtwork(for:cornerRadius:),
+      onSelect: selectCollectionBook(_:),
+      onToggleRead: toggleRead(_:),
+      onToggleFavorite: toggleFavorite(_:),
+      onScrolledPastHeader: setCollectionHeaderCollapsed(_:)
+    ) {
+      collectionStatusMessages(client: client)
+    } controls: {
+      collectionControls
+    } emptyState: {
+      collectionEmptyState(client: client)
     }
   }
 
