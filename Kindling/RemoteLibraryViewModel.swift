@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 func isCancellationError(_ error: Error) -> Bool {
   if error is CancellationError { return true }
@@ -11,7 +12,8 @@ func librarySyncErrorMessage(for error: Error) -> String? {
 }
 
 @MainActor
-final class PodibleLibraryViewModel: ObservableObject {
+@Observable
+final class PodibleLibraryViewModel {
   struct DownloadProgress: Hashable {
     var ebook: Int
     var audiobook: Int
@@ -22,21 +24,22 @@ final class PodibleLibraryViewModel: ObservableObject {
     var updatedAt: Date
   }
 
-  @Published var query: String = ""
-  @Published var searchResults: [PodibleBook] = []
-  @Published var libraryItems: [PodibleLibraryItem] = []
-  @Published var isLoading: Bool = false
-  @Published var errorMessage: String?
-  @Published var downloadProgressByBookID: [String: DownloadProgress] = [:]
-  @Published var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
-  @Published var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
-  @Published var relatedBooksErrors: [BookGroupRoute: String] = [:]
-  @Published var isSyncing = false
-  @Published var isSyncSpinnerVisible = false
-  @Published var syncErrorMessage: String?
-  @Published private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
+  var query: String = ""
+  var searchResults: [PodibleBook] = []
+  var libraryItems: [PodibleLibraryItem] = []
+  var isLoading: Bool = false
+  var errorMessage: String?
+  var downloadProgressByBookID: [String: DownloadProgress] = [:]
+  var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
+  var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
+  var relatedBooksErrors: [BookGroupRoute: String] = [:]
+  var isSyncing = false
+  var isSyncSpinnerVisible = false
+  var syncErrorMessage: String?
+  private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
 
-  private var downloadPollingTasks: [String: Task<Void, Never>] = [:]
+  @ObservationIgnored nonisolated(unsafe) private var downloadPollingTasks:
+    [String: Task<Void, Never>] = [:]
   private var isLoadingLibrary = false
   private let downloadPollIntervalNanoseconds: UInt64 = 500_000_000
   private let searchCooldownInterval: TimeInterval = 20

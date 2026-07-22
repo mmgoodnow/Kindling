@@ -14,7 +14,7 @@ struct ContentView: View {
   @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
   private var syncStates: [LibrarySyncState]
   @State private var libraryData = LibraryStore()
-  @StateObject private var podibleLibrary = PodibleLibraryViewModel()
+  @State private var podibleLibrary = PodibleLibraryViewModel()
   @State private var artworkPalettes = ArtworkPaletteStore()
   @State private var libraryDownloads = LibraryDownloadController()
   @State private var selectedTab: AppTab = .home
@@ -67,7 +67,7 @@ struct ContentView: View {
       LocalPlaybackView(player: player)
     }
     .environment(libraryData)
-    .environmentObject(podibleLibrary)
+    .environment(podibleLibrary)
     .environment(artworkPalettes)
     .environment(libraryDownloads)
     .task(id: libraryDataRevision) {

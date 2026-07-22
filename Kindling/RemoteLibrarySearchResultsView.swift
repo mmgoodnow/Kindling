@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PodibleSearchResultsView: View {
-  @ObservedObject var viewModel: RemoteLibraryViewModel
+  @Bindable var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   let client: RemoteLibraryServing
@@ -38,7 +38,7 @@ struct PodibleSearchResultsView: View {
 }
 
 struct PodibleSearchResultRow: View {
-  @ObservedObject var viewModel: RemoteLibraryViewModel
+  @Bindable var viewModel: RemoteLibraryViewModel
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   let book: PodibleBook

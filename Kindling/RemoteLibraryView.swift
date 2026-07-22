@@ -102,7 +102,7 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
   @Environment(LibraryStore.self) private var libraryData
-  @EnvironmentObject private var viewModel: PodibleLibraryViewModel
+  @Environment(PodibleLibraryViewModel.self) private var viewModel
   @Environment(ArtworkPaletteStore.self) private var artworkPalettes
   @Environment(LibraryDownloadController.self) private var libraryDownloads
   @Environment(\.scenePhase) private var scenePhase
@@ -3297,7 +3297,7 @@ struct ActivityShareSheet: View {
 
 private struct RemoteLibrarySearchBindingModifier: ViewModifier {
   let searchQuery: Binding<String>?
-  @ObservedObject var viewModel: RemoteLibraryViewModel
+  @Bindable var viewModel: RemoteLibraryViewModel
   let onChange: (String) -> Void
 
   @ViewBuilder
