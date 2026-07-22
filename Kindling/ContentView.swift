@@ -16,6 +16,7 @@ struct ContentView: View {
   @StateObject private var libraryData = LibraryStore()
   @StateObject private var podibleLibrary = PodibleLibraryViewModel()
   @StateObject private var artworkPalettes = ArtworkPaletteStore()
+  @StateObject private var libraryDownloads = LibraryDownloadController()
   @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
@@ -68,6 +69,7 @@ struct ContentView: View {
     .environmentObject(libraryData)
     .environmentObject(podibleLibrary)
     .environmentObject(artworkPalettes)
+    .environmentObject(libraryDownloads)
     .task(id: libraryDataRevision) {
       libraryData.update(
         books: localBooks,

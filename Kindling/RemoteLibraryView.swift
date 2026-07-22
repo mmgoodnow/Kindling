@@ -104,6 +104,7 @@ struct PodibleLibraryView: View {
   @EnvironmentObject private var libraryData: LibraryStore
   @EnvironmentObject private var viewModel: PodibleLibraryViewModel
   @EnvironmentObject private var artworkPalettes: ArtworkPaletteStore
+  @EnvironmentObject private var libraryDownloads: LibraryDownloadController
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
@@ -113,18 +114,12 @@ struct PodibleLibraryView: View {
   @State private var isShowingKindleExporter = false
   @State private var kindleExportFile: BookFile?
   @State private var isKindleExported = false
-  @State private var downloadErrorMessage: String?
-  @State private var downloadingBookID: String?
-  @State private var downloadProgress: Double?
-  @State private var downloadKind: DownloadKind?
   @State private var pendingSearchItemIDs: Set<String> = []
   @State private var searchTask: Task<Void, Never>?
   @State private var isSyncing = false
   @State private var isSyncSpinnerVisible = false
   @State private var syncSpinnerTask: Task<Void, Never>?
   @State private var syncErrorMessage: String?
-  @State private var localDownloadProgressByBookID: [String: Double] = [:]
-  @State private var localDownloadingBookIDs: Set<String> = []
   @State private var relatedBooksResults: [BookGroupRoute: PodibleRelatedBooksResult] = [:]
   @State private var loadingRelatedBooksRoutes = Set<BookGroupRoute>()
   @State private var relatedBooksErrors: [BookGroupRoute: String] = [:]
@@ -159,9 +154,34 @@ struct PodibleLibraryView: View {
     self._isShowingPlayer = isShowingPlayer
   }
 
-  private enum DownloadKind {
-    case ebook
-    case audiobook
+  private var downloadErrorMessage: String? {
+    get { libraryDownloads.errorMessage }
+    nonmutating set { libraryDownloads.errorMessage = newValue }
+  }
+
+  private var downloadingBookID: String? {
+    get { libraryDownloads.remoteBookID }
+    nonmutating set { libraryDownloads.remoteBookID = newValue }
+  }
+
+  private var downloadProgress: Double? {
+    get { libraryDownloads.remoteProgress }
+    nonmutating set { libraryDownloads.remoteProgress = newValue }
+  }
+
+  private var downloadKind: LibraryDownloadKind? {
+    get { libraryDownloads.remoteKind }
+    nonmutating set { libraryDownloads.remoteKind = newValue }
+  }
+
+  private var localDownloadProgressByBookID: [String: Double] {
+    get { libraryDownloads.localProgressByBookID }
+    nonmutating set { libraryDownloads.localProgressByBookID = newValue }
+  }
+
+  private var localDownloadingBookIDs: Set<String> {
+    get { libraryDownloads.localBookIDs }
+    nonmutating set { libraryDownloads.localBookIDs = newValue }
   }
 
   private var localBooks: [LibraryBook] { libraryData.books }
