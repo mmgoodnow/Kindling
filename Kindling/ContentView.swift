@@ -1,7 +1,36 @@
+import SwiftData
 import SwiftUI
+
+@MainActor
+final class LibraryDataStore: ObservableObject {
+  @Published private(set) var books: [LibraryBook] = []
+  @Published private(set) var activities: [BookActivityState] = []
+  @Published private(set) var syncStates: [LibrarySyncState] = []
+
+  func update(
+    books: [LibraryBook],
+    activities: [BookActivityState],
+    syncStates: [LibrarySyncState]
+  ) {
+    self.books = books
+    self.activities = activities
+    self.syncStates = syncStates
+  }
+}
 
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
+  @Query(
+    sort: [
+      SortDescriptor(\LibraryBook.addedAt, order: .reverse),
+      SortDescriptor(\LibraryBook.title, order: .forward),
+    ]
+  )
+  private var localBooks: [LibraryBook]
+  @Query private var bookActivities: [BookActivityState]
+  @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
+  private var syncStates: [LibrarySyncState]
+  @StateObject private var libraryData = LibraryDataStore()
   @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
@@ -51,6 +80,22 @@ struct ContentView: View {
     .sheet(isPresented: $isShowingPlayer) {
       LocalPlaybackView(player: player)
     }
+    .environmentObject(libraryData)
+    .task(id: libraryDataRevision) {
+      libraryData.update(
+        books: localBooks,
+        activities: bookActivities,
+        syncStates: syncStates
+      )
+    }
+  }
+
+  private var libraryDataRevision: Int {
+    var hasher = Hasher()
+    localBooks.forEach { hasher.combine($0.persistentModelID) }
+    bookActivities.forEach { hasher.combine($0.persistentModelID) }
+    syncStates.forEach { hasher.combine($0.persistentModelID) }
+    return hasher.finalize()
   }
 
   private var appTabs: some View {

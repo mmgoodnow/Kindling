@@ -101,19 +101,10 @@ struct PodibleLibraryView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
+  @EnvironmentObject private var libraryData: LibraryDataStore
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
-  @Query(
-    sort: [
-      SortDescriptor(\LibraryBook.addedAt, order: .reverse),
-      SortDescriptor(\LibraryBook.title, order: .forward),
-    ]
-  )
-  private var localBooks: [LibraryBook]
-  @Query private var bookActivities: [BookActivityState]
-  @Query(filter: #Predicate<LibrarySyncState> { $0.scope == "library" })
-  private var syncStates: [LibrarySyncState]
   @StateObject private var viewModel = RemoteLibraryViewModel()
   @StateObject private var playbackIdentityResolver = PlaybackIdentityResolver()
   @State private var isShowingShareSheet = false
@@ -173,6 +164,10 @@ struct PodibleLibraryView: View {
     case ebook
     case audiobook
   }
+
+  private var localBooks: [LibraryBook] { libraryData.books }
+  private var bookActivities: [BookActivityState] { libraryData.activities }
+  private var syncStates: [LibrarySyncState] { libraryData.syncStates }
 
   private var configuredClient: RemoteLibraryServing? {
     if let clientOverride {
