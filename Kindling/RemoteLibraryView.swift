@@ -489,10 +489,6 @@ struct LibraryFeatureContainer: View {
         }
       #endif
     }
-    .task(id: activePlaybackMetadataTaskID(client: client)) {
-      guard let client else { return }
-      await loadMetadataForActivePlaybackIfNeeded(client: client)
-    }
     .refreshable {
       guard let client else { return }
       await refresh(using: client)
@@ -1222,11 +1218,6 @@ struct LibraryFeatureContainer: View {
       ?? book.localState?.lastPlayedAt
       ?? book.updatedAt
       ?? .distantPast
-  }
-
-  private func activePlaybackMetadataTaskID(client: RemoteLibraryServing?) -> String {
-    guard client != nil, let activeResumeID = player.activeResumeID else { return "none" }
-    return "\(podibleAuth.accessToken ?? "")|\(activeResumeID)|\(localBooks.count)"
   }
 
   private var syncState: LibrarySyncState? {
@@ -2127,7 +2118,11 @@ struct LibraryFeatureContainer: View {
     if let client = configuredClient {
       let playbackAudio = playback(from: book.playbackJSON)?.audio
       Task {
-        await loadPlaybackMetadata(playback: playbackAudio, identity: identity, client: client)
+        await PlaybackMetadataLoader(player: player).load(
+          playback: playbackAudio,
+          identity: identity,
+          client: client
+        )
       }
     }
     player.play()
@@ -2211,7 +2206,11 @@ struct LibraryFeatureContainer: View {
           }
           // Server-side chapters/transcript still available — fire and forget.
           Task {
-            await loadPlaybackMetadata(playback: playbackAudio, identity: identity, client: client)
+            await PlaybackMetadataLoader(player: player).load(
+              playback: playbackAudio,
+              identity: identity,
+              client: client
+            )
           }
         }
       } catch {
@@ -2235,114 +2234,6 @@ struct LibraryFeatureContainer: View {
       podibleID: item.id,
       manifestationID: manifestationID
     )
-  }
-
-  @MainActor
-  private func loadPlaybackMetadata(
-    playback: PodiblePlaybackAudio?,
-    identity: PlaybackIdentity,
-    client: RemoteLibraryServing
-  ) async {
-    guard let playback else {
-      player.applyRemoteTranscriptUnavailable(
-        "No audio edition metadata is available for transcript lookup.",
-        for: identity
-      )
-      player.applyRemoteChapters([], for: identity)
-      return
-    }
-
-    async let chapters: Void = loadRemoteChapters(
-      playback: playback,
-      identity: identity,
-      client: client
-    )
-    async let transcript: Void = loadRemoteTranscript(
-      playback: playback,
-      identity: identity,
-      client: client
-    )
-    _ = await (chapters, transcript)
-  }
-
-  @MainActor
-  private func loadMetadataForActivePlaybackIfNeeded(client: RemoteLibraryServing) async {
-    guard player.transcriptLoadState == .idle else { return }
-    guard let activeResumeID = player.activeResumeID else { return }
-    guard
-      let activeBook = localBooks.first(where: {
-        playbackIdentity(for: $0).matches(activeResumeID)
-      })
-    else {
-      return
-    }
-    let playbackAudio = playback(from: activeBook.playbackJSON)?.audio
-    await loadPlaybackMetadata(
-      playback: playbackAudio,
-      identity: playbackIdentity(for: activeBook),
-      client: client
-    )
-  }
-
-  private func loadRemoteTranscript(
-    playback: PodiblePlaybackAudio,
-    identity: PlaybackIdentity,
-    client: RemoteLibraryServing
-  ) async {
-    guard let transcriptURL = playback.transcriptUrl,
-      transcriptURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    else {
-      await MainActor.run {
-        player.applyRemoteTranscriptUnavailable(
-          "Podible did not return a transcript URL for this audio edition.",
-          for: identity
-        )
-      }
-      return
-    }
-
-    await MainActor.run {
-      player.beginRemoteTranscriptLoad(for: identity)
-    }
-
-    do {
-      if let transcript = try await client.fetchTranscript(playback: playback) {
-        await MainActor.run {
-          player.applyRemoteTranscript(transcript, for: identity)
-        }
-      } else {
-        await MainActor.run {
-          player.applyRemoteTranscriptUnavailable(
-            "Podible returned 404 for this transcript URL.",
-            for: identity
-          )
-        }
-      }
-    } catch {
-      await MainActor.run {
-        player.applyRemoteTranscriptFailure(
-          "Transcript download failed: \(error.localizedDescription)",
-          for: identity
-        )
-      }
-    }
-  }
-
-  private func loadRemoteChapters(
-    playback: PodiblePlaybackAudio,
-    identity: PlaybackIdentity,
-    client: RemoteLibraryServing
-  ) async {
-    do {
-      let chapters = try await client.fetchChapters(playback: playback)
-      await MainActor.run {
-        player.applyRemoteChapters(chapters, for: identity)
-      }
-    } catch {
-      await MainActor.run {
-        player.applyRemoteChapters([], for: identity)
-      }
-    }
   }
 
   private func playbackIdentity(for book: LibraryBook) -> PlaybackIdentity {

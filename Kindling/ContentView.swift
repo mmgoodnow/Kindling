@@ -102,6 +102,14 @@ struct ContentView: View {
       }
       await podibleLibrary.refresh(using: client, modelContext: modelContext)
     }
+    .task(id: playbackMetadataTaskID) {
+      guard let client = configuredClient else { return }
+      await PlaybackMetadataLoader(player: player).loadForActivePlaybackIfNeeded(
+        books: localBooks,
+        identity: playbackIdentityResolver.identity(for:),
+        client: client
+      )
+    }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active, let client = configuredClient else { return }
       Task {
@@ -124,6 +132,11 @@ struct ContentView: View {
 
   private var podibleSessionTaskID: String {
     "\(userSettings.podibleRPCURL)|\(podibleAuth.accessToken ?? "")|\(podibleAuth.hasCheckedStoredSession)"
+  }
+
+  private var playbackMetadataTaskID: String {
+    guard configuredClient != nil, let activeResumeID = player.activeResumeID else { return "none" }
+    return "\(podibleAuth.accessToken ?? "")|\(activeResumeID)|\(localBooks.count)"
   }
 
   private var artworkPaletteTaskID: Int {
