@@ -174,7 +174,6 @@ struct ContentView: View {
           navigationPath: $homeNavigationPath,
           isShowingPlayer: playerTabBinding
         )
-        .equatable()
       }
 
       Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
@@ -183,7 +182,6 @@ struct ContentView: View {
           navigationPath: $libraryNavigationPath,
           isShowingPlayer: playerTabBinding
         )
-        .equatable()
       }
 
       Tab("Favorites", systemImage: "heart.fill", value: AppTab.favorites) {
@@ -192,7 +190,6 @@ struct ContentView: View {
           navigationPath: $favoritesNavigationPath,
           isShowingPlayer: playerTabBinding
         )
-        .equatable()
       }
 
       Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
@@ -202,7 +199,6 @@ struct ContentView: View {
           navigationPath: $searchNavigationPath,
           isShowingPlayer: playerTabBinding
         )
-        .equatable()
       }
       .tabPlacement(.pinned)
     }
@@ -215,7 +211,7 @@ struct ContentView: View {
   }
 }
 
-private struct LibraryTabRoot: View, Equatable {
+private struct LibraryTabRoot: View {
   let mode: PodibleLibraryScreenMode
   var searchQuery: Binding<String>?
   @Binding var navigationPath: NavigationPath
@@ -231,10 +227,6 @@ private struct LibraryTabRoot: View, Equatable {
     self.searchQuery = searchQuery
     self._navigationPath = navigationPath
     self._isShowingPlayer = isShowingPlayer
-  }
-
-  static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.mode == rhs.mode
   }
 
   var body: some View {
