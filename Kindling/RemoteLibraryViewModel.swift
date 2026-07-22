@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 func isCancellationError(_ error: Error) -> Bool {
   if error is CancellationError { return true }
@@ -40,6 +41,7 @@ final class PodibleLibraryViewModel {
 
   @ObservationIgnored nonisolated(unsafe) private var downloadPollingTasks:
     [String: Task<Void, Never>] = [:]
+  @ObservationIgnored nonisolated(unsafe) private var syncSpinnerTask: Task<Void, Never>?
   private var isLoadingLibrary = false
   private let downloadPollIntervalNanoseconds: UInt64 = 500_000_000
   private let searchCooldownInterval: TimeInterval = 20
@@ -55,6 +57,7 @@ final class PodibleLibraryViewModel {
     for task in downloadPollingTasks.values {
       task.cancel()
     }
+    syncSpinnerTask?.cancel()
   }
 
   func loadLibraryItems(using client: RemoteLibraryServing) async {
@@ -65,17 +68,35 @@ final class PodibleLibraryViewModel {
     errorMessage = nil
     do {
       let all = try await client.fetchLibraryItems()
-      let filteredAll = filtered(all)
-      prunePendingItems(matching: filteredAll)
-      let filteredItems = mergePending(into: filteredAll)
-      libraryItems = filteredItems
-      startPollingIfNeeded(for: filteredItems, client: client)
+      applyLibraryItems(all, client: client)
     } catch {
       if shouldIgnoreError(error) == false {
         errorMessage = error.localizedDescription
       }
     }
     isLoading = false
+  }
+
+  func refresh(using client: RemoteLibraryServing, modelContext: ModelContext) async {
+    guard isSyncing == false else { return }
+    isSyncing = true
+    scheduleSyncSpinner()
+    syncErrorMessage = nil
+    defer {
+      cancelSyncSpinner()
+      isSyncing = false
+    }
+
+    do {
+      let summary = try await LibrarySyncService().syncLibrary(
+        using: client,
+        modelContext: modelContext
+      )
+      updateSyncState(with: summary, syncedAt: Date(), modelContext: modelContext)
+      applyLibraryItems(summary.items, client: client)
+    } catch {
+      syncErrorMessage = librarySyncErrorMessage(for: error)
+    }
   }
 
   func search(using client: RemoteLibraryServing) async {
@@ -236,6 +257,53 @@ final class PodibleLibraryViewModel {
     }
   }
 
+  private func applyLibraryItems(
+    _ items: [PodibleLibraryItem],
+    client: RemoteLibraryServing
+  ) {
+    let filteredItems = filtered(items)
+    prunePendingItems(matching: filteredItems)
+    let mergedItems = mergePending(into: filteredItems)
+    libraryItems = mergedItems
+    startPollingIfNeeded(for: mergedItems, client: client)
+  }
+
+  private func scheduleSyncSpinner() {
+    syncSpinnerTask?.cancel()
+    isSyncSpinnerVisible = false
+    syncSpinnerTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 200_000_000)
+      guard Task.isCancelled == false, let self, self.isSyncing else { return }
+      self.isSyncSpinnerVisible = true
+    }
+  }
+
+  private func cancelSyncSpinner() {
+    syncSpinnerTask?.cancel()
+    syncSpinnerTask = nil
+    isSyncSpinnerVisible = false
+  }
+
+  private func updateSyncState(
+    with summary: LibrarySyncService.Summary,
+    syncedAt: Date,
+    modelContext: ModelContext
+  ) {
+    let states = (try? modelContext.fetch(FetchDescriptor<LibrarySyncState>())) ?? []
+    let state = states.first(where: { $0.scope == "library" }) ?? LibrarySyncState()
+    if state.modelContext == nil {
+      modelContext.insert(state)
+    }
+    state.lastSync = syncedAt
+    state.insertedBooks = summary.insertedBooks
+    state.updatedBooks = summary.updatedBooks
+    state.insertedAuthors = summary.insertedAuthors
+    state.updatedAuthors = summary.updatedAuthors
+    if modelContext.hasChanges {
+      try? modelContext.save()
+    }
+  }
+
   func beginOptimisticRequest(for book: PodibleBook) {
     addPendingRequestIfNeeded(for: book)
   }
@@ -342,6 +410,11 @@ final class PodibleLibraryViewModel {
     searchResults = []
     errorMessage = nil
     isLoading = false
+    syncSpinnerTask?.cancel()
+    syncSpinnerTask = nil
+    isSyncing = false
+    isSyncSpinnerVisible = false
+    syncErrorMessage = nil
   }
 
   private func markSearchTriggered(bookID: String, library: PodibleLibraryMedia) {

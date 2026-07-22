@@ -3,6 +3,10 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var player: AudioPlayerController
+  @EnvironmentObject private var userSettings: UserSettings
+  @EnvironmentObject private var podibleAuth: PodibleAuthController
+  @Environment(\.modelContext) private var modelContext
+  @Environment(\.scenePhase) private var scenePhase
   @Query(
     sort: [
       SortDescriptor(\LibraryBook.addedAt, order: .reverse),
@@ -17,6 +21,7 @@ struct ContentView: View {
   @State private var podibleLibrary = PodibleLibraryViewModel()
   @State private var artworkPalettes = ArtworkPaletteStore()
   @State private var libraryDownloads = LibraryDownloadController()
+  @StateObject private var playbackIdentityResolver = PlaybackIdentityResolver()
   @State private var selectedTab: AppTab = .home
   @State private var searchQuery = ""
   @State private var libraryNavigationPath = NavigationPath()
@@ -76,6 +81,7 @@ struct ContentView: View {
         activities: bookActivities,
         syncStates: syncStates
       )
+      try? libraryData.migrateLegacyActivityState(context: modelContext)
     }
     .task(id: artworkPaletteTaskID) {
       artworkPalettes.loadCached(
@@ -88,10 +94,37 @@ struct ContentView: View {
         }
       )
     }
+    .task(id: podibleSessionTaskID) {
+      guard podibleAuth.isCheckingStoredSession == false else { return }
+      guard let client = configuredClient else {
+        podibleLibrary.reset()
+        return
+      }
+      await podibleLibrary.refresh(using: client, modelContext: modelContext)
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      guard newPhase == .active, let client = configuredClient else { return }
+      Task {
+        await podibleLibrary.refresh(using: client, modelContext: modelContext)
+      }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
+      markFinishedPlaybackRead($0)
+    }
   }
 
-  @EnvironmentObject private var userSettings: UserSettings
-  @EnvironmentObject private var podibleAuth: PodibleAuthController
+  private var configuredClient: RemoteLibraryServing? {
+    guard let url = URL(string: userSettings.podibleRPCURL),
+      userSettings.podibleRPCURL.isEmpty == false,
+      let accessToken = podibleAuth.accessToken,
+      accessToken.isEmpty == false
+    else { return nil }
+    return PodibleClient(rpcURL: url, accessToken: accessToken)
+  }
+
+  private var podibleSessionTaskID: String {
+    "\(userSettings.podibleRPCURL)|\(podibleAuth.accessToken ?? "")|\(podibleAuth.hasCheckedStoredSession)"
+  }
 
   private var artworkPaletteTaskID: Int {
     artworkPaletteRevision(
@@ -109,6 +142,15 @@ struct ContentView: View {
     bookActivities.forEach { hasher.combine($0.persistentModelID) }
     syncStates.forEach { hasher.combine($0.persistentModelID) }
     return hasher.finalize()
+  }
+
+  private func markFinishedPlaybackRead(_ notification: Notification) {
+    guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
+    try? libraryData.markFinishedPlaybackRead(
+      resumeID: resumeID,
+      identity: playbackIdentityResolver.identity(for:),
+      context: modelContext
+    )
   }
 
   private var appTabs: some View {

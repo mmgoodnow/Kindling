@@ -57,6 +57,36 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(librarySyncErrorMessage(for: error), error.localizedDescription)
   }
 
+  func testLibrarySessionRefreshFetchesRemoteLibraryOnce() async throws {
+    let schema = Schema([
+      Author.self,
+      Series.self,
+      LibraryBook.self,
+      LibraryBookFile.self,
+      LocalBookState.self,
+      LibrarySyncState.self,
+    ])
+    let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: schema, configurations: [configuration])
+    let client = PodibleMockClient(
+      libraryItems: [
+        PodibleLibraryItem(
+          id: "book-1",
+          title: "Wool",
+          author: "Hugh Howey",
+          status: .downloaded
+        )
+      ]
+    )
+    let viewModel = PodibleLibraryViewModel()
+
+    await viewModel.refresh(using: client, modelContext: container.mainContext)
+
+    let fetchCount = await client.fetchLibraryItemsCallCount()
+    XCTAssertEqual(fetchCount, 1)
+    XCTAssertEqual(viewModel.libraryItems.map(\.id), ["book-1"])
+  }
+
   func testIdenticalDownloadPollDoesNotMutateLibraryState() {
     let item = PodibleLibraryItem(
       id: "book-1",

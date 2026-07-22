@@ -4,6 +4,7 @@ import SwiftData
 @MainActor
 struct LibrarySyncService {
   struct Summary {
+    let items: [PodibleLibraryItem]
     let insertedBooks: Int
     let updatedBooks: Int
     let insertedAuthors: Int
@@ -134,6 +135,7 @@ struct LibrarySyncService {
     }
 
     return Summary(
+      items: items,
       insertedBooks: insertedBooks,
       updatedBooks: updatedBooks,
       insertedAuthors: insertedAuthors,

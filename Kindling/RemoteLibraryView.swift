@@ -105,7 +105,6 @@ struct LibraryFeatureContainer: View {
   @Environment(PodibleLibraryViewModel.self) private var viewModel
   @Environment(ArtworkPaletteStore.self) private var artworkPalettes
   @Environment(LibraryDownloadController.self) private var libraryDownloads
-  @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
   @Environment(\.colorScheme) private var colorScheme
   @StateObject private var playbackIdentityResolver = PlaybackIdentityResolver()
@@ -116,7 +115,6 @@ struct LibraryFeatureContainer: View {
   @State private var isKindleExported = false
   @State private var pendingSearchItemIDs: Set<String> = []
   @State private var searchTask: Task<Void, Never>?
-  @State private var syncSpinnerTask: Task<Void, Never>?
   @State private var isCollectionHeaderCollapsed = false
   @State private var isShowingSettings = false
   @AppStorage("library.collectionFilter") private var collectionFilterRawValue =
@@ -261,11 +259,9 @@ struct LibraryFeatureContainer: View {
       .navigationDestination(isPresented: $isShowingSettings) {
         SettingsView()
       }
-      .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
-        markFinishedPlaybackRead($0)
-      }
-      .task {
-        migrateLegacyActivityState()
+      .task(id: clientOverride == nil ? "shared-session" : "client-override") {
+        guard let clientOverride else { return }
+        await refresh(using: clientOverride)
       }
   }
 
@@ -493,30 +489,9 @@ struct LibraryFeatureContainer: View {
         }
       #endif
     }
-    .task(id: "\(podibleAuth.accessToken ?? "")|\(podibleAuth.hasCheckedStoredSession)") {
-      guard isWaitingForStoredPodibleSession == false else { return }
-      guard let client else {
-        viewModel.reset()
-        return
-      }
-      await refresh(using: client)
-      let remoteOnly = self.viewModel.libraryItems.filter { self.localBooksById[$0.id] == nil }
-      if remoteOnly.isEmpty == false {
-        for item in remoteOnly {
-          applyLibraryItemUpdate(item)
-        }
-      }
-    }
     .task(id: activePlaybackMetadataTaskID(client: client)) {
       guard let client else { return }
       await loadMetadataForActivePlaybackIfNeeded(client: client)
-    }
-    .onChange(of: scenePhase) { _, newPhase in
-      guard newPhase == .active else { return }
-      guard let client else { return }
-      Task {
-        await refresh(using: client)
-      }
     }
     .refreshable {
       guard let client else { return }
@@ -1249,16 +1224,6 @@ struct LibraryFeatureContainer: View {
       ?? .distantPast
   }
 
-  @MainActor
-  private func markFinishedPlaybackRead(_ notification: Notification) {
-    guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
-    try? libraryData.markFinishedPlaybackRead(
-      resumeID: resumeID,
-      identity: playbackIdentity(for:),
-      context: modelContext
-    )
-  }
-
   private func activePlaybackMetadataTaskID(client: RemoteLibraryServing?) -> String {
     guard client != nil, let activeResumeID = player.activeResumeID else { return "none" }
     return "\(podibleAuth.accessToken ?? "")|\(activeResumeID)|\(localBooks.count)"
@@ -1515,65 +1480,8 @@ struct LibraryFeatureContainer: View {
   }
 
   @MainActor
-  private func syncFromRemote(using client: RemoteLibraryServing) async {
-    guard isSyncing == false else { return }
-    isSyncing = true
-    scheduleSyncSpinner()
-    syncErrorMessage = nil
-    do {
-      let summary = try await LibrarySyncService().syncLibrary(
-        using: client,
-        modelContext: modelContext
-      )
-      updateSyncState(with: summary, syncedAt: Date())
-    } catch {
-      syncErrorMessage = librarySyncErrorMessage(for: error)
-    }
-    cancelSyncSpinner()
-    isSyncing = false
-  }
-
-  @MainActor
-  private func scheduleSyncSpinner() {
-    syncSpinnerTask?.cancel()
-    isSyncSpinnerVisible = false
-    syncSpinnerTask = Task {
-      try? await Task.sleep(nanoseconds: 200_000_000)
-      guard Task.isCancelled == false else { return }
-      await MainActor.run {
-        guard isSyncing else { return }
-        isSyncSpinnerVisible = true
-      }
-    }
-  }
-
-  @MainActor
-  private func cancelSyncSpinner() {
-    syncSpinnerTask?.cancel()
-    syncSpinnerTask = nil
-    isSyncSpinnerVisible = false
-  }
-
-  @MainActor
-  private func updateSyncState(with summary: LibrarySyncService.Summary, syncedAt: Date) {
-    let state = syncState ?? LibrarySyncState()
-    if syncState == nil {
-      modelContext.insert(state)
-    }
-    state.lastSync = syncedAt
-    state.insertedBooks = summary.insertedBooks
-    state.updatedBooks = summary.updatedBooks
-    state.insertedAuthors = summary.insertedAuthors
-    state.updatedAuthors = summary.updatedAuthors
-    if modelContext.hasChanges {
-      try? modelContext.save()
-    }
-  }
-
-  @MainActor
   private func refresh(using client: RemoteLibraryServing) async {
-    await syncFromRemote(using: client)
-    await viewModel.loadLibraryItems(using: client)
+    await viewModel.refresh(using: client, modelContext: modelContext)
   }
 
   @MainActor
@@ -2654,10 +2562,6 @@ struct LibraryFeatureContainer: View {
 
   private func activityStateIfPresent(for bookID: String) -> BookActivityState? {
     libraryData.activity(for: bookID)
-  }
-
-  private func migrateLegacyActivityState() {
-    try? libraryData.migrateLegacyActivityState(context: modelContext)
   }
 
   @MainActor

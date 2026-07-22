@@ -998,6 +998,13 @@ final actor PodibleMockClient: PodibleLibraryServing {
       bookAdded: Date().addingTimeInterval(-86_400 * 12)),
   ]
   private var progress: [String: (ebook: Int, audio: Int)] = [:]
+  private var libraryFetchCount = 0
+
+  init(libraryItems: [PodibleLibraryItem]? = nil) {
+    if let libraryItems {
+      self.libraryItems = libraryItems
+    }
+  }
 
   nonisolated var supportsLibraryDelete: Bool { true }
 
@@ -1040,7 +1047,12 @@ final actor PodibleMockClient: PodibleLibraryServing {
   }
 
   func fetchLibraryItems() async throws -> [PodibleLibraryItem] {
+    libraryFetchCount += 1
     return libraryItems
+  }
+
+  func fetchLibraryItemsCallCount() -> Int {
+    libraryFetchCount
   }
 
   func acquireLibraryMedia(bookID: String, library: PodibleLibraryMedia) async throws {
