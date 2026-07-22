@@ -16,6 +16,70 @@ final class LibraryDataStore: ObservableObject {
     self.activities = activities
     self.syncStates = syncStates
   }
+
+  func books(
+    for mode: PodibleLibraryScreenMode,
+    progress: (LibraryBook) -> Double?
+  ) -> [LibraryBook] {
+    switch mode {
+    case .home, .library:
+      books
+    case .favorites:
+      books.filter { isSavedBookState($0.localState, progress: progress($0)) }
+    }
+  }
+
+  func books(
+    for collection: LibraryCollection,
+    progress: (LibraryBook) -> Double?,
+    lastPlayedAt: (LibraryBook) -> Date
+  ) -> [LibraryBook] {
+    switch collection {
+    case .continueReading:
+      books
+        .filter {
+          belongsInContinueReading(
+            progress: progress($0),
+            isRead: $0.localState?.isRead == true
+          )
+        }
+        .sorted { lastPlayedAt($0) > lastPlayedAt($1) }
+    case .tbr:
+      books.filter {
+        belongsInTBR(
+          isFavorite: $0.localState?.isFavorite == true,
+          isRead: $0.localState?.isRead == true,
+          progress: progress($0)
+        )
+      }
+    case .newOnPodible:
+      books
+        .filter {
+          belongsInNewOnPodible(
+            isFavorite: isSavedBookState($0.localState, progress: progress($0)),
+            isRead: $0.localState?.isRead == true
+          )
+        }
+        .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+    case .recentlyViewed:
+      books.filter { activity(for: $0.podibleId)?.lastViewedAt != nil }
+        .sorted {
+          (activity(for: $0.podibleId)?.lastViewedAt ?? .distantPast)
+            > (activity(for: $1.podibleId)?.lastViewedAt ?? .distantPast)
+        }
+    case .read:
+      books
+        .filter { $0.localState?.isRead == true }
+        .sorted {
+          (activity(for: $0.podibleId)?.readAt ?? .distantPast)
+            > (activity(for: $1.podibleId)?.readAt ?? .distantPast)
+        }
+    }
+  }
+
+  func activity(for bookID: String) -> BookActivityState? {
+    activities.first { $0.bookPodibleID == bookID }
+  }
 }
 
 struct ContentView: View {

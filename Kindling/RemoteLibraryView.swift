@@ -166,7 +166,6 @@ struct PodibleLibraryView: View {
   }
 
   private var localBooks: [LibraryBook] { libraryData.books }
-  private var bookActivities: [BookActivityState] { libraryData.activities }
   private var syncStates: [LibrarySyncState] { libraryData.syncStates }
 
   private var configuredClient: RemoteLibraryServing? {
@@ -561,14 +560,7 @@ struct PodibleLibraryView: View {
   }
 
   private var collectionBooks: [LibraryBook] {
-    switch mode {
-    case .home:
-      localBooks
-    case .library:
-      localBooks
-    case .favorites:
-      localBooks.filter(isSavedBook(_:))
-    }
+    libraryData.books(for: mode, progress: playbackProgress(for:))
   }
 
   @MainActor
@@ -579,49 +571,11 @@ struct PodibleLibraryView: View {
   }
 
   private func books(for collection: LibraryCollection) -> [LibraryBook] {
-    return switch collection {
-    case .continueReading:
-      localBooks
-        .filter {
-          belongsInContinueReading(
-            progress: playbackProgress(for: $0),
-            isRead: $0.localState?.isRead == true
-          )
-        }
-        .sorted {
-          playbackLastPlayedAt(for: $0) > playbackLastPlayedAt(for: $1)
-        }
-    case .tbr:
-      localBooks.filter {
-        belongsInTBR(
-          isFavorite: $0.localState?.isFavorite == true,
-          isRead: $0.localState?.isRead == true,
-          progress: playbackProgress(for: $0)
-        )
-      }
-    case .newOnPodible:
-      localBooks
-        .filter {
-          belongsInNewOnPodible(
-            isFavorite: isSavedBook($0),
-            isRead: $0.localState?.isRead == true
-          )
-        }
-        .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
-    case .recentlyViewed:
-      localBooks.filter { activityStateIfPresent(for: $0.podibleId)?.lastViewedAt != nil }
-        .sorted {
-          (activityStateIfPresent(for: $0.podibleId)?.lastViewedAt ?? .distantPast)
-            > (activityStateIfPresent(for: $1.podibleId)?.lastViewedAt ?? .distantPast)
-        }
-    case .read:
-      localBooks
-        .filter { $0.localState?.isRead == true }
-        .sorted {
-          (activityStateIfPresent(for: $0.podibleId)?.readAt ?? .distantPast)
-            > (activityStateIfPresent(for: $1.podibleId)?.readAt ?? .distantPast)
-        }
-    }
+    libraryData.books(
+      for: collection,
+      progress: playbackProgress(for:),
+      lastPlayedAt: playbackLastPlayedAt(for:)
+    )
   }
 
   private func homeContent(client: RemoteLibraryServing?) -> some View {
@@ -2818,7 +2772,7 @@ struct PodibleLibraryView: View {
   }
 
   private func activityStateIfPresent(for bookID: String) -> BookActivityState? {
-    bookActivities.first { $0.bookPodibleID == bookID }
+    libraryData.activity(for: bookID)
   }
 
   private func activityState(for bookID: String) -> BookActivityState {
