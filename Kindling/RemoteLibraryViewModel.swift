@@ -31,7 +31,7 @@ final class PodibleLibraryViewModel: ObservableObject {
   @Published private var pendingItemsByID: [String: PodibleLibraryItem] = [:]
 
   private var downloadPollingTasks: [String: Task<Void, Never>] = [:]
-  private let downloadPollIntervalNanoseconds: UInt64 = 500_000_000
+  private let downloadPollIntervalNanoseconds: UInt64 = 2_000_000_000
   private let searchCooldownInterval: TimeInterval = 20
   private var lastSearchByKey: [SearchCooldownKey: Date] = [:]
   private var searchResultsByQuery: [String: [PodibleBook]] = [:]
@@ -385,8 +385,9 @@ final class PodibleLibraryViewModel: ObservableObject {
     }
   }
 
-  private func mergeInProgressItem(_ item: PodibleLibraryItem, forBookID bookID: String) {
-    guard item.id == bookID else { return }
+  @discardableResult
+  func mergeInProgressItem(_ item: PodibleLibraryItem, forBookID bookID: String) -> Bool {
+    guard item.id == bookID else { return false }
 
     if let index = libraryItems.firstIndex(where: { $0.id == bookID }) {
       let existing = libraryItems[index]
@@ -414,14 +415,16 @@ final class PodibleLibraryViewModel: ObservableObject {
         seriesPosition: item.seriesPosition ?? existing.seriesPosition,
         playback: item.playback ?? existing.playback
       )
+      guard merged != existing else { return false }
       libraryItems[index] = merged
       updatePolledProgressSnapshot(for: merged)
-      return
+      return true
     }
 
     libraryItems.append(item)
     libraryItems = filtered(libraryItems)
     updatePolledProgressSnapshot(for: item)
+    return true
   }
 
   private func updatePolledProgressSnapshot(for item: PodibleLibraryItem) {
@@ -429,7 +432,8 @@ final class PodibleLibraryViewModel: ObservableObject {
     let ebookStatus = item.ebookStatus ?? item.status
     let audioStatus = item.audioStatus
     let sawProgress = item.fullPseudoProgress != nil
-    downloadProgressByBookID[item.id] = DownloadProgress(
+    let existing = downloadProgressByBookID[item.id]
+    let updated = DownloadProgress(
       ebook: combined,
       audiobook: combined,
       ebookFinished: ebookStatus.isComplete,
@@ -438,6 +442,15 @@ final class PodibleLibraryViewModel: ObservableObject {
       audiobookSeen: sawProgress,
       updatedAt: .now
     )
+    guard
+      existing?.ebook != updated.ebook
+        || existing?.audiobook != updated.audiobook
+        || existing?.ebookFinished != updated.ebookFinished
+        || existing?.audiobookFinished != updated.audiobookFinished
+        || existing?.ebookSeen != updated.ebookSeen
+        || existing?.audiobookSeen != updated.audiobookSeen
+    else { return }
+    downloadProgressByBookID[item.id] = updated
   }
 
   private func mergeProgress(_ items: [PodibleDownloadProgressItem], forBookID bookID: String) {

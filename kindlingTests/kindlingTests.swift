@@ -57,6 +57,31 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(librarySyncErrorMessage(for: error), error.localizedDescription)
   }
 
+  func testIdenticalDownloadPollDoesNotMutateLibraryState() {
+    let item = PodibleLibraryItem(
+      id: "book-1",
+      title: "Wool",
+      author: "Hugh Howey",
+      status: .snatched,
+      fullPseudoProgress: 42
+    )
+    let viewModel = PodibleLibraryViewModel()
+    viewModel.libraryItems = [item]
+
+    XCTAssertFalse(viewModel.mergeInProgressItem(item, forBookID: item.id))
+    XCTAssertTrue(viewModel.downloadProgressByBookID.isEmpty)
+
+    let updated = PodibleLibraryItem(
+      id: item.id,
+      title: item.title,
+      author: item.author,
+      status: item.status,
+      fullPseudoProgress: 43
+    )
+    XCTAssertTrue(viewModel.mergeInProgressItem(updated, forBookID: item.id))
+    XCTAssertEqual(viewModel.downloadProgressByBookID[item.id]?.ebook, 43)
+  }
+
   func testMiniPlayerUsesCurrentChapterAndRemainingTime() {
     let chapters = [
       AudioPlayerController.Chapter(id: 0, title: "Chapter 2", startTime: 0, duration: 600),
@@ -723,6 +748,30 @@ final class kindlingTests: XCTestCase {
     }
     let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
     XCTAssertEqual(states.map(\.canonicalID), ["indexed-book"])
+  }
+
+  @MainActor
+  func testPlaybackRepositoryIndexesAliasesForRepeatedReads() throws {
+    let defaults = try isolatedDefaults(named: "IndexedAliasReads")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let storedIdentity = PlaybackIdentity(
+      canonicalID: "canonical-book",
+      aliases: ["legacy-book"]
+    )
+    repository.checkpoint(
+      identity: storedIdentity,
+      position: 321,
+      duration: 1_000,
+      playbackRate: 1,
+      flush: true
+    )
+
+    let legacyIdentity = PlaybackIdentity(canonicalID: "legacy-book")
+    for _ in 0..<100 {
+      XCTAssertEqual(repository.position(for: legacyIdentity), 321)
+    }
   }
 
   @MainActor

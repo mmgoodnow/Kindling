@@ -30,6 +30,7 @@ final class PlaybackRepository {
   private let defaults: UserDefaults
   private var cachedStates: [PlaybackState]
   private var statesByCanonicalID: [String: PlaybackState]
+  private var statesByResumeID: [String: [PlaybackState]]
 
   init(context: ModelContext, defaults: UserDefaults = .standard) {
     self.context = context
@@ -39,6 +40,8 @@ final class PlaybackRepository {
     self.statesByCanonicalID = states.reduce(into: [:]) { result, state in
       result[state.canonicalID] = state
     }
+    self.statesByResumeID = [:]
+    rebuildResumeIndex()
   }
 
   func migrateLegacyState() throws {
@@ -158,6 +161,7 @@ final class PlaybackRepository {
       exact.aliasesJSON = encodedAliases(identity.allResumeIDs)
       exact.bookPodibleID = identity.podibleID ?? exact.bookPodibleID
       exact.manifestationID = identity.manifestationID ?? exact.manifestationID
+      rebuildResumeIndex()
       return exact
     }
 
@@ -177,6 +181,7 @@ final class PlaybackRepository {
       context.insert(state)
       cachedStates.append(state)
       statesByCanonicalID[state.canonicalID] = state
+      rebuildResumeIndex()
     }
     return state
   }
@@ -207,6 +212,7 @@ final class PlaybackRepository {
     state.playbackRate = checkpoint.playbackRate
     state.lastPlayedAt = checkpoint.updatedAt
     state.updatedAt = checkpoint.updatedAt
+    rebuildResumeIndex()
   }
 
   private func exactState(for canonicalID: String) -> PlaybackState? {
@@ -218,11 +224,13 @@ final class PlaybackRepository {
   }
 
   private func matchingStates(for identity: PlaybackIdentity) -> [PlaybackState] {
-    let resumeIDs = Set(identity.allResumeIDs)
-    return allStates().filter { state in
-      resumeIDs.contains(state.canonicalID)
-        || resumeIDs.isDisjoint(with: decodedAliases(state.aliasesJSON)) == false
+    var matches: [PersistentIdentifier: PlaybackState] = [:]
+    for resumeID in identity.allResumeIDs {
+      for state in statesByResumeID[resumeID] ?? [] {
+        matches[state.persistentModelID] = state
+      }
     }
+    return Array(matches.values)
   }
 
   private func allStates() -> [PlaybackState] {
@@ -239,11 +247,20 @@ final class PlaybackRepository {
     try? JSONEncoder().encode(aliases)
   }
 
-  private func decodedAliases(_ data: Data?) -> Set<String> {
+  private static func decodedAliases(_ data: Data?) -> Set<String> {
     guard let data, let aliases = try? JSONDecoder().decode([String].self, from: data) else {
       return []
     }
     return Set(aliases)
+  }
+
+  private func rebuildResumeIndex() {
+    statesByResumeID = cachedStates.reduce(into: [:]) { index, state in
+      let resumeIDs = Self.decodedAliases(state.aliasesJSON).union([state.canonicalID])
+      for resumeID in resumeIDs {
+        index[resumeID, default: []].append(state)
+      }
+    }
   }
 
   private func saveIfNeeded() throws {

@@ -3101,14 +3101,13 @@ func remoteLibraryEbookStatusRow(
           icon: "book",
           snoring: false
         )
-      } else {
+      } else if shouldOfferSearch {
         remoteLibraryProgressCircle(
           value: 0,
           tint: .blue,
           icon: "book",
           snoring: true
         )
-        .opacity(shouldOfferSearch ? 1 : 0)
       }
     }
   }
@@ -3134,14 +3133,13 @@ func remoteLibraryAudioStatusRow(
           icon: "waveform.mid",
           snoring: false
         )
-      } else {
+      } else if shouldOfferSearch {
         remoteLibraryProgressCircle(
           value: 0,
           tint: .blue,
           icon: "waveform.mid",
           snoring: true
         )
-        .opacity(shouldOfferSearch ? 1 : 0)
       }
     }
   }
