@@ -618,6 +618,29 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(state.isFavorite, true)
   }
 
+  func testHomeCollectionsReadPlaybackProgressOncePerBook() {
+    let inProgress = LibraryBook(podibleId: "progress", title: "In Progress")
+    let tbr = LibraryBook(podibleId: "tbr", title: "TBR")
+    tbr.localState = LocalBookState(bookPodibleId: tbr.podibleId, isFavorite: true, book: tbr)
+    let unread = LibraryBook(podibleId: "new", title: "New")
+    let store = LibraryStore()
+    store.update(books: [inProgress, tbr, unread], activities: [], syncStates: [])
+    var progressReads: [String: Int] = [:]
+
+    let collections = store.homeCollections(
+      progress: { book in
+        progressReads[book.podibleId, default: 0] += 1
+        return book.podibleId == inProgress.podibleId ? 0.25 : nil
+      },
+      lastPlayedAt: { _ in .now }
+    )
+
+    XCTAssertEqual(progressReads, ["progress": 1, "tbr": 1, "new": 1])
+    XCTAssertEqual(collections[.continueReading]?.map(\.podibleId), ["progress"])
+    XCTAssertEqual(collections[.tbr]?.map(\.podibleId), ["tbr"])
+    XCTAssertEqual(collections[.newOnPodible]?.map(\.podibleId), ["new"])
+  }
+
   func testLibraryCollectionsHaveStableTitles() {
     XCTAssertEqual(
       LibraryCollection.allCases.map(\.title),

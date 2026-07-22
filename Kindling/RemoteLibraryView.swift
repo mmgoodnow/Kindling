@@ -576,13 +576,21 @@ struct LibraryFeatureContainer: View {
   }
 
   private func homeContent(client: RemoteLibraryServing?) -> some View {
-    ScrollView {
+    let collectionBooks = libraryData.homeCollections(
+      progress: playbackProgress(for:),
+      lastPlayedAt: playbackLastPlayedAt(for:)
+    )
+    let tileFactory = bookTileFactory
+    let tilesByID = Dictionary(
+      uniqueKeysWithValues: localBooks.map { ($0.podibleId, tileFactory.make(for: $0)) }
+    )
+    return ScrollView {
       LazyVStack(alignment: .leading, spacing: 28) {
         collectionStatusMessages(client: client)
         ForEach(LibraryCollection.allCases) { collection in
           BookRailView(
             title: collection.title,
-            books: books(for: collection).map(bookTileViewData(for:)),
+            books: (collectionBooks[collection] ?? []).compactMap { tilesByID[$0.podibleId] },
             emptyMessage: homeRailEmptyMessage(title: collection.title),
             artwork: collectionArtwork(for:cornerRadius:),
             onSelect: selectCollectionBook(_:),

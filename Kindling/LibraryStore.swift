@@ -48,47 +48,64 @@ final class LibraryStore {
     progress: (LibraryBook) -> Double?,
     lastPlayedAt: (LibraryBook) -> Date
   ) -> [LibraryBook] {
-    switch collection {
-    case .continueReading:
-      books
-        .filter {
-          belongsInContinueReading(
-            progress: progress($0),
-            isRead: $0.localState?.isRead == true
-          )
-        }
-        .sorted { lastPlayedAt($0) > lastPlayedAt($1) }
-    case .tbr:
-      books.filter {
-        belongsInTBR(
-          isFavorite: $0.localState?.isFavorite == true,
-          isRead: $0.localState?.isRead == true,
-          progress: progress($0)
-        )
+    homeCollections(progress: progress, lastPlayedAt: lastPlayedAt)[collection] ?? []
+  }
+
+  func homeCollections(
+    progress: (LibraryBook) -> Double?,
+    lastPlayedAt: (LibraryBook) -> Date
+  ) -> [LibraryCollection: [LibraryBook]] {
+    var result: [LibraryCollection: [LibraryBook]] = Dictionary(
+      uniqueKeysWithValues: LibraryCollection.allCases.map { ($0, [LibraryBook]()) }
+    )
+    var continueDates: [String: Date] = [:]
+
+    for book in books {
+      let playbackProgress = progress(book)
+      let isRead = book.localState?.isRead == true
+      let activity = activity(for: book.podibleId)
+
+      if belongsInContinueReading(progress: playbackProgress, isRead: isRead) {
+        result[.continueReading, default: []].append(book)
+        continueDates[book.podibleId] = lastPlayedAt(book)
       }
-    case .newOnPodible:
-      books
-        .filter {
-          belongsInNewOnPodible(
-            isFavorite: isSavedBookState($0.localState, progress: progress($0)),
-            isRead: $0.localState?.isRead == true
-          )
-        }
-        .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
-    case .recentlyViewed:
-      books.filter { activity(for: $0.podibleId)?.lastViewedAt != nil }
-        .sorted {
-          (activity(for: $0.podibleId)?.lastViewedAt ?? .distantPast)
-            > (activity(for: $1.podibleId)?.lastViewedAt ?? .distantPast)
-        }
-    case .read:
-      books
-        .filter { $0.localState?.isRead == true }
-        .sorted {
-          (activity(for: $0.podibleId)?.readAt ?? .distantPast)
-            > (activity(for: $1.podibleId)?.readAt ?? .distantPast)
-        }
+      if belongsInTBR(
+        isFavorite: book.localState?.isFavorite == true,
+        isRead: isRead,
+        progress: playbackProgress
+      ) {
+        result[.tbr, default: []].append(book)
+      }
+      if belongsInNewOnPodible(
+        isFavorite: isSavedBookState(book.localState, progress: playbackProgress),
+        isRead: isRead
+      ) {
+        result[.newOnPodible, default: []].append(book)
+      }
+      if activity?.lastViewedAt != nil {
+        result[.recentlyViewed, default: []].append(book)
+      }
+      if isRead {
+        result[.read, default: []].append(book)
+      }
     }
+
+    result[.continueReading]?.sort {
+      (continueDates[$0.podibleId] ?? .distantPast)
+        > (continueDates[$1.podibleId] ?? .distantPast)
+    }
+    result[.newOnPodible]?.sort {
+      ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast)
+    }
+    result[.recentlyViewed]?.sort {
+      (activity(for: $0.podibleId)?.lastViewedAt ?? .distantPast)
+        > (activity(for: $1.podibleId)?.lastViewedAt ?? .distantPast)
+    }
+    result[.read]?.sort {
+      (activity(for: $0.podibleId)?.readAt ?? .distantPast)
+        > (activity(for: $1.podibleId)?.readAt ?? .distantPast)
+    }
+    return result
   }
 
   func activity(for bookID: String) -> BookActivityState? {
