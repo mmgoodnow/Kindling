@@ -424,24 +424,12 @@ struct LibraryFeatureContainer: View {
       viewModel.libraryItems.append(item)
     }
 
-    let book = ensureLocalBook(for: item)
-    let author = fetchOrCreateAuthor(name: item.author)
-    let series = fetchOrCreateSeries(for: item)
-    updateLocalBook(book, with: item, author: author, series: series)
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
+    _ = ensureLocalBook(for: item)
   }
 
   @MainActor
   private func persistRequestedBook(_ item: PodibleLibraryItem) {
-    let book = ensureLocalBook(for: item)
-    let author = fetchOrCreateAuthor(name: item.author)
-    let series = fetchOrCreateSeries(for: item)
-    updateLocalBook(book, with: item, author: author, series: series)
-    if modelContext.hasChanges {
-      saveModelContext()
-    }
+    _ = ensureLocalBook(for: item)
   }
 
   @ViewBuilder
@@ -2457,183 +2445,14 @@ struct LibraryFeatureContainer: View {
 
   @MainActor
   private func ensureLocalBook(for item: PodibleLibraryItem) -> LibraryBook {
-    if let existing = localBooksById[item.id] {
-      let author = fetchOrCreateAuthor(name: item.author)
-      let series = fetchOrCreateSeries(for: item)
-      updateLocalBook(existing, with: item, author: author, series: series)
-      return existing
-    }
-
-    let author = fetchOrCreateAuthor(name: item.author)
-    let series = fetchOrCreateSeries(for: item)
-    let book = LibraryBook(
-      podibleId: item.id,
-      openLibraryWorkID: item.openLibraryWorkID,
-      title: item.title,
-      summary: item.summary,
-      descriptionHTML: item.descriptionHTML,
-      coverURLString: item.bookImagePath,
-      runtimeSeconds: item.runtimeSeconds,
-      wordCount: item.wordCount,
-      publishedYear: item.publishedYear,
-      narrator: item.narrator,
-      addedAt: item.bookAdded,
-      updatedAt: latestLibraryDate(for: item),
-      fullPseudoProgress: item.fullPseudoProgress,
-      seriesIndex: item.seriesPosition,
-      seriesMembershipsJSON: podibleSeriesMembershipsData(item.series),
-      bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
-      audioStatusRaw: item.audioStatus?.rawValue,
-      playbackJSON: playbackData(for: item.playback),
-      author: author,
-      series: series
+    let book = LibraryBookRepository(modelContext: modelContext).upsert(
+      item,
+      existing: localBooksById[item.id]
     )
-    modelContext.insert(book)
     if modelContext.hasChanges {
       saveModelContext()
     }
     return book
-  }
-
-  @MainActor
-  private func fetchOrCreateAuthor(name: String) -> Author {
-    let key = normalizeAuthorKey(name)
-    let descriptor = FetchDescriptor<Author>(
-      predicate: #Predicate { $0.podibleId == key }
-    )
-    if let existing = (try? modelContext.fetch(descriptor))?.first {
-      if existing.name != name {
-        existing.name = name
-      }
-      return existing
-    }
-    let author = Author(podibleId: key, name: name)
-    modelContext.insert(author)
-    return author
-  }
-
-  @MainActor
-  private func fetchOrCreateSeries(for item: PodibleLibraryItem) -> Series? {
-    guard let key = seriesKey(for: item) else { return nil }
-    let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let displayTitle = title?.isEmpty == false ? title! : key
-    let descriptor = FetchDescriptor<Series>(
-      predicate: #Predicate { $0.podibleId == key }
-    )
-    if let existing = (try? modelContext.fetch(descriptor))?.first {
-      if existing.title != displayTitle {
-        existing.title = displayTitle
-      }
-      return existing
-    }
-    let series = Series(podibleId: key, title: displayTitle)
-    modelContext.insert(series)
-    return series
-  }
-
-  @MainActor
-  private func updateLocalBook(
-    _ book: LibraryBook,
-    with item: PodibleLibraryItem,
-    author: Author,
-    series: Series?
-  ) {
-    var updated = false
-    if let localState = book.localState, localState.bookPodibleId != item.id {
-      localState.bookPodibleId = item.id
-      updated = true
-    }
-    if book.openLibraryWorkID != item.openLibraryWorkID {
-      book.openLibraryWorkID = item.openLibraryWorkID
-      updated = true
-    }
-    if book.title != item.title {
-      book.title = item.title
-      updated = true
-    }
-    if book.summary != item.summary {
-      book.summary = item.summary
-      updated = true
-    }
-    if book.descriptionHTML != item.descriptionHTML {
-      book.descriptionHTML = item.descriptionHTML
-      updated = true
-    }
-    if book.coverURLString != item.bookImagePath {
-      book.coverURLString = item.bookImagePath
-      updated = true
-    }
-    if book.runtimeSeconds != item.runtimeSeconds {
-      book.runtimeSeconds = item.runtimeSeconds
-      updated = true
-    }
-    if book.wordCount != item.wordCount {
-      book.wordCount = item.wordCount
-      updated = true
-    }
-    if book.publishedYear != item.publishedYear {
-      book.publishedYear = item.publishedYear
-      updated = true
-    }
-    if book.narrator != item.narrator {
-      book.narrator = item.narrator
-      updated = true
-    }
-    let nextAddedAt = item.bookAdded
-    if book.addedAt != nextAddedAt {
-      book.addedAt = nextAddedAt
-      updated = true
-    }
-    let nextUpdatedAt = latestLibraryDate(for: item)
-    if book.updatedAt != nextUpdatedAt {
-      book.updatedAt = nextUpdatedAt
-      updated = true
-    }
-    if book.author !== author {
-      book.author = author
-      updated = true
-    }
-    if book.series !== series {
-      book.series = series
-      updated = true
-    }
-    if book.seriesIndex != item.seriesPosition {
-      book.seriesIndex = item.seriesPosition
-      updated = true
-    }
-    let nextSeriesMembershipsJSON = podibleSeriesMembershipsData(item.series)
-    if book.seriesMembershipsJSON != nextSeriesMembershipsJSON {
-      book.seriesMembershipsJSON = nextSeriesMembershipsJSON
-      updated = true
-    }
-    if book.fullPseudoProgress != item.fullPseudoProgress {
-      book.fullPseudoProgress = item.fullPseudoProgress
-      updated = true
-    }
-    let ebookRaw = (item.ebookStatus ?? item.status).rawValue
-    if book.bookStatusRaw != ebookRaw {
-      book.bookStatusRaw = ebookRaw
-      updated = true
-    }
-    if book.audioStatusRaw != item.audioStatus?.rawValue {
-      book.audioStatusRaw = item.audioStatus?.rawValue
-      updated = true
-    }
-    if let itemPlayback = item.playback {
-      let nextPlaybackJSON = playbackData(for: itemPlayback)
-      if book.playbackJSON != nextPlaybackJSON {
-        book.playbackJSON = nextPlaybackJSON
-        updated = true
-      }
-    }
-    if updated, modelContext.hasChanges {
-      saveModelContext()
-    }
-  }
-
-  private func playbackData(for playback: PodiblePlayback?) -> Data? {
-    guard let playback else { return nil }
-    return try? JSONEncoder().encode(playback)
   }
 
   private func playback(from data: Data?) -> PodiblePlayback? {
@@ -2650,27 +2469,6 @@ struct LibraryFeatureContainer: View {
     }
   }
 
-  private func normalizeAuthorKey(_ name: String) -> String {
-    name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-  }
-
-  private func seriesKey(for item: PodibleLibraryItem) -> String? {
-    if let raw = item.seriesKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-      raw.isEmpty == false
-    {
-      return raw
-    }
-    guard let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
-      title.isEmpty == false
-    else {
-      return nil
-    }
-    return title.lowercased()
-  }
-
-  private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
-    item.updatedAt
-  }
 }
 
 typealias RemoteLibraryView = LibraryFeatureContainer

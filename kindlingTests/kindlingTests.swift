@@ -341,6 +341,57 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testLibraryBookPersistenceMapperKeepsPlaybackWhenRefreshOmitsIt() throws {
+    let originalPlayback = PodiblePlayback(
+      audio: PodiblePlaybackAudio(
+        manifestationId: 42,
+        label: "Audio",
+        editionNote: nil,
+        streamUrl: "/audio/42",
+        chaptersUrl: "/chapters/42",
+        transcriptUrl: nil,
+        mimeType: "audio/mpeg",
+        durationMs: 3_600_000,
+        sizeBytes: 1_000
+      ),
+      ebook: nil
+    )
+    let originalPlaybackData = try JSONEncoder().encode(originalPlayback)
+    let originalAuthor = Author(podibleId: "old", name: "Old Author")
+    let updatedAuthor = Author(podibleId: "new", name: "New Author")
+    let book = LibraryBook(
+      podibleId: "book-1",
+      title: "Old Title",
+      playbackJSON: originalPlaybackData,
+      author: originalAuthor
+    )
+    let item = PodibleLibraryItem(
+      id: "book-1",
+      title: "New Title",
+      author: "New Author",
+      summary: "Updated summary",
+      descriptionHTML: "<p>Updated summary</p>",
+      status: .downloaded,
+      runtimeSeconds: 3_600,
+      playback: nil
+    )
+
+    XCTAssertTrue(
+      LibraryBookPersistenceMapper.update(
+        book,
+        with: item,
+        author: updatedAuthor,
+        series: nil
+      )
+    )
+    XCTAssertEqual(book.title, "New Title")
+    XCTAssertEqual(book.summary, "Updated summary")
+    XCTAssertEqual(book.descriptionHTML, "<p>Updated summary</p>")
+    XCTAssertEqual(book.runtimeSeconds, 3_600)
+    XCTAssertEqual(book.playbackJSON, originalPlaybackData)
+    XCTAssertTrue(book.author === updatedAuthor)
+  }
+
   func testLibrarySeriesResponseDecodesOpenLibraryBooks() throws {
     let data = try XCTUnwrap(
       """

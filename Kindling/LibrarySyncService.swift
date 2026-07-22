@@ -62,7 +62,9 @@ struct LibrarySyncService {
       let book: LibraryBook
       if let existing = booksById[item.id] {
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author, series: series)
+        updatedBooks +=
+          LibraryBookPersistenceMapper.update(book, with: item, author: author, series: series)
+          ? 1 : 0
       } else if let workID = item.openLibraryWorkID,
         let existing = booksByOpenLibraryWorkID[workID]
       {
@@ -70,7 +72,9 @@ struct LibrarySyncService {
         existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author, series: series)
+        updatedBooks +=
+          LibraryBookPersistenceMapper.update(book, with: item, author: author, series: series)
+          ? 1 : 0
       } else if let identityKey = bookIdentityKey(title: item.title, author: item.author),
         let existing = booksByIdentity[identityKey]
       {
@@ -78,30 +82,11 @@ struct LibrarySyncService {
         existing.podibleId = item.id
         booksById[item.id] = existing
         book = existing
-        updatedBooks += updateBook(book, with: item, author: author, series: series)
+        updatedBooks +=
+          LibraryBookPersistenceMapper.update(book, with: item, author: author, series: series)
+          ? 1 : 0
       } else {
-        let created = LibraryBook(
-          podibleId: item.id,
-          openLibraryWorkID: item.openLibraryWorkID,
-          title: item.title,
-          summary: item.summary,
-          descriptionHTML: item.descriptionHTML,
-          coverURLString: item.bookImagePath,
-          runtimeSeconds: item.runtimeSeconds,
-          wordCount: item.wordCount,
-          publishedYear: item.publishedYear,
-          narrator: item.narrator,
-          addedAt: item.bookAdded,
-          updatedAt: latestLibraryDate(for: item),
-          fullPseudoProgress: item.fullPseudoProgress,
-          seriesIndex: item.seriesPosition,
-          seriesMembershipsJSON: podibleSeriesMembershipsData(item.series),
-          bookStatusRaw: (item.ebookStatus ?? item.status).rawValue,
-          audioStatusRaw: item.audioStatus?.rawValue,
-          playbackJSON: playbackData(for: item.playback),
-          author: author,
-          series: series
-        )
+        let created = LibraryBookPersistenceMapper.make(item: item, author: author, series: series)
         modelContext.insert(created)
         booksById[item.id] = created
         if let workID = item.openLibraryWorkID, workID.isEmpty == false {
@@ -161,7 +146,7 @@ struct LibrarySyncService {
     seriesById: inout [String: Series],
     modelContext: ModelContext
   ) -> Series? {
-    guard let key = seriesKey(for: item) else { return nil }
+    guard let key = LibraryBookPersistenceMapper.seriesKey(for: item) else { return nil }
     let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
     let displayTitle = title?.isEmpty == false ? title! : key
     if let existing = seriesById[key] {
@@ -174,128 +159,6 @@ struct LibrarySyncService {
     modelContext.insert(created)
     seriesById[key] = created
     return created
-  }
-
-  private func seriesKey(for item: PodibleLibraryItem) -> String? {
-    if let raw = item.seriesKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-      raw.isEmpty == false
-    {
-      return raw
-    }
-    guard let title = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
-      title.isEmpty == false
-    else {
-      return nil
-    }
-    return title.lowercased()
-  }
-
-  private func latestLibraryDate(for item: PodibleLibraryItem) -> Date? {
-    item.updatedAt
-  }
-
-  private func updateBook(
-    _ book: LibraryBook,
-    with item: PodibleLibraryItem,
-    author: Author,
-    series: Series?
-  )
-    -> Int
-  {
-    var updated = 0
-    if let localState = book.localState, localState.bookPodibleId != item.id {
-      localState.bookPodibleId = item.id
-      updated += 1
-    }
-    if book.openLibraryWorkID != item.openLibraryWorkID {
-      book.openLibraryWorkID = item.openLibraryWorkID
-      updated += 1
-    }
-    if book.title != item.title {
-      book.title = item.title
-      updated += 1
-    }
-    if book.summary != item.summary {
-      book.summary = item.summary
-      updated += 1
-    }
-    if book.descriptionHTML != item.descriptionHTML {
-      book.descriptionHTML = item.descriptionHTML
-      updated += 1
-    }
-    if book.coverURLString != item.bookImagePath {
-      book.coverURLString = item.bookImagePath
-      updated += 1
-    }
-    if book.runtimeSeconds != item.runtimeSeconds {
-      book.runtimeSeconds = item.runtimeSeconds
-      updated += 1
-    }
-    if book.wordCount != item.wordCount {
-      book.wordCount = item.wordCount
-      updated += 1
-    }
-    if book.publishedYear != item.publishedYear {
-      book.publishedYear = item.publishedYear
-      updated += 1
-    }
-    if book.narrator != item.narrator {
-      book.narrator = item.narrator
-      updated += 1
-    }
-    let nextAddedAt = item.bookAdded
-    if book.addedAt != nextAddedAt {
-      book.addedAt = nextAddedAt
-      updated += 1
-    }
-    let nextUpdatedAt = latestLibraryDate(for: item)
-    if book.updatedAt != nextUpdatedAt {
-      book.updatedAt = nextUpdatedAt
-      updated += 1
-    }
-    if book.author !== author {
-      book.author = author
-      updated += 1
-    }
-    if book.series !== series {
-      book.series = series
-      updated += 1
-    }
-    if book.seriesIndex != item.seriesPosition {
-      book.seriesIndex = item.seriesPosition
-      updated += 1
-    }
-    let nextSeriesMembershipsJSON = podibleSeriesMembershipsData(item.series)
-    if book.seriesMembershipsJSON != nextSeriesMembershipsJSON {
-      book.seriesMembershipsJSON = nextSeriesMembershipsJSON
-      updated += 1
-    }
-    if book.fullPseudoProgress != item.fullPseudoProgress {
-      book.fullPseudoProgress = item.fullPseudoProgress
-      updated += 1
-    }
-    let ebookRaw = (item.ebookStatus ?? item.status).rawValue
-    if book.bookStatusRaw != ebookRaw {
-      book.bookStatusRaw = ebookRaw
-      updated += 1
-    }
-    if book.audioStatusRaw != item.audioStatus?.rawValue {
-      book.audioStatusRaw = item.audioStatus?.rawValue
-      updated += 1
-    }
-    if let playback = item.playback {
-      let nextPlaybackJSON = playbackData(for: playback)
-      if book.playbackJSON != nextPlaybackJSON {
-        book.playbackJSON = nextPlaybackJSON
-        updated += 1
-      }
-    }
-    return updated > 0 ? 1 : 0
-  }
-
-  private func playbackData(for playback: PodiblePlayback?) -> Data? {
-    guard let playback else { return nil }
-    return try? JSONEncoder().encode(playback)
   }
 
   private func shouldDeleteLocalMirror(_ book: LibraryBook) -> Bool {
