@@ -304,19 +304,19 @@ private struct ChapterPlaybackProgressSectionView: View {
         }
       }
 
-      if let currentChapter {
-        Text(currentChapter.title)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(palette.foreground.opacity(0.65))
-          .frame(maxWidth: .infinity, alignment: .center)
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
-      }
-
       HStack {
         Text(formatPlaybackTime(currentChapterElapsed))
-        Spacer()
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+        if let currentChapter {
+          Text(currentChapter.title)
+            .fontWeight(.semibold)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+
         Text(playbackRemainingText(currentChapterRemaining))
+          .frame(maxWidth: .infinity, alignment: .trailing)
       }
       .font(.caption.monospacedDigit())
       .foregroundStyle(palette.foreground.opacity(0.65))
