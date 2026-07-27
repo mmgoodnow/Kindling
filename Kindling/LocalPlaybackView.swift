@@ -243,15 +243,6 @@ private struct ChapterPlaybackProgressSectionView: View {
     let currentChapterProgress = min(
       max(currentChapterElapsed / max(currentChapterDuration, 1), 0), 1)
     VStack(alignment: .leading, spacing: 8) {
-      if let currentChapter {
-        Text(currentChapter.title)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(palette.foreground.opacity(0.65))
-          .frame(maxWidth: .infinity, alignment: .center)
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
-      }
-
       HStack(spacing: 8) {
         GeometryReader { proxy in
           ZStack(alignment: .leading) {
@@ -311,6 +302,15 @@ private struct ChapterPlaybackProgressSectionView: View {
           .buttonStyle(.plain)
           .foregroundStyle(palette.foreground)
         }
+      }
+
+      if let currentChapter {
+        Text(currentChapter.title)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(palette.foreground.opacity(0.65))
+          .frame(maxWidth: .infinity, alignment: .center)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
       }
 
       HStack {
