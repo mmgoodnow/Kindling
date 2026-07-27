@@ -67,14 +67,38 @@ public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
 }
 
 public struct ArtworkPalette: Hashable, Sendable {
-  public var red: Double
-  public var green: Double
-  public var blue: Double
+  public let red: Double
+  public let green: Double
+  public let blue: Double
+  private let primaryLight: ArtworkPaletteRGB
+  private let primaryDark: ArtworkPaletteRGB
+  private let secondaryLight: ArtworkPaletteRGB
+  private let secondaryDark: ArtworkPaletteRGB
 
   public init(red: Double, green: Double, blue: Double) {
-    self.red = max(0, min(1, red))
-    self.green = max(0, min(1, green))
-    self.blue = max(0, min(1, blue))
+    let red = max(0, min(1, red))
+    let green = max(0, min(1, green))
+    let blue = max(0, min(1, blue))
+    let base = ArtworkPaletteRGB(red: red, green: green, blue: blue)
+    self.red = red
+    self.green = green
+    self.blue = blue
+    self.primaryLight = base.adjustedToMeetContrast(
+      7,
+      against: .canvas(for: .light)
+    )
+    self.primaryDark = base.adjustedToMeetContrast(
+      7,
+      against: .canvas(for: .dark)
+    )
+    self.secondaryLight = base.adjustedToMeetContrast(
+      4.5,
+      against: .canvas(for: .light)
+    )
+    self.secondaryDark = base.adjustedToMeetContrast(
+      4.5,
+      against: .canvas(for: .dark)
+    )
   }
 
   public static let fallback = ArtworkPalette(red: 0.20, green: 0.47, blue: 0.86)
@@ -88,8 +112,11 @@ public struct ArtworkPalette: Hashable, Sendable {
   }
 
   public var foreground: Color {
-    Color(red: red, green: green, blue: blue)
-      .mix(with: .primary, by: 0.36)
+    adaptiveColor(light: primaryLight, dark: primaryDark)
+  }
+
+  public var secondaryForeground: Color {
+    adaptiveColor(light: secondaryLight, dark: secondaryDark)
   }
 
   public var currentHighlight: Color {
@@ -1519,7 +1546,7 @@ public struct PlayerCoverContentView<Artwork: View>: View {
       if player.author.isEmpty == false {
         Text(player.author)
           .font(.subheadline)
-          .foregroundStyle(player.palette.foreground.opacity(0.65))
+          .foregroundStyle(player.palette.secondaryForeground)
           .multilineTextAlignment(.center)
       }
 
@@ -1540,7 +1567,7 @@ public struct PlayerCoverContentView<Artwork: View>: View {
             Text(player.currentChapterRemainingText)
           }
           .font(.caption.monospacedDigit())
-          .foregroundStyle(player.palette.foreground.opacity(0.65))
+          .foregroundStyle(player.palette.secondaryForeground)
         }
       }
     }
@@ -1648,7 +1675,7 @@ public struct PlayerContentView: View {
       case .transcript:
         Text(player.transcriptStatusText ?? "Transcript")
           .font(.body)
-          .foregroundStyle(player.palette.foreground.opacity(0.65))
+          .foregroundStyle(player.palette.secondaryForeground)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
 
@@ -1736,7 +1763,7 @@ public struct ChapterRowView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
         Text(chapter.durationText)
           .font(.caption.monospacedDigit())
-          .foregroundStyle(palette.foreground.opacity(0.65))
+          .foregroundStyle(palette.secondaryForeground)
       }
       .padding(.horizontal, 12)
       .padding(.vertical, 8)

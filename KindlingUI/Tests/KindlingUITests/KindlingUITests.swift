@@ -3,6 +3,38 @@ import XCTest
 @testable import KindlingUI
 
 final class KindlingUITests: XCTestCase {
+  func testArtworkPalettePrimaryForegroundMeetsWCAGContrastInBothAppearances() {
+    let palette = ArtworkPalette(red: 0.28, green: 0.04, blue: 0.08)
+
+    for appearance in [ArtworkPaletteAppearance.light, .dark] {
+      let foreground = palette.resolvedForeground(for: appearance, minimumContrast: 7)
+      let background = ArtworkPaletteRGB.canvas(for: appearance)
+
+      XCTAssertGreaterThanOrEqual(foreground.contrastRatio(with: background), 6.999)
+    }
+  }
+
+  func testArtworkPaletteSecondaryForegroundMeetsWCAGAAContrast() {
+    let palette = ArtworkPalette(red: 0.10, green: 0.20, blue: 0.36)
+    let foreground = palette.resolvedForeground(for: .dark, minimumContrast: 4.5)
+
+    XCTAssertGreaterThanOrEqual(
+      foreground.contrastRatio(with: .canvas(for: .dark)),
+      4.499
+    )
+  }
+
+  func testArtworkPaletteContrastAdjustmentPreservesOKLCHHue() {
+    let source = ArtworkPaletteRGB(red: 0.28, green: 0.04, blue: 0.08)
+    let adjusted = source.adjustedToMeetContrast(
+      7,
+      against: .canvas(for: .dark)
+    )
+
+    XCTAssertEqual(adjusted.oklch.hueRadians, source.oklch.hueRadians, accuracy: 0.01)
+    XCTAssertLessThanOrEqual(adjusted.oklch.chroma, source.oklch.chroma + 0.001)
+  }
+
   func testDoubleTapAdvancesBookThroughSavedStates() {
     XCTAssertEqual(bookDoubleTapAction(for: book(isFavorite: false, isRead: false)), .favorite)
     XCTAssertEqual(bookDoubleTapAction(for: book(isFavorite: true, isRead: false)), .markRead)

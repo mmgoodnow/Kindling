@@ -319,7 +319,7 @@ private struct ChapterPlaybackProgressSectionView: View {
           .frame(maxWidth: .infinity, alignment: .trailing)
       }
       .font(.caption.monospacedDigit())
-      .foregroundStyle(palette.foreground.opacity(0.65))
+      .foregroundStyle(palette.secondaryForeground)
     }
   }
 }
