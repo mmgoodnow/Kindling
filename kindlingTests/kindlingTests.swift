@@ -705,6 +705,32 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
   }
 
+  func testSystemPlayBeforeSessionRestoreDefersPlaybackAtSavedPosition() throws {
+    let defaults = try isolatedDefaults(named: "SystemPlayResume")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let identity = PlaybackIdentity(canonicalID: "suggested-audio-book")
+    let savedPosition = 1_234.5
+    defaults.set(savedPosition, forKey: resumePositionKeyPrefix + identity.canonicalID)
+    let player = AudioPlayerController(defaults: defaults)
+
+    player.play()
+
+    XCTAssertFalse(player.isPlaying)
+
+    player.load(
+      url: URL(fileURLWithPath: "/tmp/kindling-system-play-regression.m4b"),
+      identity: identity,
+      title: "Suggested Audio Book"
+    )
+
+    XCTAssertNotNil(defaults.data(forKey: "audioPlayer.lastSession"))
+    XCTAssertEqual(
+      player.progress.currentTime,
+      savedPosition - 2.5,
+      accuracy: 0.001
+    )
+  }
+
   func testResumeIDAliasesPreserveProgressAcrossBookIdentityChanges() {
     let openLibraryResumeID = "OL123W#manifestation-456"
     let openLibraryLegacyResumeID = "OL123W"

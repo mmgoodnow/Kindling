@@ -85,6 +85,7 @@ final class AudioPlayerController: ObservableObject {
   private var timeControlObservation: NSKeyValueObservation?
   private var itemStatusObservation: NSKeyValueObservation?
   private var pendingResumeSeekSeconds: Double?
+  private var pendingPlayRequest = false
   private var lastPersistedPositionAt: TimeInterval = 0
   private var lastBufferRefreshAt: CFTimeInterval = 0
   private var pendingBufferRefresh: Bool = false
@@ -278,8 +279,12 @@ final class AudioPlayerController: ObservableObject {
     observesBuffering: Bool
   ) {
     persistSession()
-    if savedPosition > 0 {
-      scheduleResumeSeek(to: savedPosition, on: player)
+    let resumePosition =
+      pendingPlayRequest && savedPosition > 0
+      ? max(0, savedPosition - Self.resumeRewindSeconds)
+      : savedPosition
+    if resumePosition > 0 {
+      scheduleResumeSeek(to: resumePosition, on: player)
     }
     attachTimeObserver(to: player)
     if observesBuffering {
@@ -293,9 +298,12 @@ final class AudioPlayerController: ObservableObject {
       updateNowPlayingInfo()
       loadNowPlayingArtwork(from: artworkURL)
     #endif
+    startPlaybackIfReady()
   }
 
   func play() {
+    guard isPlaying == false, pendingPlayRequest == false else { return }
+    pendingPlayRequest = true
     if shouldRewindOnResume {
       let rewindTarget = max(0, progress.currentTime - Self.resumeRewindSeconds)
       progress.currentTime = rewindTarget
@@ -304,8 +312,14 @@ final class AudioPlayerController: ObservableObject {
         scheduleResumeSeek(to: rewindTarget, on: player)
       }
     }
-    player?.play()
-    player?.rate = Float(playbackRate)
+    startPlaybackIfReady()
+  }
+
+  private func startPlaybackIfReady() {
+    guard pendingPlayRequest, pendingResumeSeekSeconds == nil, let player else { return }
+    pendingPlayRequest = false
+    player.play()
+    player.rate = Float(playbackRate)
     isPlaying = true
     #if os(iOS)
       updateNowPlayingInfo()
@@ -313,6 +327,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func pause() {
+    pendingPlayRequest = false
     player?.pause()
     isPlaying = false
     persistCurrentPosition(force: true)
@@ -322,7 +337,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func togglePlayback() {
-    if isPlaying {
+    if isPlaying || pendingPlayRequest {
       pause()
     } else {
       play()
@@ -383,6 +398,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func stop() {
+    pendingPlayRequest = false
     player?.pause()
     isPlaying = false
     persistCurrentPosition(force: true)
@@ -704,6 +720,7 @@ final class AudioPlayerController: ObservableObject {
       performResumeSeek(to: target, on: player)
     case .failed:
       pendingResumeSeekSeconds = nil
+      pendingPlayRequest = false
     case .unknown:
       itemStatusObservation = item.observe(\.status, options: [.new, .initial]) {
         [weak self, weak player] item, _ in
@@ -717,6 +734,7 @@ final class AudioPlayerController: ObservableObject {
         case .failed:
           DispatchQueue.main.async {
             self.pendingResumeSeekSeconds = nil
+            self.pendingPlayRequest = false
             self.itemStatusObservation?.invalidate()
             self.itemStatusObservation = nil
           }
@@ -737,11 +755,16 @@ final class AudioPlayerController: ObservableObject {
     player.currentItem?.cancelPendingSeeks()
     player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
       DispatchQueue.main.async {
-        guard let self, finished else { return }
-        self.progress.currentTime = target
+        guard let self else { return }
         self.pendingResumeSeekSeconds = nil
         self.itemStatusObservation?.invalidate()
         self.itemStatusObservation = nil
+        guard finished else {
+          self.pendingPlayRequest = false
+          return
+        }
+        self.progress.currentTime = target
+        self.startPlaybackIfReady()
         #if os(iOS)
           self.updateNowPlayingInfo()
         #endif
@@ -895,16 +918,16 @@ final class AudioPlayerController: ObservableObject {
     )
 
     guard let data = try? JSONEncoder().encode(session) else { return }
-    UserDefaults.standard.set(data, forKey: ResumeStore.sessionKey)
+    defaults.set(data, forKey: ResumeStore.sessionKey)
   }
 
   private func persistedSession() -> PersistedSession? {
-    guard let data = UserDefaults.standard.data(forKey: ResumeStore.sessionKey) else { return nil }
+    guard let data = defaults.data(forKey: ResumeStore.sessionKey) else { return nil }
     return try? JSONDecoder().decode(PersistedSession.self, from: data)
   }
 
   private func clearPersistedSession() {
-    UserDefaults.standard.removeObject(forKey: ResumeStore.sessionKey)
+    defaults.removeObject(forKey: ResumeStore.sessionKey)
   }
 
   private var shouldRewindOnResume: Bool {
