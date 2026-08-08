@@ -395,29 +395,24 @@ struct LocalPlaybackView: View {
   #if os(iOS)
     private var iOSPlayerPresentation: some View {
       ZStack {
-        Color.black
+        Color(uiColor: .systemBackground)
           .ignoresSafeArea()
 
-        ZStack {
-          Color(uiColor: .systemBackground)
-            .ignoresSafeArea()
+        artworkPalette.background
+          .ignoresSafeArea()
 
-          artworkPalette.background
-            .ignoresSafeArea()
+        Rectangle()
+          .fill(.ultraThinMaterial)
+          .ignoresSafeArea()
 
-          Rectangle()
-            .fill(.ultraThinMaterial)
-            .ignoresSafeArea()
-
-          VStack(spacing: 0) {
-            playerDismissHandle
-            expandedPlayerView()
-              .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
-          }
-          .safeAreaPadding(.top, 6)
+        VStack(spacing: 0) {
+          playerDismissHandle
+          expandedPlayerView()
+            .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
         }
-        .offset(y: playerDismissOffset)
+        .safeAreaPadding(.top, 6)
       }
+      .offset(y: playerDismissOffset)
     }
 
     private var playerDismissHandle: some View {
@@ -453,13 +448,28 @@ struct LocalPlaybackView: View {
             value.translation.height > 120
             || value.predictedEndTranslation.height > 220
           if shouldDismiss {
-            dismiss()
+            completePlayerDismissal()
           } else {
             withAnimation(.snappy(duration: 0.28)) {
               playerDismissOffset = 0
             }
           }
         }
+    }
+
+    private func completePlayerDismissal() {
+      withAnimation(.easeOut(duration: 0.2)) {
+        playerDismissOffset = activeScreenSize().height
+      }
+
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(200))
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+          dismiss()
+        }
+      }
     }
 
     private var selectedScrollIsAtTop: Bool {

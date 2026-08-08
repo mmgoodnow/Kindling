@@ -70,6 +70,7 @@ struct ContentView: View {
     }
     .fullScreenCover(isPresented: $isShowingPlayer) {
       LocalPlaybackView(player: player)
+        .presentationBackground(.clear)
     }
     .environment(libraryData)
     .environment(podibleLibrary)
