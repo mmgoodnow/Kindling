@@ -408,6 +408,7 @@ struct LocalPlaybackView: View {
         VStack(spacing: 0) {
           playerDismissHandle
           expandedPlayerView()
+            .scrollDisabled(isPlayerDismissDragActive)
             .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
         }
         .safeAreaPadding(.top, 6)
