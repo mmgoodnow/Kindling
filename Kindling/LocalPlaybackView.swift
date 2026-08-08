@@ -401,6 +401,10 @@ struct LocalPlaybackView: View {
     private var iOSPlayerPresentation: some View {
       GeometryReader { proxy in
         let safeAreaInsets = activeSafeAreaInsets()
+        let screenCornerRadii = fixedPlayerCornerRadii(
+          from: proxy.containerCornerInsets,
+          safeAreaInsets: safeAreaInsets
+        )
 
         ZStack {
           Color(uiColor: .systemBackground)
@@ -421,8 +425,10 @@ struct LocalPlaybackView: View {
           .padding(.bottom, safeAreaInsets.bottom)
         }
         .frame(width: proxy.size.width, height: proxy.size.height)
-        .clipShape(ConcentricRectangle())
-        .compositingGroup()
+        .clipShape(
+          UnevenRoundedRectangle(cornerRadii: screenCornerRadii, style: .continuous)
+        )
+        .drawingGroup()
         .shadow(
           color: .black.opacity(0.2 * playerDismissProgress),
           radius: 22 * playerDismissProgress,
@@ -1004,6 +1010,27 @@ struct LocalPlaybackView: View {
       .first { $0.activationState == .foregroundActive } as? UIWindowScene
       ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
     return scene?.windows.first(where: \.isKeyWindow)?.safeAreaInsets ?? .zero
+  }
+
+  private func fixedPlayerCornerRadii(
+    from cornerInsets: RectangleCornerInsets,
+    safeAreaInsets: UIEdgeInsets
+  ) -> RectangleCornerRadii {
+    let fallbackRadius: CGFloat =
+      cornerInsets == RectangleCornerInsets()
+        && (safeAreaInsets.top > 20 || safeAreaInsets.bottom > 0)
+      ? 52 : 0
+
+    func radius(for inset: CGSize) -> CGFloat {
+      max(inset.width, inset.height, fallbackRadius)
+    }
+
+    return RectangleCornerRadii(
+      topLeading: radius(for: cornerInsets.topLeading),
+      bottomLeading: radius(for: cornerInsets.bottomLeading),
+      bottomTrailing: radius(for: cornerInsets.bottomTrailing),
+      topTrailing: radius(for: cornerInsets.topTrailing)
+    )
   }
 
   private struct AirPlayRouteButton: UIViewRepresentable {
