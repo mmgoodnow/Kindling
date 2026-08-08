@@ -436,6 +436,16 @@ final class AudioPlayerController: ObservableObject {
     player != nil && title.isEmpty == false
   }
 
+  #if os(iOS)
+    /// Re-attempts artwork loading after authentication becomes available.
+    /// A restored local session can be loaded before Podible has refreshed its token.
+    func updateArtworkAccessToken(_ accessToken: String?) {
+      guard hasLoadedItem else { return }
+      artworkAccessToken = accessToken?.isEmpty == false ? accessToken : nil
+      loadNowPlayingArtwork(from: artworkURL)
+    }
+  #endif
+
   var activePlaybackIdentity: PlaybackIdentity? {
     currentPlaybackIdentity
   }

@@ -368,7 +368,7 @@ struct LocalPlaybackView: View {
         .tint(artworkPalette.foreground)
         .foregroundStyle(artworkPalette.foreground)
         .presentationDragIndicator(.visible)
-        .presentationCornerRadius(28)
+        .presentationCornerRadius(0)
         .presentationBackground(.ultraThinMaterial)
         .task(id: player.artworkURL?.absoluteString) {
           loadArtworkPalette()
