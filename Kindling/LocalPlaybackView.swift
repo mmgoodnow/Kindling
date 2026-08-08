@@ -428,7 +428,7 @@ struct LocalPlaybackView: View {
     }
 
     private func playerDismissGesture(requiresScrollAtTop: Bool) -> some Gesture {
-      DragGesture(minimumDistance: 4)
+      DragGesture(minimumDistance: 4, coordinateSpace: .global)
         .onChanged { value in
           guard value.translation.height > abs(value.translation.width) else { return }
           guard value.translation.height > 0 else { return }
