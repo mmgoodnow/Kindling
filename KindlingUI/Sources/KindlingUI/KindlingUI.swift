@@ -1712,15 +1712,18 @@ public struct ChapterListView: View {
   public let chapters: [ChapterRowViewData]
   public let palette: ArtworkPalette
   public let onSelectChapter: (ChapterRowViewData) -> Void
+  public let onIsAtTopChange: (Bool) -> Void
 
   public init(
     chapters: [ChapterRowViewData],
     palette: ArtworkPalette = .fallback,
-    onSelectChapter: @escaping (ChapterRowViewData) -> Void = { _ in }
+    onSelectChapter: @escaping (ChapterRowViewData) -> Void = { _ in },
+    onIsAtTopChange: @escaping (Bool) -> Void = { _ in }
   ) {
     self.chapters = chapters
     self.palette = palette
     self.onSelectChapter = onSelectChapter
+    self.onIsAtTopChange = onIsAtTopChange
   }
 
   public var body: some View {
@@ -1736,6 +1739,13 @@ public struct ChapterListView: View {
       }
       .padding(.vertical, 4)
     }
+    .onScrollGeometryChange(
+      for: Bool.self,
+      of: { $0.contentOffset.y + $0.contentInsets.top <= 1 },
+      action: { _, isAtTop in
+        onIsAtTopChange(isAtTop)
+      }
+    )
   }
 }
 

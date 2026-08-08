@@ -352,6 +352,10 @@ struct LocalPlaybackView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var artworkPalette: ArtworkPalette = .fallback
   @State private var playerDismissOffset: CGFloat = 0
+  @State private var isPlayerDismissDragActive = false
+  @State private var isArtworkScrollAtTop = true
+  @State private var isChaptersScrollAtTop = true
+  @State private var isTranscriptScrollAtTop = true
 
   init(player: AudioPlayerController) {
     self._player = ObservedObject(wrappedValue: player)
@@ -408,6 +412,7 @@ struct LocalPlaybackView: View {
           VStack(spacing: 0) {
             playerDismissHandle
             expandedPlayerView()
+              .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
           }
           .safeAreaPadding(.top, 6)
         }
@@ -422,26 +427,50 @@ struct LocalPlaybackView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .contentShape(Rectangle())
-        .gesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { value in
-              playerDismissOffset = max(value.translation.height, 0)
-            }
-            .onEnded { value in
-              let shouldDismiss =
-                value.translation.height > 120
-                || value.predictedEndTranslation.height > 220
-              if shouldDismiss {
-                dismiss()
-              } else {
-                withAnimation(.snappy(duration: 0.28)) {
-                  playerDismissOffset = 0
-                }
-              }
-            }
-        )
+        .gesture(playerDismissGesture(requiresScrollAtTop: false))
         .accessibilityLabel("Dismiss player")
         .accessibilityHint("Drag down to close the player")
+    }
+
+    private func playerDismissGesture(requiresScrollAtTop: Bool) -> some Gesture {
+      DragGesture(minimumDistance: 4)
+        .onChanged { value in
+          guard value.translation.height > abs(value.translation.width) else { return }
+          guard value.translation.height > 0 else { return }
+
+          if isPlayerDismissDragActive == false {
+            guard requiresScrollAtTop == false || selectedScrollIsAtTop else { return }
+            isPlayerDismissDragActive = true
+          }
+
+          playerDismissOffset = value.translation.height
+        }
+        .onEnded { value in
+          guard isPlayerDismissDragActive else { return }
+          isPlayerDismissDragActive = false
+
+          let shouldDismiss =
+            value.translation.height > 120
+            || value.predictedEndTranslation.height > 220
+          if shouldDismiss {
+            dismiss()
+          } else {
+            withAnimation(.snappy(duration: 0.28)) {
+              playerDismissOffset = 0
+            }
+          }
+        }
+    }
+
+    private var selectedScrollIsAtTop: Bool {
+      switch selectedContentTab {
+      case .artwork:
+        isArtworkScrollAtTop
+      case .chapters:
+        isChaptersScrollAtTop
+      case .transcript:
+        isTranscriptScrollAtTop
+      }
     }
   #endif
 
@@ -657,10 +686,15 @@ struct LocalPlaybackView: View {
   }
 
   private var chapterListContent: some View {
-    KindlingUI.ChapterListView(chapters: chapterRows, palette: artworkPalette) { row in
-      guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
-      player.seek(to: chapter.startTime)
-    }
+    KindlingUI.ChapterListView(
+      chapters: chapterRows,
+      palette: artworkPalette,
+      onSelectChapter: { row in
+        guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
+        player.seek(to: chapter.startTime)
+      },
+      onIsAtTopChange: { isChaptersScrollAtTop = $0 }
+    )
   }
 
   @MainActor
@@ -713,6 +747,13 @@ struct LocalPlaybackView: View {
       .padding(.top, 4)
       .padding(.bottom, 24)
     }
+    .onScrollGeometryChange(
+      for: Bool.self,
+      of: { $0.contentOffset.y + $0.contentInsets.top <= 1 },
+      action: { _, isAtTop in
+        isArtworkScrollAtTop = isAtTop
+      }
+    )
   }
 
   @ViewBuilder
@@ -790,7 +831,8 @@ struct LocalPlaybackView: View {
       player: player,
       progress: player.progress,
       isTabActive: selectedContentTab == .transcript,
-      onGenerateTranscript: canGenerateTranscript ? requestTranscriptGeneration : nil
+      onGenerateTranscript: canGenerateTranscript ? requestTranscriptGeneration : nil,
+      onIsAtTopChange: { isTranscriptScrollAtTop = $0 }
     )
   }
 

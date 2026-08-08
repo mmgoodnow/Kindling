@@ -5,17 +5,20 @@ struct TranscriptView: View {
   let progress: AudioPlayerController.PlaybackProgressState
   let isTabActive: Bool
   let onGenerateTranscript: (() -> Void)?
+  let onIsAtTopChange: (Bool) -> Void
 
   init(
     player: AudioPlayerController,
     progress: AudioPlayerController.PlaybackProgressState,
     isTabActive: Bool,
-    onGenerateTranscript: (() -> Void)? = nil
+    onGenerateTranscript: (() -> Void)? = nil,
+    onIsAtTopChange: @escaping (Bool) -> Void = { _ in }
   ) {
     self.player = player
     self.progress = progress
     self.isTabActive = isTabActive
     self.onGenerateTranscript = onGenerateTranscript
+    self.onIsAtTopChange = onIsAtTopChange
   }
 
   @State private var segments: [TranscriptSegment] = []
@@ -175,6 +178,13 @@ struct TranscriptView: View {
           }
           .padding(.horizontal, 4)
         }
+        .onScrollGeometryChange(
+          for: Bool.self,
+          of: { $0.contentOffset.y + $0.contentInsets.top <= 1 },
+          action: { _, isAtTop in
+            onIsAtTopChange(isAtTop)
+          }
+        )
         .onScrollPhaseChange { _, newPhase in
           switch newPhase {
           case .tracking, .interacting, .decelerating:
