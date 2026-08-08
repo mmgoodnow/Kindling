@@ -212,6 +212,7 @@ private struct ChapterPlaybackProgressSectionView: View {
   @State private var chapterScrubOriginDuration: Double?
   @State private var chapterScrubPreviewTime: Double?
   @State private var chapterScrubLastSeekTimestamp: TimeInterval = 0
+  @GestureState private var isChapterScrubbing = false
 
   var body: some View {
     let chapters = player.chapters
@@ -253,10 +254,15 @@ private struct ChapterPlaybackProgressSectionView: View {
               .fill(palette.foreground)
               .frame(width: max(proxy.size.width * currentChapterProgress, 10))
           }
-          .frame(height: 8)
+          .frame(height: isChapterScrubbing ? 14 : 8)
+          .animation(.snappy(duration: 0.18), value: isChapterScrubbing)
+          .frame(maxHeight: .infinity)
           .contentShape(Rectangle())
           .gesture(
             DragGesture(minimumDistance: 0)
+              .updating($isChapterScrubbing) { _, isScrubbing, _ in
+                isScrubbing = true
+              }
               .onChanged { value in
                 if chapterScrubOriginTime == nil {
                   chapterScrubOriginTime = currentTime
@@ -291,7 +297,7 @@ private struct ChapterPlaybackProgressSectionView: View {
               }
           )
         }
-        .frame(height: 8)
+        .frame(height: 16)
 
         if player.canRestorePreviousSeek {
           Button(action: player.restorePreviousSeek) {
