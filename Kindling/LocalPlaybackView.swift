@@ -349,7 +349,9 @@ struct LocalPlaybackView: View {
   @ObservedObject private var progress: AudioPlayerController.PlaybackProgressState
   @EnvironmentObject private var userSettings: UserSettings
   @EnvironmentObject private var podibleAuth: PodibleAuthController
+  @Environment(\.dismiss) private var dismiss
   @State private var artworkPalette: ArtworkPalette = .fallback
+  @State private var playerDismissOffset: CGFloat = 0
 
   init(player: AudioPlayerController) {
     self._player = ObservedObject(wrappedValue: player)
@@ -370,12 +372,9 @@ struct LocalPlaybackView: View {
 
   var body: some View {
     #if os(iOS)
-      expandedPlayerView()
+      iOSPlayerPresentation
         .tint(artworkPalette.foreground)
         .foregroundStyle(artworkPalette.foreground)
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(0)
-        .presentationBackground(.ultraThinMaterial)
         .task(id: player.artworkURL?.absoluteString) {
           loadArtworkPalette()
         }
@@ -388,6 +387,63 @@ struct LocalPlaybackView: View {
         .background(macPlayerBackground)
     #endif
   }
+
+  #if os(iOS)
+    private var iOSPlayerPresentation: some View {
+      ZStack {
+        Color.black
+          .ignoresSafeArea()
+
+        ZStack {
+          Rectangle()
+            .fill(.ultraThinMaterial)
+            .ignoresSafeArea()
+
+          VStack(spacing: 0) {
+            playerDismissHandle
+            expandedPlayerView()
+          }
+          .safeAreaPadding(.top, 6)
+        }
+        .offset(y: playerDismissOffset)
+        .clipShape(
+          RoundedRectangle(
+            cornerRadius: min(playerDismissOffset * 0.16, 32),
+            style: .continuous
+          )
+        )
+      }
+    }
+
+    private var playerDismissHandle: some View {
+      Capsule(style: .continuous)
+        .fill(.secondary)
+        .frame(width: 38, height: 5)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .contentShape(Rectangle())
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { value in
+              playerDismissOffset = max(value.translation.height, 0)
+            }
+            .onEnded { value in
+              let shouldDismiss =
+                value.translation.height > 120
+                || value.predictedEndTranslation.height > 220
+              if shouldDismiss {
+                dismiss()
+              } else {
+                withAnimation(.snappy(duration: 0.28)) {
+                  playerDismissOffset = 0
+                }
+              }
+            }
+        )
+        .accessibilityLabel("Dismiss player")
+        .accessibilityHint("Drag down to close the player")
+    }
+  #endif
 
   private func expandedPlayerView() -> some View {
     #if os(iOS)

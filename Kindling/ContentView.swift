@@ -68,7 +68,7 @@ struct ContentView: View {
           }
       #endif
     }
-    .sheet(isPresented: $isShowingPlayer) {
+    .fullScreenCover(isPresented: $isShowingPlayer) {
       LocalPlaybackView(player: player)
     }
     .environment(libraryData)
