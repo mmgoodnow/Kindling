@@ -3,6 +3,21 @@ import KindlingUI
 import Kingfisher
 import SwiftUI
 
+private struct VerticalTranslationEffect: GeometryEffect {
+  var translation: CGFloat
+
+  var animatableData: CGFloat {
+    get { translation }
+    set { translation = newValue }
+  }
+
+  func effectValue(size: CGSize) -> ProjectionTransform {
+    ProjectionTransform(
+      CGAffineTransform(translationX: 0, y: translation)
+    )
+  }
+}
+
 private func playbackEffectiveDuration(
   for chapter: AudioPlayerController.Chapter,
   at index: Int?,
@@ -434,11 +449,7 @@ struct LocalPlaybackView: View {
           radius: 22 * playerDismissProgress,
           y: 6 * playerDismissProgress
         )
-        .projectionEffect(
-          ProjectionTransform(
-            CGAffineTransform(translationX: 0, y: playerDismissOffset)
-          )
-        )
+        .modifier(VerticalTranslationEffect(translation: playerDismissOffset))
       }
       .ignoresSafeArea()
     }
