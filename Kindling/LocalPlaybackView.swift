@@ -422,6 +422,7 @@ struct LocalPlaybackView: View {
         }
         .frame(width: proxy.size.width, height: proxy.size.height)
         .clipShape(ConcentricRectangle())
+        .compositingGroup()
         .shadow(
           color: .black.opacity(0.2 * playerDismissProgress),
           radius: 22 * playerDismissProgress,
@@ -447,10 +448,9 @@ struct LocalPlaybackView: View {
     private func playerDismissGesture(requiresScrollAtTop: Bool) -> some Gesture {
       DragGesture(minimumDistance: 4, coordinateSpace: .global)
         .onChanged { value in
-          guard value.translation.height > abs(value.translation.width) else { return }
-          guard value.translation.height > 0 else { return }
-
           if isPlayerDismissDragActive == false {
+            guard value.translation.height > abs(value.translation.width) else { return }
+            guard value.translation.height > 0 else { return }
             guard requiresScrollAtTop == false || selectedScrollIsAtTop else { return }
             isPlayerDismissDragActive = true
             isPlayerContentInteractionSuppressed = true
@@ -458,7 +458,7 @@ struct LocalPlaybackView: View {
             playerInteractionSuppressionGeneration += 1
           }
 
-          playerDismissOffset = value.translation.height
+          playerDismissOffset = max(value.translation.height, 0)
         }
         .onEnded { value in
           guard isPlayerDismissDragActive else { return }
