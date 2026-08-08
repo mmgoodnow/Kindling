@@ -355,6 +355,7 @@ struct LocalPlaybackView: View {
   @State private var playerDismissOffset: CGFloat = 0
   @State private var isPlayerDismissDragActive = false
   @State private var isPlayerContentInteractionSuppressed = false
+  @State private var isPlayerScrollSuppressed = false
   @State private var playerInteractionSuppressionGeneration = 0
   @State private var isArtworkScrollAtTop = true
   @State private var isChaptersScrollAtTop = true
@@ -413,14 +414,14 @@ struct LocalPlaybackView: View {
             playerDismissHandle
             expandedPlayerView()
               .allowsHitTesting(isPlayerContentInteractionSuppressed == false)
-              .scrollDisabled(isPlayerDismissDragActive)
+              .scrollDisabled(isPlayerScrollSuppressed)
               .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
           }
           .padding(.top, safeAreaInsets.top + 6)
           .padding(.bottom, safeAreaInsets.bottom)
         }
         .frame(width: proxy.size.width, height: proxy.size.height)
-        .clipShape(RoundedRectangle(cornerRadius: 52, style: .continuous))
+        .clipShape(ConcentricRectangle())
         .shadow(
           color: .black.opacity(0.2 * playerDismissProgress),
           radius: 22 * playerDismissProgress,
@@ -453,6 +454,7 @@ struct LocalPlaybackView: View {
             guard requiresScrollAtTop == false || selectedScrollIsAtTop else { return }
             isPlayerDismissDragActive = true
             isPlayerContentInteractionSuppressed = true
+            isPlayerScrollSuppressed = true
             playerInteractionSuppressionGeneration += 1
           }
 
@@ -471,17 +473,18 @@ struct LocalPlaybackView: View {
             withAnimation(.snappy(duration: 0.28)) {
               playerDismissOffset = 0
             }
-            releasePlayerInteractionSuppression()
+            releasePlayerInteractionSuppression(after: .milliseconds(300))
           }
         }
     }
 
-    private func releasePlayerInteractionSuppression() {
+    private func releasePlayerInteractionSuppression(after delay: Duration) {
       let generation = playerInteractionSuppressionGeneration
       Task { @MainActor in
-        try? await Task.sleep(for: .milliseconds(150))
+        try? await Task.sleep(for: delay)
         guard generation == playerInteractionSuppressionGeneration else { return }
         isPlayerContentInteractionSuppressed = false
+        isPlayerScrollSuppressed = false
       }
     }
 
