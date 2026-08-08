@@ -395,9 +395,12 @@ struct LocalPlaybackView: View {
           .ignoresSafeArea()
 
         ZStack {
+          Color(uiColor: .systemBackground)
+
+          artworkPalette.background
+
           Rectangle()
             .fill(.ultraThinMaterial)
-            .ignoresSafeArea()
 
           VStack(spacing: 0) {
             playerDismissHandle
@@ -405,6 +408,8 @@ struct LocalPlaybackView: View {
           }
           .safeAreaPadding(.top, 6)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
         .offset(y: playerDismissOffset)
         .clipShape(
           RoundedRectangle(
