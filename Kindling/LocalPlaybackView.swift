@@ -353,6 +353,8 @@ struct LocalPlaybackView: View {
   @State private var artworkPalette: ArtworkPalette = .fallback
   @State private var playerDismissOffset: CGFloat = 0
   @State private var isPlayerDismissDragActive = false
+  @State private var isPlayerContentInteractionSuppressed = false
+  @State private var playerInteractionSuppressionGeneration = 0
   @State private var isArtworkScrollAtTop = true
   @State private var isChaptersScrollAtTop = true
   @State private var isTranscriptScrollAtTop = true
@@ -408,6 +410,7 @@ struct LocalPlaybackView: View {
         VStack(spacing: 0) {
           playerDismissHandle
           expandedPlayerView()
+            .disabled(isPlayerContentInteractionSuppressed)
             .scrollDisabled(isPlayerDismissDragActive)
             .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
         }
@@ -437,6 +440,8 @@ struct LocalPlaybackView: View {
           if isPlayerDismissDragActive == false {
             guard requiresScrollAtTop == false || selectedScrollIsAtTop else { return }
             isPlayerDismissDragActive = true
+            isPlayerContentInteractionSuppressed = true
+            playerInteractionSuppressionGeneration += 1
           }
 
           playerDismissOffset = value.translation.height
@@ -454,8 +459,18 @@ struct LocalPlaybackView: View {
             withAnimation(.snappy(duration: 0.28)) {
               playerDismissOffset = 0
             }
+            releasePlayerInteractionSuppression()
           }
         }
+    }
+
+    private func releasePlayerInteractionSuppression() {
+      let generation = playerInteractionSuppressionGeneration
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(150))
+        guard generation == playerInteractionSuppressionGeneration else { return }
+        isPlayerContentInteractionSuppressed = false
+      }
     }
 
     private func completePlayerDismissal() {
@@ -701,6 +716,7 @@ struct LocalPlaybackView: View {
       chapters: chapterRows,
       palette: artworkPalette,
       onSelectChapter: { row in
+        guard isPlayerContentInteractionSuppressed == false else { return }
         guard let chapter = player.chapters.first(where: { $0.id == row.id }) else { return }
         player.seek(to: chapter.startTime)
       },
