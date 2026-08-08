@@ -410,7 +410,7 @@ struct LocalPlaybackView: View {
         VStack(spacing: 0) {
           playerDismissHandle
           expandedPlayerView()
-            .disabled(isPlayerContentInteractionSuppressed)
+            .allowsHitTesting(isPlayerContentInteractionSuppressed == false)
             .scrollDisabled(isPlayerDismissDragActive)
             .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
         }
