@@ -68,10 +68,22 @@ struct ContentView: View {
           }
       #endif
     }
-    .fullScreenCover(isPresented: $isShowingPlayer) {
-      LocalPlaybackView(player: player)
-        .presentationBackground(.clear)
-    }
+    #if os(iOS)
+      .overlay {
+        if isShowingPlayer {
+          LocalPlaybackView(player: player) {
+            isShowingPlayer = false
+          }
+          .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .identity))
+          .zIndex(1)
+        }
+      }
+      .animation(.snappy(duration: 0.38), value: isShowingPlayer)
+    #else
+      .fullScreenCover(isPresented: $isShowingPlayer) {
+        LocalPlaybackView(player: player)
+      }
+    #endif
     .environment(libraryData)
     .environment(podibleLibrary)
     .environment(artworkPalettes)

@@ -350,6 +350,7 @@ struct LocalPlaybackView: View {
   @EnvironmentObject private var userSettings: UserSettings
   @EnvironmentObject private var podibleAuth: PodibleAuthController
   @Environment(\.dismiss) private var dismiss
+  private let onDismiss: (() -> Void)?
   @State private var artworkPalette: ArtworkPalette = .fallback
   @State private var playerDismissOffset: CGFloat = 0
   @State private var isPlayerDismissDragActive = false
@@ -359,9 +360,10 @@ struct LocalPlaybackView: View {
   @State private var isChaptersScrollAtTop = true
   @State private var isTranscriptScrollAtTop = true
 
-  init(player: AudioPlayerController) {
+  init(player: AudioPlayerController, onDismiss: (() -> Void)? = nil) {
     self._player = ObservedObject(wrappedValue: player)
     self._progress = ObservedObject(wrappedValue: player.progress)
+    self.onDismiss = onDismiss
   }
 
   private var selectedContentTab: ContentTab {
@@ -416,6 +418,12 @@ struct LocalPlaybackView: View {
         }
         .safeAreaPadding(.top, 6)
       }
+      .clipShape(RoundedRectangle(cornerRadius: 52, style: .continuous))
+      .shadow(
+        color: .black.opacity(0.2 * playerDismissProgress),
+        radius: 22 * playerDismissProgress,
+        y: 6 * playerDismissProgress
+      )
       .offset(y: playerDismissOffset)
     }
 
@@ -483,9 +491,21 @@ struct LocalPlaybackView: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-          dismiss()
+          dismissPlayerPresentation()
         }
       }
+    }
+
+    private func dismissPlayerPresentation() {
+      if let onDismiss {
+        onDismiss()
+      } else {
+        dismiss()
+      }
+    }
+
+    private var playerDismissProgress: Double {
+      min(max(playerDismissOffset / 180, 0), 1)
     }
 
     private var selectedScrollIsAtTop: Bool {
