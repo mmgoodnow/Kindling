@@ -428,13 +428,17 @@ struct LocalPlaybackView: View {
         .clipShape(
           UnevenRoundedRectangle(cornerRadii: screenCornerRadii, style: .continuous)
         )
-        .drawingGroup()
+        .compositingGroup()
         .shadow(
           color: .black.opacity(0.2 * playerDismissProgress),
           radius: 22 * playerDismissProgress,
           y: 6 * playerDismissProgress
         )
-        .offset(y: playerDismissOffset)
+        .projectionEffect(
+          ProjectionTransform(
+            CGAffineTransform(translationX: 0, y: playerDismissOffset)
+          )
+        )
       }
       .ignoresSafeArea()
     }
