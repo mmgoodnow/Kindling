@@ -398,33 +398,37 @@ struct LocalPlaybackView: View {
 
   #if os(iOS)
     private var iOSPlayerPresentation: some View {
-      ZStack {
-        Color(uiColor: .systemBackground)
-          .ignoresSafeArea()
+      GeometryReader { proxy in
+        let safeAreaInsets = activeSafeAreaInsets()
 
-        artworkPalette.background
-          .ignoresSafeArea()
+        ZStack {
+          Color(uiColor: .systemBackground)
 
-        Rectangle()
-          .fill(.ultraThinMaterial)
-          .ignoresSafeArea()
+          artworkPalette.background
 
-        VStack(spacing: 0) {
-          playerDismissHandle
-          expandedPlayerView()
-            .allowsHitTesting(isPlayerContentInteractionSuppressed == false)
-            .scrollDisabled(isPlayerDismissDragActive)
-            .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
+          Rectangle()
+            .fill(.ultraThinMaterial)
+
+          VStack(spacing: 0) {
+            playerDismissHandle
+            expandedPlayerView()
+              .allowsHitTesting(isPlayerContentInteractionSuppressed == false)
+              .scrollDisabled(isPlayerDismissDragActive)
+              .simultaneousGesture(playerDismissGesture(requiresScrollAtTop: true))
+          }
+          .padding(.top, safeAreaInsets.top + 6)
+          .padding(.bottom, safeAreaInsets.bottom)
         }
-        .safeAreaPadding(.top, 6)
+        .frame(width: proxy.size.width, height: proxy.size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 52, style: .continuous))
+        .shadow(
+          color: .black.opacity(0.2 * playerDismissProgress),
+          radius: 22 * playerDismissProgress,
+          y: 6 * playerDismissProgress
+        )
+        .offset(y: playerDismissOffset)
       }
-      .clipShape(RoundedRectangle(cornerRadius: 52, style: .continuous))
-      .shadow(
-        color: .black.opacity(0.2 * playerDismissProgress),
-        radius: 22 * playerDismissProgress,
-        y: 6 * playerDismissProgress
-      )
-      .offset(y: playerDismissOffset)
+      .ignoresSafeArea()
     }
 
     private var playerDismissHandle: some View {
@@ -988,6 +992,15 @@ struct LocalPlaybackView: View {
       .first { $0.activationState == .foregroundActive } as? UIWindowScene
       ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
     return scene?.screen.bounds.size ?? CGSize(width: 390, height: 844)
+  }
+
+  @MainActor
+  private func activeSafeAreaInsets() -> UIEdgeInsets {
+    let scene =
+      UIApplication.shared.connectedScenes
+      .first { $0.activationState == .foregroundActive } as? UIWindowScene
+      ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
+    return scene?.windows.first(where: \.isKeyWindow)?.safeAreaInsets ?? .zero
   }
 
   private struct AirPlayRouteButton: UIViewRepresentable {
