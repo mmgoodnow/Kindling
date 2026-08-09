@@ -460,6 +460,7 @@ final class AudioPlayerController: ObservableObject {
 
   @discardableResult
   func restoreLastSession(accessToken: String? = nil) -> Bool {
+    guard hasLoadedItem == false else { return false }
     guard let session = persistedSession() else { return false }
 
     if let fileRelativePath = session.fileRelativePath {
@@ -585,7 +586,7 @@ final class AudioPlayerController: ObservableObject {
     let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
     timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
       [weak self] time in
-      guard let self else { return }
+      guard let self, self.player === player else { return }
       let seconds = time.seconds
       if seconds.isFinite {
         if let pendingResumeSeekSeconds,
@@ -623,7 +624,7 @@ final class AudioPlayerController: ObservableObject {
     timeControlObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) {
       [weak self] player, _ in
       DispatchQueue.main.async {
-        guard let self else { return }
+        guard let self, self.player === player else { return }
         switch player.timeControlStatus {
         case .waitingToPlayAtSpecifiedRate:
           self.isStalled = true
@@ -634,8 +635,9 @@ final class AudioPlayerController: ObservableObject {
     }
     if let item = player.currentItem {
       loadedRangesObservation = item.observe(\.loadedTimeRanges, options: [.new]) {
-        [weak self] _, _ in
-        self?.scheduleBufferRefresh()
+        [weak self, weak player] _, _ in
+        guard let player else { return }
+        self?.scheduleBufferRefresh(for: player)
       }
     }
   }
@@ -643,9 +645,9 @@ final class AudioPlayerController: ObservableObject {
   /// Throttles `refreshBufferedSeconds` to at most ~4Hz. The KVO callback
   /// can fire many times per second during initial buffering of a streamed
   /// asset; without throttling we'd flood the main queue with state writes.
-  private func scheduleBufferRefresh() {
+  private func scheduleBufferRefresh(for player: AVPlayer) {
     DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
+      guard let self, self.player === player else { return }
       if self.pendingBufferRefresh { return }
       let now = CACurrentMediaTime()
       let elapsed = now - self.lastBufferRefreshAt
@@ -655,8 +657,9 @@ final class AudioPlayerController: ObservableObject {
         self.refreshBufferedSeconds()
       } else {
         self.pendingBufferRefresh = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + (interval - elapsed)) { [weak self] in
-          guard let self else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (interval - elapsed)) {
+          [weak self, weak player] in
+          guard let self, let player, self.player === player else { return }
           self.pendingBufferRefresh = false
           self.lastBufferRefreshAt = CACurrentMediaTime()
           self.refreshBufferedSeconds()
@@ -696,7 +699,7 @@ final class AudioPlayerController: ObservableObject {
       object: player.currentItem,
       queue: .main
     ) { [weak self] _ in
-      guard let self else { return }
+      guard let self, self.player === player else { return }
       isPlaying = false
       progress.currentTime = progress.duration
       if let currentPlaybackIdentity {
@@ -714,6 +717,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func scheduleResumeSeek(to seconds: Double, on player: AVPlayer) {
+    guard self.player === player else { return }
     let target = max(seconds, 0)
     pendingResumeSeekSeconds = target
     progress.currentTime = target
@@ -738,11 +742,14 @@ final class AudioPlayerController: ObservableObject {
         switch item.status {
         case .readyToPlay:
           DispatchQueue.main.async {
-            guard let target = self.pendingResumeSeekSeconds else { return }
+            guard self.player === player,
+              let target = self.pendingResumeSeekSeconds
+            else { return }
             self.performResumeSeek(to: target, on: player)
           }
         case .failed:
           DispatchQueue.main.async {
+            guard self.player === player else { return }
             self.pendingResumeSeekSeconds = nil
             self.pendingPlayRequest = false
             self.itemStatusObservation?.invalidate()
@@ -765,7 +772,7 @@ final class AudioPlayerController: ObservableObject {
     player.currentItem?.cancelPendingSeeks()
     player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
       DispatchQueue.main.async {
-        guard let self else { return }
+        guard let self, self.player === player else { return }
         self.pendingResumeSeekSeconds = nil
         self.itemStatusObservation?.invalidate()
         self.itemStatusObservation = nil

@@ -772,6 +772,35 @@ final class kindlingTests: XCTestCase {
     )
   }
 
+  func testSessionRestoreDoesNotReplaceAnAlreadyLoadedBook() throws {
+    let defaults = try isolatedDefaults(named: "ActiveSessionRestore")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let activeIdentity = PlaybackIdentity(canonicalID: "active-book")
+    let player = AudioPlayerController(defaults: defaults)
+    player.loadStreaming(
+      httpURL: URL(string: "https://example.com/active.mp3")!,
+      accessToken: "token",
+      identity: activeIdentity,
+      title: "Active Book"
+    )
+    player.seek(to: 456)
+    defaults.set(
+      try JSONSerialization.data(withJSONObject: [
+        "resumeID": "stale-book",
+        "streamingURLString": "https://example.com/stale.mp3",
+        "title": "Stale Book",
+        "author": "",
+        "description": "",
+      ]),
+      forKey: "audioPlayer.lastSession"
+    )
+
+    XCTAssertFalse(player.restoreLastSession(accessToken: "token"))
+    XCTAssertEqual(player.activePlaybackIdentity, activeIdentity)
+    XCTAssertEqual(player.title, "Active Book")
+    XCTAssertEqual(player.progress.currentTime, 456, accuracy: 0.001)
+  }
+
   func testResumeIDAliasesPreserveProgressAcrossBookIdentityChanges() {
     let openLibraryResumeID = "OL123W#manifestation-456"
     let openLibraryLegacyResumeID = "OL123W"

@@ -49,7 +49,9 @@ struct KindlingApp: App {
         .environmentObject(podibleAuth)
         .environmentObject(audioPlayer)
         .task {
-          _ = audioPlayer.restoreLastSession()
+          if audioPlayer.hasLoadedItem == false {
+            _ = audioPlayer.restoreLastSession()
+          }
         }
         .task(id: userSettings.podibleRPCURL) {
           await podibleAuth.refreshStoredSession(rpcURLString: userSettings.podibleRPCURL)
