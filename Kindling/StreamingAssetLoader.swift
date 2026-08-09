@@ -21,6 +21,31 @@ import UniformTypeIdentifiers
 final class StreamingAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
   static let customScheme = "kindling-stream"
 
+  static func canUseResponse(
+    statusCode: Int,
+    contentRange: String?,
+    requestedOffset: Int64
+  ) -> Bool {
+    if statusCode == 200 {
+      return requestedOffset == 0
+    }
+    guard statusCode == 206,
+      let contentRange,
+      let responseOffset = contentRangeStart(contentRange)
+    else { return false }
+    return responseOffset == requestedOffset
+  }
+
+  private static func contentRangeStart(_ value: String) -> Int64? {
+    let parts = value.split(separator: " ", omittingEmptySubsequences: true)
+    guard parts.count == 2, parts[0].lowercased() == "bytes" else { return nil }
+    let bounds = parts[1].split(separator: "/", maxSplits: 1)
+    guard bounds.count == 2 else { return nil }
+    let byteRange = bounds[0].split(separator: "-", maxSplits: 1)
+    guard byteRange.count == 2 else { return nil }
+    return Int64(byteRange[0])
+  }
+
   private let httpURL: URL
   private let accessToken: String?
   private let cache: StreamingAudioCache?
@@ -208,6 +233,27 @@ private final class RequestContext: NSObject, URLSessionDataDelegate, @unchecked
           domain: "StreamingAssetLoader",
           code: httpResponse.statusCode,
           userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"]
+        ))
+      completionHandler(.cancel)
+      return
+    }
+
+    let requestedOffset = loadingRequest.dataRequest?.requestedOffset ?? 0
+    guard
+      StreamingAssetLoader.canUseResponse(
+        statusCode: httpResponse.statusCode,
+        contentRange: httpResponse.value(forHTTPHeaderField: "Content-Range"),
+        requestedOffset: requestedOffset
+      )
+    else {
+      finish(
+        with: NSError(
+          domain: "StreamingAssetLoader",
+          code: -2,
+          userInfo: [
+            NSLocalizedDescriptionKey:
+              "Server returned bytes for the wrong offset (requested \(requestedOffset))"
+          ]
         ))
       completionHandler(.cancel)
       return

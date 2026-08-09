@@ -57,6 +57,47 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(librarySyncErrorMessage(for: error), error.localizedDescription)
   }
 
+  func testStreamingRejectsFullResponseForNonzeroRangeRequest() {
+    XCTAssertFalse(
+      StreamingAssetLoader.canUseResponse(
+        statusCode: 200,
+        contentRange: nil,
+        requestedOffset: 8_192
+      )
+    )
+    XCTAssertTrue(
+      StreamingAssetLoader.canUseResponse(
+        statusCode: 200,
+        contentRange: nil,
+        requestedOffset: 0
+      )
+    )
+  }
+
+  func testStreamingRequiresPartialResponseToStartAtRequestedOffset() {
+    XCTAssertTrue(
+      StreamingAssetLoader.canUseResponse(
+        statusCode: 206,
+        contentRange: "bytes 8192-16383/100000",
+        requestedOffset: 8_192
+      )
+    )
+    XCTAssertFalse(
+      StreamingAssetLoader.canUseResponse(
+        statusCode: 206,
+        contentRange: "bytes 0-8191/100000",
+        requestedOffset: 8_192
+      )
+    )
+    XCTAssertFalse(
+      StreamingAssetLoader.canUseResponse(
+        statusCode: 206,
+        contentRange: nil,
+        requestedOffset: 8_192
+      )
+    )
+  }
+
   func testLibrarySessionRefreshFetchesRemoteLibraryOnce() async throws {
     let schema = Schema([
       Author.self,

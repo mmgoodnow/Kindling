@@ -270,13 +270,16 @@ final class StreamingAudioCache: @unchecked Sendable {
 
     let (data, response) = try await URLSession.shared.data(for: request)
     guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-    guard (200..<300).contains(http.statusCode) else {
+    guard
+      StreamingAssetLoader.canUseResponse(
+        statusCode: http.statusCode,
+        contentRange: http.value(forHTTPHeaderField: "Content-Range"),
+        requestedOffset: lower
+      )
+    else {
       throw URLError(.badServerResponse)
     }
     let info = responseInfo(from: http, requestedOffset: lower)
-    if http.statusCode == 200, lower > 0 {
-      throw URLError(.badServerResponse)
-    }
     _ = write(data, at: info.responseStartOffset)
   }
 
