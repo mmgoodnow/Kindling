@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreGraphics
 import Foundation
 import KindlingUI
@@ -716,27 +717,19 @@ final class kindlingTests: XCTestCase {
     )
   }
 
-  func testManifestationResumeIDPreservesLegacyPlaybackPosition() {
+  func testManifestationResumeIDMigratesLegacyPlaybackPosition() throws {
     let legacyResumeID = "OL123W"
     let manifestationResumeID = "\(legacyResumeID)#manifestation-456"
     let identity = PlaybackIdentity(canonicalID: manifestationResumeID)
     let expectedPosition = 3_218.5
-    let defaults = UserDefaults.standard
-    let sessionKey = "audioPlayer.lastSession"
+    let defaults = try isolatedDefaults(named: "LegacyManifestationPosition")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
     let legacyKey = resumePositionKeyPrefix + legacyResumeID
     let manifestationKey = resumePositionKeyPrefix + manifestationResumeID
-    defaults.removeObject(forKey: sessionKey)
-    defaults.removeObject(forKey: legacyKey)
-    defaults.removeObject(forKey: manifestationKey)
-    defer {
-      defaults.removeObject(forKey: sessionKey)
-      defaults.removeObject(forKey: legacyKey)
-      defaults.removeObject(forKey: manifestationKey)
-    }
     defaults.set(expectedPosition, forKey: legacyKey)
     defaults.set(0, forKey: manifestationKey)
 
-    let player = AudioPlayerController()
+    let player = AudioPlayerController(defaults: defaults)
     player.load(
       url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
       identity: identity,
@@ -744,6 +737,8 @@ final class kindlingTests: XCTestCase {
     )
 
     XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
+    XCTAssertEqual(defaults.double(forKey: manifestationKey), expectedPosition, accuracy: 0.001)
+    XCTAssertNil(defaults.object(forKey: legacyKey))
   }
 
   func testSystemPlayBeforeSessionRestoreDefersPlaybackAtSavedPosition() throws {
@@ -801,7 +796,108 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(player.progress.currentTime, 456, accuracy: 0.001)
   }
 
-  func testResumeIDAliasesPreserveProgressAcrossBookIdentityChanges() {
+  func testLegacySessionRestoresWithCanonicalPodibleIdentityAndPosition() throws {
+    let defaults = try isolatedDefaults(named: "CanonicalSessionRestore")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    container.mainContext.insert(
+      PlaybackState(
+        canonicalID: "OL123W#manifestation-7",
+        positionSeconds: 654,
+        updatedAt: Date(timeIntervalSince1970: 1)
+      )
+    )
+    try container.mainContext.save()
+    defaults.set(
+      try JSONSerialization.data(withJSONObject: [
+        "resumeID": "OL123W#manifestation-7",
+        "podibleID": "podible-123",
+        "manifestationID": 7,
+        "streamingURLString": "https://example.com/audio.mp3",
+        "title": "Restored Book",
+        "author": "Author",
+        "description": "",
+      ]),
+      forKey: "audioPlayer.lastSession"
+    )
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let player = AudioPlayerController(defaults: defaults, repository: repository)
+
+    XCTAssertTrue(player.restoreLastSession(accessToken: "token"))
+    XCTAssertEqual(player.activeResumeID, "podible-123#manifestation-7")
+    XCTAssertEqual(player.progress.currentTime, 654, accuracy: 0.001)
+
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.first?.canonicalID, "podible-123#manifestation-7")
+  }
+
+  func testMissingLocalSessionDoesNotClearPlaybackPosition() throws {
+    let defaults = try isolatedDefaults(named: "MissingLocalSession")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(canonicalID: "missing-local-book")
+    repository.checkpoint(
+      identity: identity,
+      position: 789,
+      duration: 1_000,
+      playbackRate: 1,
+      flush: true
+    )
+    defaults.set(789, forKey: resumePositionKeyPrefix + identity.canonicalID)
+    defaults.set(
+      try JSONSerialization.data(withJSONObject: [
+        "resumeID": identity.canonicalID,
+        "fileRelativePath": "missing-\(UUID().uuidString).m4b",
+        "title": "Missing Local Book",
+        "author": "",
+        "description": "",
+      ]),
+      forKey: "audioPlayer.lastSession"
+    )
+    let player = AudioPlayerController(defaults: defaults, repository: repository)
+
+    XCTAssertFalse(player.restoreLastSession())
+    XCTAssertEqual(repository.position(for: identity), 789)
+    XCTAssertEqual(
+      defaults.double(forKey: resumePositionKeyPrefix + identity.canonicalID),
+      789
+    )
+  }
+
+  #if os(iOS)
+    func testAudioInterruptionPauseCheckpointsCurrentPosition() throws {
+      let defaults = try isolatedDefaults(named: "InterruptionCheckpoint")
+      defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+      let identity = PlaybackIdentity(canonicalID: "interrupted-book")
+      let player = AudioPlayerController(defaults: defaults)
+      player.loadStreaming(
+        httpURL: URL(string: "https://example.com/interrupted.mp3")!,
+        accessToken: "token",
+        identity: identity,
+        title: "Interrupted Book"
+      )
+      player.play()
+      player.progress.currentTime = 654
+
+      NotificationCenter.default.post(
+        name: AVAudioSession.interruptionNotification,
+        object: AVAudioSession.sharedInstance(),
+        userInfo: [
+          AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue
+        ]
+      )
+
+      XCTAssertFalse(player.isPlaying)
+      XCTAssertEqual(
+        defaults.double(forKey: resumePositionKeyPrefix + identity.canonicalID),
+        654
+      )
+    }
+  #endif
+
+  func testLoadMigratesOpenLibraryPositionToCanonicalPodibleIdentity() throws {
     let openLibraryResumeID = "OL123W#manifestation-456"
     let openLibraryLegacyResumeID = "OL123W"
     let podibleResumeID = "podible-123#manifestation-456"
@@ -811,25 +907,15 @@ final class kindlingTests: XCTestCase {
       manifestationID: 456
     )
     let expectedPosition = 3_218.5
-    let defaults = UserDefaults.standard
-    let sessionKey = "audioPlayer.lastSession"
+    let defaults = try isolatedDefaults(named: "OpenLibraryIdentityMigration")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
     let openLibraryKey = resumePositionKeyPrefix + openLibraryResumeID
     let openLibraryLegacyKey = resumePositionKeyPrefix + openLibraryLegacyResumeID
     let podibleKey = resumePositionKeyPrefix + podibleResumeID
-    defaults.removeObject(forKey: sessionKey)
-    defaults.removeObject(forKey: openLibraryKey)
-    defaults.removeObject(forKey: openLibraryLegacyKey)
-    defaults.removeObject(forKey: podibleKey)
-    defer {
-      defaults.removeObject(forKey: sessionKey)
-      defaults.removeObject(forKey: openLibraryKey)
-      defaults.removeObject(forKey: openLibraryLegacyKey)
-      defaults.removeObject(forKey: podibleKey)
-    }
     defaults.set(expectedPosition, forKey: openLibraryKey)
     defaults.set(0, forKey: podibleKey)
 
-    let player = AudioPlayerController()
+    let player = AudioPlayerController(defaults: defaults)
     player.load(
       url: URL(fileURLWithPath: "/tmp/kindling-regression-audio.m4b"),
       identity: identity,
@@ -837,8 +923,9 @@ final class kindlingTests: XCTestCase {
     )
 
     XCTAssertEqual(player.progress.currentTime, expectedPosition, accuracy: 0.001)
-    XCTAssertEqual(defaults.double(forKey: openLibraryKey), expectedPosition, accuracy: 0.001)
     XCTAssertEqual(defaults.double(forKey: podibleKey), expectedPosition, accuracy: 0.001)
+    XCTAssertNil(defaults.object(forKey: openLibraryKey))
+    XCTAssertNil(defaults.object(forKey: openLibraryLegacyKey))
   }
 
   func testPersistedProgressLookupDoesNotRewriteResumeAliases() throws {
@@ -848,19 +935,11 @@ final class kindlingTests: XCTestCase {
       manifestationID: 456
     )
     let expectedPosition = 1_234.5
-    let defaults = UserDefaults.standard
-    let keys = identity.allResumeIDs.map { resumePositionKeyPrefix + $0 }
-    for key in keys {
-      defaults.removeObject(forKey: key)
-    }
-    defer {
-      for key in keys {
-        defaults.removeObject(forKey: key)
-      }
-    }
+    let defaults = try isolatedDefaults(named: "ReadOnlyLegacyProgress")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
     defaults.set(expectedPosition, forKey: resumePositionKeyPrefix + "OL123W")
 
-    let player = AudioPlayerController()
+    let player = AudioPlayerController(defaults: defaults)
     let progress = try XCTUnwrap(
       player.persistedProgress(identity: identity, duration: 2_469)
     )
@@ -873,25 +952,27 @@ final class kindlingTests: XCTestCase {
     )
   }
 
-  func testPlaybackIdentityIncludesCanonicalAliasesAndLegacyFallbacks() {
+  func testPlaybackIdentityUsesCanonicalPodibleManifestationKey() {
     let identity = PlaybackIdentity(
       openLibraryWorkID: "OL123W",
       podibleID: "podible-123",
       manifestationID: 456
     )
 
-    XCTAssertEqual(identity.canonicalID, "OL123W#manifestation-456")
+    XCTAssertEqual(identity.canonicalID, "podible-123#manifestation-456")
+    XCTAssertEqual(identity.allResumeIDs, ["podible-123#manifestation-456"])
     XCTAssertEqual(
-      identity.allResumeIDs,
+      identity.migrationResumeIDs,
       [
-        "OL123W#manifestation-456",
-        "OL123W",
-        "podible-123",
         "podible-123#manifestation-456",
+        "OL123W#manifestation-456",
+        "podible-123",
+        "OL123W",
       ]
     )
     XCTAssertTrue(identity.matches("podible-123#manifestation-456"))
-    XCTAssertTrue(identity.matches("podible-123"))
+    XCTAssertFalse(identity.matches("OL123W#manifestation-456"))
+    XCTAssertFalse(identity.matches("podible-123"))
     XCTAssertFalse(identity.matches("other-book"))
   }
 
@@ -1003,6 +1084,73 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(states.count, 1)
     XCTAssertEqual(states.first?.positionSeconds, 432.1)
     XCTAssertEqual(states.first?.playbackRate, 1.5)
+    XCTAssertNil(defaults.object(forKey: resumePositionKeyPrefix + "book#manifestation-7"))
+  }
+
+  @MainActor
+  func testStartupMigrationCanonicalizesKnownBookPlaybackIdentity() throws {
+    let defaults = try isolatedDefaults(named: "StartupIdentityMigration")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    defaults.set(432.1, forKey: resumePositionKeyPrefix + "OL123W#manifestation-7")
+    defaults.set(765.4, forKey: resumePositionKeyPrefix + "OL123W#manifestation-8")
+    let container = try playbackTestContainer()
+    let alternateAudio = PodiblePlaybackAudio(
+      manifestationId: 8,
+      label: "Alternate",
+      editionNote: nil,
+      streamUrl: "https://example.com/alternate-audio",
+      chaptersUrl: "https://example.com/alternate-chapters",
+      transcriptUrl: nil,
+      mimeType: "audio/mpeg",
+      durationMs: 2_000,
+      sizeBytes: 200
+    )
+    let playbackJSON = try JSONEncoder().encode(
+      PodiblePlayback(
+        audio: PodiblePlaybackAudio(
+          manifestationId: 7,
+          label: nil,
+          editionNote: nil,
+          streamUrl: "https://example.com/audio",
+          chaptersUrl: "https://example.com/chapters",
+          transcriptUrl: nil,
+          mimeType: "audio/mpeg",
+          durationMs: 1_000,
+          sizeBytes: 100
+        ),
+        audioOptions: [alternateAudio],
+        ebook: nil
+      )
+    )
+    container.mainContext.insert(
+      LibraryBook(
+        podibleId: "podible-123",
+        openLibraryWorkID: "OL123W",
+        title: "Migrated Book",
+        playbackJSON: playbackJSON
+      )
+    )
+    try container.mainContext.save()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+
+    try repository.migrateLegacyState()
+    try repository.migrateLegacyState()
+
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 2)
+    XCTAssertEqual(
+      Dictionary(uniqueKeysWithValues: states.map { ($0.canonicalID, $0.positionSeconds) }),
+      [
+        "podible-123#manifestation-7": 432.1,
+        "podible-123#manifestation-8": 765.4,
+      ]
+    )
+    XCTAssertNil(
+      defaults.object(forKey: resumePositionKeyPrefix + "OL123W#manifestation-7")
+    )
+    XCTAssertNil(
+      defaults.object(forKey: resumePositionKeyPrefix + "OL123W#manifestation-8")
+    )
   }
 
   @MainActor
@@ -1047,27 +1195,112 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
-  func testPlaybackRepositoryIndexesAliasesForRepeatedReads() throws {
-    let defaults = try isolatedDefaults(named: "IndexedAliasReads")
+  func testPlaybackRepositoryMigratesLegacyRowToCanonicalIdentity() throws {
+    let defaults = try isolatedDefaults(named: "CanonicalIdentityMigration")
     defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
     let container = try playbackTestContainer()
-    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
-    let storedIdentity = PlaybackIdentity(
-      canonicalID: "canonical-book",
-      aliases: ["legacy-book"]
+    let legacyState = PlaybackState(
+      canonicalID: "OL123W#manifestation-7",
+      aliasesJSON: try JSONEncoder().encode([
+        "OL123W#manifestation-7", "OL123W", "podible-123", "podible-123#manifestation-7",
+      ]),
+      bookPodibleID: "podible-123",
+      manifestationID: 7,
+      positionSeconds: 321,
+      playbackRate: 1.25,
+      updatedAt: Date(timeIntervalSince1970: 100)
     )
-    repository.checkpoint(
-      identity: storedIdentity,
-      position: 321,
-      duration: 1_000,
-      playbackRate: 1,
-      flush: true
+    container.mainContext.insert(legacyState)
+    try container.mainContext.save()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 7
     )
 
-    let legacyIdentity = PlaybackIdentity(canonicalID: "legacy-book")
-    for _ in 0..<100 {
-      XCTAssertEqual(repository.position(for: legacyIdentity), 321)
-    }
+    XCTAssertEqual(repository.position(for: identity), 321)
+
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.first?.canonicalID, "podible-123#manifestation-7")
+    XCTAssertEqual(states.first?.positionSeconds, 321)
+    XCTAssertEqual(states.first?.playbackRate, 1.25)
+    XCTAssertNil(states.first?.aliasesJSON)
+  }
+
+  @MainActor
+  func testBareLegacyPositionMigratesToOnlyOneManifestation() throws {
+    let defaults = try isolatedDefaults(named: "SingleManifestationMigration")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    container.mainContext.insert(
+      PlaybackState(
+        canonicalID: "podible-123",
+        aliasesJSON: try JSONEncoder().encode(["podible-123"]),
+        bookPodibleID: "podible-123",
+        positionSeconds: 321,
+        updatedAt: Date(timeIntervalSince1970: 1)
+      )
+    )
+    try container.mainContext.save()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let first = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 1
+    )
+    let second = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 2
+    )
+
+    XCTAssertEqual(repository.position(for: first), 321)
+    XCTAssertEqual(repository.position(for: second), 0)
+
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.first?.canonicalID, "podible-123#manifestation-1")
+  }
+
+  @MainActor
+  func testCanonicalZeroAdoptsNewerLegacyProgressDuringMigration() throws {
+    let defaults = try isolatedDefaults(named: "CanonicalZeroMigration")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    container.mainContext.insert(
+      PlaybackState(
+        canonicalID: "podible-123#manifestation-7",
+        aliasesJSON: try JSONEncoder().encode(["podible-123#manifestation-7"]),
+        bookPodibleID: "podible-123",
+        manifestationID: 7,
+        positionSeconds: 0,
+        updatedAt: Date(timeIntervalSince1970: 1)
+      )
+    )
+    container.mainContext.insert(
+      PlaybackState(
+        canonicalID: "OL123W#manifestation-7",
+        aliasesJSON: try JSONEncoder().encode(["OL123W#manifestation-7"]),
+        bookPodibleID: "podible-123",
+        manifestationID: 7,
+        positionSeconds: 321,
+        updatedAt: Date(timeIntervalSince1970: 2)
+      )
+    )
+    try container.mainContext.save()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(
+      openLibraryWorkID: "OL123W",
+      podibleID: "podible-123",
+      manifestationID: 7
+    )
+
+    XCTAssertEqual(repository.position(for: identity), 321)
+    let states = try container.mainContext.fetch(FetchDescriptor<PlaybackState>())
+    XCTAssertEqual(states.count, 1)
+    XCTAssertEqual(states.first?.canonicalID, identity.canonicalID)
   }
 
   @MainActor

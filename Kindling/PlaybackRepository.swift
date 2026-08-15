@@ -30,7 +30,7 @@ final class PlaybackRepository {
   private let defaults: UserDefaults
   private var cachedStates: [PlaybackState]
   private var statesByCanonicalID: [String: PlaybackState]
-  private var statesByResumeID: [String: [PlaybackState]]
+  private var consolidatedCanonicalIDs: Set<String> = []
 
   init(context: ModelContext, defaults: UserDefaults = .standard) {
     self.context = context
@@ -40,8 +40,6 @@ final class PlaybackRepository {
     self.statesByCanonicalID = states.reduce(into: [:]) { result, state in
       result[state.canonicalID] = state
     }
-    self.statesByResumeID = [:]
-    rebuildResumeIndex()
   }
 
   func migrateLegacyState() throws {
@@ -53,37 +51,41 @@ final class PlaybackRepository {
     let rate = (defaults.object(forKey: Keys.rate) as? NSNumber)?.doubleValue ?? 1
 
     for (resumeID, position) in legacyPositions where position > 0 {
-      let identity = PlaybackIdentity(canonicalID: resumeID)
-      let state = state(for: identity, createIfNeeded: true)
-      state.positionSeconds = max(state.positionSeconds, position)
-      state.playbackRate = rate
-      state.updatedAt = max(state.updatedAt, .distantPast)
+      let state = rawState(for: resumeID)
+      if state.positionSeconds <= 0 {
+        state.positionSeconds = position
+        state.playbackRate = rate
+      }
     }
     if let data = defaults.data(forKey: "audioPlayer.lastSession"),
       let session = try? JSONDecoder().decode(LegacySession.self, from: data)
     {
       let identity = PlaybackIdentity(
-        canonicalID: session.resumeID,
+        restoring: session.resumeID,
         podibleID: session.podibleID,
         manifestationID: session.manifestationID
       )
-      let state = state(for: identity, createIfNeeded: true)
-      state.bookPodibleID = session.podibleID ?? state.bookPodibleID
-      state.manifestationID = session.manifestationID ?? state.manifestationID
+      _ = state(for: identity, createIfNeeded: true)
+    }
+
+    let books = (try? context.fetch(FetchDescriptor<LibraryBook>())) ?? []
+    for book in books {
+      for identity in playbackIdentities(for: book) {
+        _ = state(for: identity, createIfNeeded: false)
+      }
+    }
+
+    try reconcileRecoveryCheckpoint()
+    try saveIfNeeded()
+    for (resumeID, _) in legacyPositions {
+      defaults.removeObject(forKey: Keys.resumePrefix + resumeID)
     }
     favoriteBooksWithPlaybackProgress()
-    try reconcileRecoveryCheckpoint()
     try saveIfNeeded()
   }
 
   func position(for identity: PlaybackIdentity) -> Double {
-    if let exact = exactState(for: identity.canonicalID) {
-      return exact.positionSeconds
-    }
-    if let recovered = aliasState(for: identity) {
-      return recovered.positionSeconds
-    }
-    return legacyPosition(for: identity)
+    state(for: identity, createIfNeeded: false)?.positionSeconds ?? legacyPosition(for: identity)
   }
 
   func progress(for identity: PlaybackIdentity, duration: Double?) -> Double? {
@@ -94,15 +96,14 @@ final class PlaybackRepository {
   }
 
   func playbackRate(for identity: PlaybackIdentity?) -> Double {
-    if let identity, let state = exactState(for: identity.canonicalID) ?? aliasState(for: identity)
-    {
+    if let identity, let state = state(for: identity, createIfNeeded: false) {
       return state.playbackRate
     }
     return (defaults.object(forKey: Keys.rate) as? NSNumber)?.doubleValue ?? 1
   }
 
   func lastPlayedAt(for identity: PlaybackIdentity) -> Date? {
-    (exactState(for: identity.canonicalID) ?? aliasState(for: identity))?.lastPlayedAt
+    state(for: identity, createIfNeeded: false)?.lastPlayedAt
   }
 
   func checkpoint(
@@ -115,7 +116,7 @@ final class PlaybackRepository {
     let now = Date()
     let checkpoint = RecoveryCheckpoint(
       canonicalID: identity.canonicalID,
-      aliases: identity.allResumeIDs,
+      aliases: [],
       bookPodibleID: identity.podibleID,
       manifestationID: identity.manifestationID,
       positionSeconds: max(position, 0),
@@ -128,7 +129,7 @@ final class PlaybackRepository {
     }
     guard flush else { return }
 
-    let state = state(for: identity, createIfNeeded: true)
+    guard let state = state(for: identity, createIfNeeded: true) else { return }
     apply(checkpoint, to: state)
     try? saveIfNeeded()
   }
@@ -136,18 +137,19 @@ final class PlaybackRepository {
   func setPlaybackRate(_ rate: Double, identity: PlaybackIdentity?) {
     defaults.set(rate, forKey: Keys.rate)
     guard let identity else { return }
-    let state = state(for: identity, createIfNeeded: true)
+    guard let state = state(for: identity, createIfNeeded: true) else { return }
     state.playbackRate = rate
     state.updatedAt = Date()
     try? saveIfNeeded()
   }
 
   func clear(identity: PlaybackIdentity) {
-    for state in matchingStates(for: identity) {
+    if let state = state(for: identity, createIfNeeded: false) {
       state.positionSeconds = 0
       state.updatedAt = Date()
     }
     try? saveIfNeeded()
+    removeLegacyDefaults(for: identity)
     defaults.removeObject(forKey: Keys.recoveryCheckpoint)
   }
 
@@ -156,33 +158,30 @@ final class PlaybackRepository {
     try? saveIfNeeded()
   }
 
-  private func state(for identity: PlaybackIdentity, createIfNeeded: Bool) -> PlaybackState {
+  private func state(for identity: PlaybackIdentity, createIfNeeded: Bool) -> PlaybackState? {
+    if consolidatedCanonicalIDs.contains(identity.canonicalID) == false {
+      consolidateLegacyStates(for: identity)
+    }
+
     if let exact = exactState(for: identity.canonicalID) {
-      exact.aliasesJSON = encodedAliases(identity.allResumeIDs)
+      exact.aliasesJSON = nil
       exact.bookPodibleID = identity.podibleID ?? exact.bookPodibleID
       exact.manifestationID = identity.manifestationID ?? exact.manifestationID
-      rebuildResumeIndex()
       return exact
     }
 
-    let source = aliasState(for: identity)
+    guard createIfNeeded else { return nil }
     let state = PlaybackState(
       canonicalID: identity.canonicalID,
-      aliasesJSON: encodedAliases(identity.allResumeIDs),
+      aliasesJSON: nil,
       bookPodibleID: identity.podibleID,
       manifestationID: identity.manifestationID,
-      positionSeconds: source?.positionSeconds ?? legacyPosition(for: identity),
-      durationSeconds: source?.durationSeconds,
-      playbackRate: source?.playbackRate ?? playbackRate(for: nil),
-      lastPlayedAt: source?.lastPlayedAt,
-      updatedAt: source?.updatedAt ?? Date()
+      positionSeconds: legacyPosition(for: identity),
+      playbackRate: defaultPlaybackRate()
     )
-    if createIfNeeded {
-      context.insert(state)
-      cachedStates.append(state)
-      statesByCanonicalID[state.canonicalID] = state
-      rebuildResumeIndex()
-    }
+    context.insert(state)
+    cachedStates.append(state)
+    statesByCanonicalID[state.canonicalID] = state
     return state
   }
 
@@ -191,46 +190,31 @@ final class PlaybackRepository {
       let checkpoint = try? JSONDecoder().decode(RecoveryCheckpoint.self, from: data)
     else { return }
     let identity = PlaybackIdentity(
-      canonicalID: checkpoint.canonicalID,
+      restoring: checkpoint.canonicalID,
       aliases: checkpoint.aliases,
       podibleID: checkpoint.bookPodibleID,
       manifestationID: checkpoint.manifestationID
     )
-    let hadExactState = exactState(for: identity.canonicalID) != nil
-    let state = state(for: identity, createIfNeeded: true)
-    if hadExactState == false || checkpoint.updatedAt >= state.updatedAt {
+    guard let state = state(for: identity, createIfNeeded: true) else { return }
+    let stateHasPlayback = state.positionSeconds > 0 || state.lastPlayedAt != nil
+    if stateHasPlayback == false || checkpoint.updatedAt >= state.updatedAt {
       apply(checkpoint, to: state)
     }
   }
 
   private func apply(_ checkpoint: RecoveryCheckpoint, to state: PlaybackState) {
-    state.aliasesJSON = encodedAliases(checkpoint.aliases)
-    state.bookPodibleID = checkpoint.bookPodibleID
-    state.manifestationID = checkpoint.manifestationID
+    state.aliasesJSON = nil
+    state.bookPodibleID = checkpoint.bookPodibleID ?? state.bookPodibleID
+    state.manifestationID = checkpoint.manifestationID ?? state.manifestationID
     state.positionSeconds = checkpoint.positionSeconds
     state.durationSeconds = checkpoint.durationSeconds
     state.playbackRate = checkpoint.playbackRate
     state.lastPlayedAt = checkpoint.updatedAt
     state.updatedAt = checkpoint.updatedAt
-    rebuildResumeIndex()
   }
 
   private func exactState(for canonicalID: String) -> PlaybackState? {
     statesByCanonicalID[canonicalID]
-  }
-
-  private func aliasState(for identity: PlaybackIdentity) -> PlaybackState? {
-    matchingStates(for: identity).max { $0.updatedAt < $1.updatedAt }
-  }
-
-  private func matchingStates(for identity: PlaybackIdentity) -> [PlaybackState] {
-    var matches: [PersistentIdentifier: PlaybackState] = [:]
-    for resumeID in identity.allResumeIDs {
-      for state in statesByResumeID[resumeID] ?? [] {
-        matches[state.persistentModelID] = state
-      }
-    }
-    return Array(matches.values)
   }
 
   private func allStates() -> [PlaybackState] {
@@ -238,13 +222,9 @@ final class PlaybackRepository {
   }
 
   private func legacyPosition(for identity: PlaybackIdentity) -> Double {
-    identity.allResumeIDs.compactMap { resumeID in
+    identity.migrationResumeIDs.compactMap { resumeID in
       (defaults.object(forKey: Keys.resumePrefix + resumeID) as? NSNumber)?.doubleValue
     }.max() ?? 0
-  }
-
-  private func encodedAliases(_ aliases: [String]) -> Data? {
-    try? JSONEncoder().encode(aliases)
   }
 
   private static func decodedAliases(_ data: Data?) -> Set<String> {
@@ -252,15 +232,6 @@ final class PlaybackRepository {
       return []
     }
     return Set(aliases)
-  }
-
-  private func rebuildResumeIndex() {
-    statesByResumeID = cachedStates.reduce(into: [:]) { index, state in
-      let resumeIDs = Self.decodedAliases(state.aliasesJSON).union([state.canonicalID])
-      for resumeID in resumeIDs {
-        index[resumeID, default: []].append(state)
-      }
-    }
   }
 
   private func saveIfNeeded() throws {
@@ -285,5 +256,154 @@ final class PlaybackRepository {
         book.localState = localState
       }
     }
+  }
+
+  private func consolidateLegacyStates(for identity: PlaybackIdentity) {
+    let exact = exactState(for: identity.canonicalID)
+    let migrationIDs = Set(identity.migrationResumeIDs)
+    let candidates = cachedStates.filter { state in
+      guard state !== exact, isCompatible(state, with: identity) else { return false }
+      let stateIDs = Self.decodedAliases(state.aliasesJSON).union([state.canonicalID])
+      let matchesKnownID = stateIDs.isDisjoint(with: migrationIDs) == false
+      let matchesMetadata =
+        identity.podibleID != nil
+        && state.bookPodibleID == identity.podibleID
+        && state.manifestationID == identity.manifestationID
+      return matchesKnownID || matchesMetadata
+    }
+    let source = candidates.max { $0.updatedAt < $1.updatedAt }
+
+    var target = exact
+    if target == nil, let source {
+      let migrated = PlaybackState(
+        canonicalID: identity.canonicalID,
+        aliasesJSON: nil,
+        bookPodibleID: identity.podibleID ?? source.bookPodibleID,
+        manifestationID: identity.manifestationID ?? source.manifestationID,
+        positionSeconds: source.positionSeconds,
+        durationSeconds: source.durationSeconds,
+        playbackRate: source.playbackRate,
+        lastPlayedAt: source.lastPlayedAt,
+        updatedAt: source.updatedAt
+      )
+      context.insert(migrated)
+      cachedStates.append(migrated)
+      target = migrated
+    } else if let target, let source,
+      source.updatedAt > target.updatedAt
+        || (target.positionSeconds <= 0 && source.positionSeconds > 0)
+    {
+      copyPlayback(from: source, to: target)
+    }
+
+    if let target {
+      target.aliasesJSON = nil
+      target.bookPodibleID = identity.podibleID ?? target.bookPodibleID
+      target.manifestationID = identity.manifestationID ?? target.manifestationID
+    }
+
+    for candidate in candidates {
+      context.delete(candidate)
+      cachedStates.removeAll { $0 === candidate }
+    }
+    statesByCanonicalID = cachedStates.reduce(into: [:]) { result, state in
+      result[state.canonicalID] = state
+    }
+    consolidatedCanonicalIDs.insert(identity.canonicalID)
+
+    guard target != nil || candidates.isEmpty == false else { return }
+    do {
+      try saveIfNeeded()
+      removeLegacyDefaults(for: identity)
+    } catch {
+      consolidatedCanonicalIDs.remove(identity.canonicalID)
+    }
+  }
+
+  private func isCompatible(_ state: PlaybackState, with identity: PlaybackIdentity) -> Bool {
+    if let podibleID = identity.podibleID,
+      let statePodibleID = state.bookPodibleID,
+      statePodibleID != podibleID
+    {
+      return false
+    }
+
+    let stateIDs = Self.decodedAliases(state.aliasesJSON).union([state.canonicalID])
+    let encodedManifestationIDs = Set(stateIDs.compactMap(PlaybackIdentity.manifestationID(in:)))
+    if let manifestationID = identity.manifestationID {
+      if let stateManifestationID = state.manifestationID,
+        stateManifestationID != manifestationID
+      {
+        return false
+      }
+      if encodedManifestationIDs.isEmpty == false,
+        encodedManifestationIDs.contains(manifestationID) == false
+      {
+        return false
+      }
+    } else if state.manifestationID != nil || encodedManifestationIDs.isEmpty == false {
+      return false
+    }
+    return true
+  }
+
+  private func copyPlayback(from source: PlaybackState, to target: PlaybackState) {
+    target.positionSeconds = source.positionSeconds
+    target.durationSeconds = source.durationSeconds
+    target.playbackRate = source.playbackRate
+    target.lastPlayedAt = source.lastPlayedAt
+    target.updatedAt = source.updatedAt
+  }
+
+  private func rawState(for resumeID: String) -> PlaybackState {
+    if let state = exactState(for: resumeID) { return state }
+    let state = PlaybackState(
+      canonicalID: resumeID,
+      aliasesJSON: nil,
+      manifestationID: PlaybackIdentity.manifestationID(in: resumeID)
+    )
+    context.insert(state)
+    cachedStates.append(state)
+    statesByCanonicalID[resumeID] = state
+    return state
+  }
+
+  private func playbackIdentities(for book: LibraryBook) -> [PlaybackIdentity] {
+    guard let data = book.playbackJSON,
+      let playback = try? JSONDecoder().decode(PodiblePlayback.self, from: data)
+    else {
+      return [
+        PlaybackIdentity(
+          openLibraryWorkID: book.openLibraryWorkID,
+          podibleID: book.podibleId,
+          manifestationID: nil
+        )
+      ]
+    }
+
+    let manifestationIDs = ([playback.audio] + playback.audioOptions.map(Optional.some))
+      .compactMap { $0?.manifestationId }
+      .reduce(into: [Int]()) { result, manifestationID in
+        if result.contains(manifestationID) == false {
+          result.append(manifestationID)
+        }
+      }
+    return (manifestationIDs.isEmpty ? [nil] : manifestationIDs.map(Optional.some)).map {
+      PlaybackIdentity(
+        openLibraryWorkID: book.openLibraryWorkID,
+        podibleID: book.podibleId,
+        manifestationID: $0
+      )
+    }
+  }
+
+  private func removeLegacyDefaults(for identity: PlaybackIdentity) {
+    for resumeID in identity.migrationResumeIDs {
+      defaults.removeObject(forKey: Keys.resumePrefix + resumeID)
+    }
+  }
+
+  private func defaultPlaybackRate() -> Double {
+    (defaults.object(forKey: Keys.rate) as? NSNumber)?.doubleValue ?? 1
   }
 }

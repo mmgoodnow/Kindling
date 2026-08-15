@@ -466,19 +466,17 @@ final class AudioPlayerController: ObservableObject {
     if let fileRelativePath = session.fileRelativePath {
       guard let url = try? LibraryStorage().url(forRelativePath: fileRelativePath) else {
         clearPersistedSession()
-        clearPersistedPosition(for: session.resumeID)
         return false
       }
       guard FileManager.default.fileExists(atPath: url.path) else {
         clearPersistedSession()
-        clearPersistedPosition(for: session.resumeID)
         return false
       }
 
       load(
         url: url,
         identity: PlaybackIdentity(
-          canonicalID: session.resumeID,
+          restoring: session.resumeID,
           podibleID: session.podibleID,
           manifestationID: session.manifestationID
         ),
@@ -495,7 +493,6 @@ final class AudioPlayerController: ObservableObject {
       let streamingURL = URL(string: streamingURLString)
     else {
       clearPersistedSession()
-      clearPersistedPosition(for: session.resumeID)
       return false
     }
 
@@ -504,7 +501,7 @@ final class AudioPlayerController: ObservableObject {
       httpURL: streamingURL,
       accessToken: accessToken,
       identity: PlaybackIdentity(
-        canonicalID: session.resumeID,
+        restoring: session.resumeID,
         podibleID: session.podibleID,
         manifestationID: session.manifestationID
       ),
@@ -851,7 +848,7 @@ final class AudioPlayerController: ObservableObject {
     if let playbackRepository {
       return playbackRepository.position(for: identity)
     }
-    let savedPositions = identity.allResumeIDs.compactMap { candidateResumeID in
+    let savedPositions = identity.migrationResumeIDs.compactMap { candidateResumeID in
       storedPersistedPosition(for: candidateResumeID).map { position in
         (resumeID: candidateResumeID, position: position)
       }
@@ -859,9 +856,9 @@ final class AudioPlayerController: ObservableObject {
     guard let restored = savedPositions.max(by: { $0.position < $1.position }) else { return 0 }
 
     if migrateAliases {
-      for resumeID in identity.allResumeIDs where resumeID != restored.resumeID {
-        guard storedPersistedPosition(for: resumeID) != restored.position else { continue }
-        defaults.set(restored.position, forKey: resumePositionKey(for: resumeID))
+      defaults.set(restored.position, forKey: resumePositionKey(for: identity.canonicalID))
+      for resumeID in identity.migrationResumeIDs where resumeID != identity.canonicalID {
+        defaults.removeObject(forKey: resumePositionKey(for: resumeID))
       }
     }
     return restored.position
@@ -879,8 +876,11 @@ final class AudioPlayerController: ObservableObject {
       playbackRate: playbackRate,
       flush: force
     )
-    for resumeID in currentPlaybackIdentity.allResumeIDs {
-      defaults.set(progress.currentTime, forKey: resumePositionKey(for: resumeID))
+    if playbackRepository == nil {
+      defaults.set(
+        progress.currentTime,
+        forKey: resumePositionKey(for: currentPlaybackIdentity.canonicalID)
+      )
     }
   }
 
@@ -891,7 +891,7 @@ final class AudioPlayerController: ObservableObject {
 
   private func clearPersistedPosition(for identity: PlaybackIdentity) {
     playbackRepository?.clear(identity: identity)
-    for resumeID in identity.allResumeIDs {
+    for resumeID in identity.migrationResumeIDs {
       defaults.removeObject(forKey: resumePositionKey(for: resumeID))
     }
   }
@@ -979,9 +979,7 @@ final class AudioPlayerController: ObservableObject {
       case .began:
         shouldResumeAfterInterruption = isPlaying
         if isPlaying {
-          player?.pause()
-          isPlaying = false
-          updateNowPlayingInfo()
+          pause()
         }
       case .ended:
         let rawOptions = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
