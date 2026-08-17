@@ -132,15 +132,35 @@ struct ContentView: View {
     .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
       markFinishedPlaybackRead($0)
     }
+    .alert("Podible Session Expired", isPresented: reauthenticationPrompt) {
+      Button("Not Now", role: .cancel) {
+        podibleAuth.dismissReauthenticationPrompt()
+      }
+      Button("Sign In Again") {
+        Task {
+          await podibleAuth.signIn(rpcURLString: userSettings.podibleRPCURL)
+        }
+      }
+    } message: {
+      Text(
+        "Sign in again to reconnect to Podible. Audiobooks already downloaded to this device remain available."
+      )
+    }
   }
 
   private var configuredClient: RemoteLibraryServing? {
-    guard let url = URL(string: userSettings.podibleRPCURL),
-      userSettings.podibleRPCURL.isEmpty == false,
-      let accessToken = podibleAuth.accessToken,
-      accessToken.isEmpty == false
-    else { return nil }
-    return PodibleClient(rpcURL: url, accessToken: accessToken)
+    podibleAuth.makeAuthenticatedClient(rpcURLString: userSettings.podibleRPCURL)
+  }
+
+  private var reauthenticationPrompt: Binding<Bool> {
+    Binding(
+      get: { podibleAuth.requiresReauthentication },
+      set: { isPresented in
+        if isPresented == false {
+          podibleAuth.dismissReauthenticationPrompt()
+        }
+      }
+    )
   }
 
   private var podibleSessionTaskID: String {

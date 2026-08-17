@@ -7,6 +7,44 @@ import XCTest
 
 @testable import Kindling
 
+private actor AsyncCallCounter {
+  private(set) var value = 0
+
+  func increment() {
+    value += 1
+  }
+}
+
+private final class UnauthorizedURLProtocol: URLProtocol, @unchecked Sendable {
+  override class func canInit(with request: URLRequest) -> Bool {
+    true
+  }
+
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    request
+  }
+
+  override func startLoading() {
+    guard let url = request.url,
+      let response = HTTPURLResponse(
+        url: url,
+        statusCode: 401,
+        httpVersion: "HTTP/1.1",
+        headerFields: ["Content-Type": "application/json"]
+      )
+    else {
+      client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+      return
+    }
+
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data())
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
 @MainActor
 final class kindlingTests: XCTestCase {
   private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
@@ -38,6 +76,61 @@ final class kindlingTests: XCTestCase {
     XCTAssertTrue(metadata.isDirty)
   }
 
+  func testUnauthorizedResponseNotifiesAuthenticatedClient() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [UnauthorizedURLProtocol.self]
+    let urlSession = URLSession(configuration: configuration)
+    let counter = AsyncCallCounter()
+    let client = PodibleClient(
+      rpcURL: try XCTUnwrap(URL(string: "https://podible.example.com/rpc")),
+      accessToken: "expired-token",
+      session: urlSession,
+      unauthorizedHandler: {
+        await counter.increment()
+      }
+    )
+
+    do {
+      _ = try await client.fetchLibraryItems()
+      XCTFail("Expected the request to be unauthorized")
+    } catch PodibleError.unauthorized {
+      // Expected.
+    } catch {
+      XCTFail("Expected PodibleError.unauthorized, got \(error)")
+    }
+
+    let callCount = await counter.value
+    XCTAssertEqual(callCount, 1)
+  }
+
+  func testUnauthorizedSessionIsClearedAndRequestsReauthentication() throws {
+    let rpcURL = try XCTUnwrap(URL(string: "https://podible.example.com/rpc"))
+    let controller = PodibleAuthController(
+      session: podibleSession(rpcURL: rpcURL, accessToken: "expired-token")
+    )
+
+    controller.handleUnauthorized(rpcURL: rpcURL, accessToken: "expired-token")
+
+    XCTAssertFalse(controller.isAuthenticated)
+    XCTAssertTrue(controller.requiresReauthentication)
+    XCTAssertEqual(
+      controller.errorMessage,
+      "Your Podible session expired. Sign in again to continue."
+    )
+  }
+
+  func testUnauthorizedResponseFromStaleClientDoesNotClearNewSession() throws {
+    let rpcURL = try XCTUnwrap(URL(string: "https://podible.example.com/rpc"))
+    let controller = PodibleAuthController(
+      session: podibleSession(rpcURL: rpcURL, accessToken: "new-token")
+    )
+
+    controller.handleUnauthorized(rpcURL: rpcURL, accessToken: "old-token")
+
+    XCTAssertEqual(controller.accessToken, "new-token")
+    XCTAssertFalse(controller.requiresReauthentication)
+  }
+
   func testArtworkPaletteSamplerReadsDominantColor() throws {
     let image = try solidImage(red: 204, green: 34, blue: 17)
     let palette = try XCTUnwrap(ArtworkPaletteSampler.palette(from: image))
@@ -45,6 +138,26 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(palette.red, 0.80, accuracy: 0.02)
     XCTAssertEqual(palette.green, 0.13, accuracy: 0.02)
     XCTAssertEqual(palette.blue, 0.07, accuracy: 0.02)
+  }
+
+  private func podibleSession(rpcURL: URL, accessToken: String) -> PodibleAppSession {
+    PodibleAppSession(
+      rpcURLKey: PodibleClient.sessionKey(for: rpcURL),
+      accessToken: accessToken,
+      expiresAt: nil,
+      expiresIn: nil,
+      user: PodibleAuthUser(
+        id: 1,
+        displayName: "Test User",
+        email: nil,
+        name: nil,
+        username: nil,
+        plexUsername: nil,
+        provider: nil,
+        thumbUrl: nil,
+        isAdmin: nil
+      )
+    )
   }
 
   func testArtworkPaletteSamplerFallsBackToNeutralArtAverage() throws {

@@ -916,11 +916,7 @@ struct LocalPlaybackView: View {
   }
 
   private var configuredClient: RemoteLibraryServing? {
-    guard let url = URL(string: userSettings.podibleRPCURL),
-      let accessToken = podibleAuth.accessToken,
-      accessToken.isEmpty == false
-    else { return nil }
-    return PodibleClient(rpcURL: url, accessToken: accessToken)
+    podibleAuth.makeAuthenticatedClient(rpcURLString: userSettings.podibleRPCURL)
   }
 
   private func requestTranscriptGeneration() {

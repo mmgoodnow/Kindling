@@ -213,17 +213,7 @@ struct LibraryFeatureContainer: View {
     if let clientOverride {
       return clientOverride
     }
-    if let url = URL(string: userSettings.podibleRPCURL),
-      userSettings.podibleRPCURL.isEmpty == false,
-      let accessToken = podibleAuth.accessToken,
-      accessToken.isEmpty == false
-    {
-      return PodibleClient(
-        rpcURL: url,
-        accessToken: accessToken
-      )
-    }
-    return nil
+    return podibleAuth.makeAuthenticatedClient(rpcURLString: userSettings.podibleRPCURL)
   }
 
   private var trimmedPodibleRPCURL: String {

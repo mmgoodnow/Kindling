@@ -16,10 +16,15 @@ final class PodibleAuthController: ObservableObject {
   @Published private(set) var session: PodibleAppSession?
   @Published private(set) var isAuthenticating = false
   @Published private(set) var hasCheckedStoredSession = false
+  @Published private(set) var requiresReauthentication = false
   @Published var errorMessage: String?
 
   private let keychain = PodibleSessionKeychain()
   private let webAuthenticator = PodibleWebAuthenticator()
+
+  init(session: PodibleAppSession? = nil) {
+    self.session = session
+  }
 
   var accessToken: String? { session?.accessToken }
   var isAuthenticated: Bool { accessToken?.isEmpty == false }
@@ -35,6 +40,7 @@ final class PodibleAuthController: ObservableObject {
     let trimmed = rpcURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed.isEmpty == false, let rpcURL = URL(string: trimmed) else {
       session = nil
+      requiresReauthentication = false
       errorMessage = nil
       return
     }
@@ -42,12 +48,14 @@ final class PodibleAuthController: ObservableObject {
     let key = PodibleClient.sessionKey(for: rpcURL)
     guard let stored = try? keychain.loadSession(for: key) else {
       session = nil
+      requiresReauthentication = false
       errorMessage = nil
       return
     }
 
     if stored.rpcURLKey != key {
       session = nil
+      requiresReauthentication = false
       errorMessage = nil
       return
     }
@@ -67,9 +75,9 @@ final class PodibleAuthController: ObservableObject {
       )
       try keychain.saveSession(refreshed, for: key)
       session = refreshed
+      requiresReauthentication = false
     } catch PodibleError.unauthorized {
-      clearSession()
-      try? keychain.deleteSession(for: key)
+      handleUnauthorized(rpcURL: rpcURL, accessToken: stored.accessToken)
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -110,12 +118,14 @@ final class PodibleAuthController: ObservableObject {
       )
       try keychain.saveSession(session, for: key)
       self.session = session
+      requiresReauthentication = false
     } catch {
       errorMessage = error.localizedDescription
     }
   }
 
   func logout(rpcURLString: String) async {
+    requiresReauthentication = false
     let trimmed = rpcURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed.isEmpty == false, let rpcURL = URL(string: trimmed) else {
       clearSession()
@@ -135,6 +145,40 @@ final class PodibleAuthController: ObservableObject {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func makeAuthenticatedClient(rpcURLString: String) -> PodibleClient? {
+    let trimmed = rpcURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard
+      trimmed.isEmpty == false,
+      let rpcURL = URL(string: trimmed),
+      let accessToken,
+      accessToken.isEmpty == false
+    else {
+      return nil
+    }
+
+    return PodibleClient(
+      rpcURL: rpcURL,
+      accessToken: accessToken,
+      unauthorizedHandler: { [weak self] in
+        await self?.handleUnauthorized(rpcURL: rpcURL, accessToken: accessToken)
+      }
+    )
+  }
+
+  func dismissReauthenticationPrompt() {
+    requiresReauthentication = false
+  }
+
+  func handleUnauthorized(rpcURL: URL, accessToken: String) {
+    let key = PodibleClient.sessionKey(for: rpcURL)
+    guard session?.rpcURLKey == key, session?.accessToken == accessToken else { return }
+
+    try? keychain.deleteSession(for: key)
+    clearSession()
+    errorMessage = "Your Podible session expired. Sign in again to continue."
+    requiresReauthentication = true
   }
 
   private func clearSession() {

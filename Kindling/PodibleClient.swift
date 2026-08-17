@@ -1661,7 +1661,20 @@ private struct DynamicCodingKey: CodingKey {
 struct PodibleClient: PodibleLibraryServing {
   let rpcURL: URL
   let accessToken: String?
-  var session: URLSession = .shared
+  var session: URLSession
+  private let unauthorizedHandler: (@Sendable () async -> Void)?
+
+  init(
+    rpcURL: URL,
+    accessToken: String?,
+    session: URLSession = .shared,
+    unauthorizedHandler: (@Sendable () async -> Void)? = nil
+  ) {
+    self.rpcURL = rpcURL
+    self.accessToken = accessToken
+    self.session = session
+    self.unauthorizedHandler = unauthorizedHandler
+  }
 
   var supportsLibraryDelete: Bool { true }
   var supportsImportIssueReporting: Bool { true }
@@ -2266,9 +2279,7 @@ struct PodibleClient: PodibleLibraryServing {
     guard let http = response as? HTTPURLResponse else {
       throw PodibleError.server("Backend returned an error for \(method).")
     }
-    if http.statusCode == 401 || http.statusCode == 403 {
-      throw PodibleError.unauthorized
-    }
+    try await validateAuthorizationStatus(http.statusCode)
     guard (200..<300).contains(http.statusCode) else {
       throw PodibleError.server("Backend returned an error for \(method).")
     }
@@ -2326,9 +2337,7 @@ struct PodibleClient: PodibleLibraryServing {
     guard let http = response as? HTTPURLResponse else {
       throw PodibleError.server("Failed to fetch backend data.")
     }
-    if http.statusCode == 401 || http.statusCode == 403 {
-      throw PodibleError.unauthorized
-    }
+    try await validateAuthorizationStatus(http.statusCode)
     guard (200..<300).contains(http.statusCode) else {
       throw PodibleHTTPError(statusCode: http.statusCode)
     }
@@ -2350,9 +2359,7 @@ struct PodibleClient: PodibleLibraryServing {
     guard let http = response as? HTTPURLResponse else {
       throw PodibleError.server("Failed to fetch backend data.")
     }
-    if http.statusCode == 401 || http.statusCode == 403 {
-      throw PodibleError.unauthorized
-    }
+    try await validateAuthorizationStatus(http.statusCode)
     guard (200..<300).contains(http.statusCode) else {
       throw PodibleHTTPError(statusCode: http.statusCode)
     }
@@ -2481,22 +2488,33 @@ struct PodibleClient: PodibleLibraryServing {
       }
     }
 
-    return try await withCheckedThrowingContinuation { continuation in
-      let delegate = DownloadDelegate()
-      delegate.continuation = continuation
-      delegate.progressHandler = progress
-      let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-      var request = URLRequest(url: url)
-      request.httpMethod = "GET"
-      do {
-        try applyAuthorization(to: &request)
-      } catch {
-        continuation.resume(throwing: error)
-        return
+    do {
+      return try await withCheckedThrowingContinuation { continuation in
+        let delegate = DownloadDelegate()
+        delegate.continuation = continuation
+        delegate.progressHandler = progress
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        do {
+          try applyAuthorization(to: &request)
+        } catch {
+          continuation.resume(throwing: error)
+          return
+        }
+        let task = session.downloadTask(with: request)
+        task.resume()
       }
-      let task = session.downloadTask(with: request)
-      task.resume()
+    } catch PodibleError.unauthorized {
+      await unauthorizedHandler?()
+      throw PodibleError.unauthorized
     }
+  }
+
+  private func validateAuthorizationStatus(_ statusCode: Int) async throws {
+    guard statusCode == 401 || statusCode == 403 else { return }
+    await unauthorizedHandler?()
+    throw PodibleError.unauthorized
   }
 
   private func applyAuthorization(
