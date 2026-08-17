@@ -107,6 +107,7 @@ struct BookDetailView: View {
   @EnvironmentObject var userSettings: UserSettings
   @EnvironmentObject var podibleAuth: PodibleAuthController
   @EnvironmentObject var player: AudioPlayerController
+  @Query private var bookAttributions: [BookAttribution]
 
   let item: PodibleLibraryItem
   let localBook: LibraryBook?
@@ -407,9 +408,14 @@ struct BookDetailView: View {
       seriesTitle: item.seriesTitle ?? localBook?.series?.title,
       seriesPosition: item.seriesPosition ?? localBook?.seriesIndex,
       narrator: item.narrator ?? localBook?.narrator,
+      requestedBy: item.addedByUser?.preferredName ?? persistedAttribution?.preferredName,
       publishedYear: item.publishedYear ?? localBook?.publishedYear,
       description: displaySummary
     )
+  }
+
+  private var persistedAttribution: BookAttribution? {
+    bookAttributions.first { $0.bookPodibleID == item.id }
   }
 
   private var detailPaletteTaskID: String {

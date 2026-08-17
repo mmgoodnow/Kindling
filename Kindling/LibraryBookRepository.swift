@@ -115,6 +115,7 @@ struct LibraryBookRepository {
   func upsert(_ item: PodibleLibraryItem, existing: LibraryBook?) -> LibraryBook {
     let author = fetchOrCreateAuthor(name: item.author)
     let series = fetchOrCreateSeries(for: item)
+    upsertAttribution(for: item)
     if let existing {
       LibraryBookPersistenceMapper.update(existing, with: item, author: author, series: series)
       return existing
@@ -123,6 +124,28 @@ struct LibraryBookRepository {
     let book = LibraryBookPersistenceMapper.make(item: item, author: author, series: series)
     modelContext.insert(book)
     return book
+  }
+
+  private func upsertAttribution(for item: PodibleLibraryItem) {
+    guard let user = item.addedByUser else { return }
+    let bookID = item.id
+    let descriptor = FetchDescriptor<BookAttribution>(
+      predicate: #Predicate { $0.bookPodibleID == bookID })
+    if let existing = (try? modelContext.fetch(descriptor))?.first {
+      existing.userID = user.id
+      existing.username = user.username
+      existing.displayName = user.displayName
+      existing.thumbURLString = user.thumbUrl
+      return
+    }
+    modelContext.insert(
+      BookAttribution(
+        bookPodibleID: bookID,
+        userID: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        thumbURLString: user.thumbUrl
+      ))
   }
 
   private func fetchOrCreateAuthor(name: String) -> Author {

@@ -235,6 +235,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
   let runtimeSeconds: Int?
   let publishedYear: Int?
   let narrator: String?
+  let addedByUser: PodibleAddedByUser?
   let series: [PodibleBookSeriesMembership]
   let seriesKey: String?
   let seriesTitle: String?
@@ -259,6 +260,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     runtimeSeconds: Int? = nil,
     publishedYear: Int? = nil,
     narrator: String? = nil,
+    addedByUser: PodibleAddedByUser? = nil,
     series: [PodibleBookSeriesMembership] = [],
     seriesKey: String? = nil,
     seriesTitle: String? = nil,
@@ -282,6 +284,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     self.runtimeSeconds = runtimeSeconds
     self.publishedYear = publishedYear
     self.narrator = narrator
+    self.addedByUser = addedByUser
     let normalizedSeries =
       series.isEmpty
       ? seriesTitle.map {
@@ -326,6 +329,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     case firstPublishYear
     case narrator
     case narratedBy
+    case addedByUser
     case seriesKey
     case seriesId
     case seriesID
@@ -384,6 +388,7 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
     narrator =
       (try? container.decodeIfPresent(String.self, forKey: .narrator))
       ?? (try? container.decodeIfPresent(String.self, forKey: .narratedBy))
+    addedByUser = try? container.decodeIfPresent(PodibleAddedByUser.self, forKey: .addedByUser)
     series =
       (try? container.decodeIfPresent([PodibleBookSeriesMembership].self, forKey: .series)) ?? []
     seriesKey =
@@ -406,6 +411,22 @@ struct PodibleLibraryItem: Identifiable, Hashable, Decodable {
       seriesPosition = nil
     }
     playback = try? container.decodeIfPresent(PodiblePlayback.self, forKey: .playback)
+  }
+}
+
+struct PodibleAddedByUser: Hashable, Decodable {
+  let id: Int
+  let username: String?
+  let displayName: String?
+  let thumbUrl: String?
+
+  var preferredName: String? {
+    for candidate in [displayName, username] {
+      if let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+        return value
+      }
+    }
+    return nil
   }
 }
 
@@ -1509,6 +1530,7 @@ struct PodibleLibraryBook: Decodable {
   let publishedYear: Int?
   let firstPublishYear: Int?
   let narrator: String?
+  let addedByUser: PodibleAddedByUser?
   let narratedBy: String?
   let seriesKey: String?
   let seriesId: String?
@@ -2116,6 +2138,7 @@ struct PodibleClient: PodibleLibraryServing {
       },
       publishedYear: book.publishedYear ?? book.firstPublishYear ?? year(from: book.publishedAt),
       narrator: book.narrator ?? book.narratedBy,
+      addedByUser: book.addedByUser,
       series: book.series,
       seriesKey: book.series.first?.key ?? book.seriesKey ?? book.seriesId ?? book.seriesID,
       seriesTitle: book.series.first?.name ?? book.seriesTitle,

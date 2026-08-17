@@ -231,6 +231,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
   public var seriesTitle: String?
   public var seriesPosition: Double?
   public var narrator: String?
+  public var requestedBy: String?
   public var publishedYear: Int?
   public var description: String?
 
@@ -246,6 +247,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
     seriesTitle: String? = nil,
     seriesPosition: Double? = nil,
     narrator: String? = nil,
+    requestedBy: String? = nil,
     publishedYear: Int? = nil,
     description: String? = nil
   ) {
@@ -260,6 +262,7 @@ public struct BookDetailViewData: Identifiable, Hashable, Sendable {
     self.seriesTitle = seriesTitle
     self.seriesPosition = seriesPosition
     self.narrator = narrator
+    self.requestedBy = requestedBy
     self.publishedYear = publishedYear
     self.description = description
   }
@@ -1001,6 +1004,13 @@ public struct BookDetailHeroView<Artwork: View, SeriesBar: View>: View {
 
         if let narrator = book.narrator {
           Text("Narrated by \(narrator)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+
+        if let requestedBy = book.requestedBy {
+          Text("Requested by \(requestedBy)")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)

@@ -302,13 +302,54 @@ enum KindlingSchemaV3: VersionedSchema {
   ]
 }
 
+@Model
+final class BookAttribution {
+  @Attribute(.unique) var bookPodibleID: String
+  var userID: Int
+  var username: String?
+  var displayName: String?
+  var thumbURLString: String?
+
+  init(
+    bookPodibleID: String,
+    userID: Int,
+    username: String? = nil,
+    displayName: String? = nil,
+    thumbURLString: String? = nil
+  ) {
+    self.bookPodibleID = bookPodibleID
+    self.userID = userID
+    self.username = username
+    self.displayName = displayName
+    self.thumbURLString = thumbURLString
+  }
+
+  var preferredName: String? {
+    for candidate in [displayName, username] {
+      if let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+        return value
+      }
+    }
+    return nil
+  }
+}
+
+enum KindlingSchemaV4: VersionedSchema {
+  static let versionIdentifier = Schema.Version(4, 0, 0)
+  static let models: [any PersistentModel.Type] = [
+    Author.self, Series.self, LibraryBook.self, LibraryBookFile.self, LocalBookState.self,
+    PlaybackState.self, BookActivityState.self, BookAttribution.self, LibrarySyncState.self,
+  ]
+}
+
 enum KindlingMigrationPlan: SchemaMigrationPlan {
   static let schemas: [any VersionedSchema.Type] = [
-    KindlingSchemaV1.self, KindlingSchemaV2.self, KindlingSchemaV3.self,
+    KindlingSchemaV1.self, KindlingSchemaV2.self, KindlingSchemaV3.self, KindlingSchemaV4.self,
   ]
   static let stages: [MigrationStage] = [
     .lightweight(fromVersion: KindlingSchemaV1.self, toVersion: KindlingSchemaV2.self),
     .lightweight(fromVersion: KindlingSchemaV2.self, toVersion: KindlingSchemaV3.self),
+    .lightweight(fromVersion: KindlingSchemaV3.self, toVersion: KindlingSchemaV4.self),
   ]
 }
 

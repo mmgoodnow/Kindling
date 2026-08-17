@@ -406,6 +406,31 @@ final class kindlingTests: XCTestCase {
     XCTAssertEqual(item.descriptionHTML, "<p>A <strong>rich</strong> description.</p>")
   }
 
+  func testLibraryItemDecodesRequesterMetadata() throws {
+    let data = try XCTUnwrap(
+      """
+      {
+        "id": "42",
+        "bookname": "Requested Book",
+        "authorname": "An Author",
+        "status": "have",
+        "addedByUser": {
+          "id": 7,
+          "username": "reader",
+          "displayName": "A Reader",
+          "thumbUrl": "/avatars/reader.jpg"
+        }
+      }
+      """.data(using: .utf8)
+    )
+
+    let item = try JSONDecoder().decode(PodibleLibraryItem.self, from: data)
+
+    XCTAssertEqual(item.addedByUser?.id, 7)
+    XCTAssertEqual(item.addedByUser?.preferredName, "A Reader")
+    XCTAssertEqual(item.addedByUser?.thumbUrl, "/avatars/reader.jpg")
+  }
+
   func testSeriesMembershipMatchesTheActiveSeriesInsteadOfTheFirstMembership() {
     let memberships = [
       PodibleBookSeriesMembership(key: "OL-OTHER", name: "Other Series", position: "8"),
@@ -1206,6 +1231,47 @@ final class kindlingTests: XCTestCase {
       container.mainContext.fetch(FetchDescriptor<PlaybackState>()).first)
     XCTAssertEqual(playback.positionSeconds, 456)
     XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<BookActivityState>()).isEmpty)
+  }
+
+  @MainActor
+  func testV3StoreMigratesToAttributionSchemaWithoutLosingLibraryData() throws {
+    let storeURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("KindlingAttributionMigration-\(UUID().uuidString).sqlite")
+    defer {
+      for suffix in ["", "-shm", "-wal"] {
+        try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
+      }
+    }
+
+    do {
+      let configuration = ModelConfiguration(
+        "attribution-migration-test",
+        schema: Schema(versionedSchema: KindlingSchemaV3.self),
+        url: storeURL
+      )
+      let container = try ModelContainer(
+        for: Schema(versionedSchema: KindlingSchemaV3.self),
+        migrationPlan: KindlingMigrationPlan.self,
+        configurations: [configuration]
+      )
+      container.mainContext.insert(LibraryBook(podibleId: "42", title: "Preserved Book"))
+      try container.mainContext.save()
+    }
+
+    let configuration = ModelConfiguration(
+      "attribution-migration-test",
+      schema: Schema(versionedSchema: KindlingSchemaV4.self),
+      url: storeURL
+    )
+    let container = try ModelContainer(
+      for: Schema(versionedSchema: KindlingSchemaV4.self),
+      migrationPlan: KindlingMigrationPlan.self,
+      configurations: [configuration]
+    )
+
+    let book = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<LibraryBook>()).first)
+    XCTAssertEqual(book.title, "Preserved Book")
+    XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<BookAttribution>()).isEmpty)
   }
 
   @MainActor
