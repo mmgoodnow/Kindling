@@ -80,7 +80,7 @@ struct ContentView: View {
       }
       .animation(.snappy(duration: 0.38), value: isShowingPlayer)
     #else
-      .fullScreenCover(isPresented: $isShowingPlayer) {
+      .sheet(isPresented: $isShowingPlayer) {
         LocalPlaybackView(player: player)
       }
     #endif
