@@ -139,6 +139,29 @@ struct SettingsView: View {
           "Removes cached library records and downloaded files from this device. Your Podible library is not changed."
         )
       }
+
+      Section("Build") {
+        LabeledContent("Version", value: BuildMetadata.appVersion())
+
+        if let metadata = BuildMetadata.current {
+          LabeledContent("Commit", value: metadata.commitDescription)
+          LabeledContent("Branch", value: metadata.branch)
+          LabeledContent("Author", value: metadata.author)
+          LabeledContent("Committed", value: metadata.formattedCommitTimestamp)
+          LabeledContent("Configuration", value: metadata.configuration)
+          LabeledContent("Built", value: metadata.formattedBuildTimestamp)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Text("Commit message")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Text(metadata.commitSubject)
+              .textSelection(.enabled)
+          }
+        } else {
+          LabeledContent("Source metadata", value: "Unavailable")
+        }
+      }
     }
     .formStyle(.grouped)
     .navigationTitle("Settings")

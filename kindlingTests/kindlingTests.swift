@@ -11,6 +11,33 @@ import XCTest
 final class kindlingTests: XCTestCase {
   private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
 
+  func testBuildMetadataDecodesGeneratedPropertyList() throws {
+    let values: [String: Any] = [
+      "buildTimestamp": "2026-08-16T19:30:00Z",
+      "configuration": "Debug",
+      "commitSHA": "0123456789abcdef0123456789abcdef01234567",
+      "shortSHA": "01234567",
+      "branch": "main",
+      "author": "Test Author",
+      "commitTimestamp": "2026-08-16T18:15:00-07:00",
+      "commitSubject": "Show build metadata in settings",
+      "isDirty": true,
+    ]
+    let data = try PropertyListSerialization.data(
+      fromPropertyList: values,
+      format: .xml,
+      options: 0
+    )
+
+    let metadata = try XCTUnwrap(BuildMetadata.decode(data))
+
+    XCTAssertEqual(metadata.shortSHA, "01234567")
+    XCTAssertEqual(metadata.branch, "main")
+    XCTAssertEqual(metadata.commitSubject, "Show build metadata in settings")
+    XCTAssertEqual(metadata.commitDescription, "01234567 + local changes")
+    XCTAssertTrue(metadata.isDirty)
+  }
+
   func testArtworkPaletteSamplerReadsDominantColor() throws {
     let image = try solidImage(red: 204, green: 34, blue: 17)
     let palette = try XCTUnwrap(ArtworkPaletteSampler.palette(from: image))
