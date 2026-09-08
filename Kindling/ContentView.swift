@@ -44,7 +44,7 @@ struct ContentView: View {
   var body: some View {
     Group {
       #if os(iOS)
-        if player.hasLoadedItem {
+        if player.hasLoadedItem && !player.hasFinished {
           appTabs
             .tabBarMinimizeBehavior(.onScrollDown)
             .tabViewSearchActivation(.searchTabSelection)
@@ -59,7 +59,7 @@ struct ContentView: View {
       #else
         appTabs
           .safeAreaInset(edge: .bottom, spacing: 0) {
-            if player.hasLoadedItem {
+            if player.hasLoadedItem && !player.hasFinished {
               miniPlayer
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -191,12 +191,33 @@ struct ContentView: View {
   }
 
   private func markFinishedPlaybackRead(_ notification: Notification) {
-    guard let resumeID = notification.userInfo?["resumeID"] as? String else { return }
+    guard let source = notification.object as? AudioPlayerController, source === player,
+      let resumeID = notification.userInfo?["resumeID"] as? String
+    else { return }
+    isShowingPlayer = false
+    guard
+      let book = localBooks.first(where: {
+        $0.podibleId == player.activePlaybackIdentity?.podibleID
+          || playbackIdentityResolver.identity(for: $0).matches(resumeID)
+      })
+    else { return }
     try? libraryData.markFinishedPlaybackRead(
       resumeID: resumeID,
-      identity: playbackIdentityResolver.identity(for:),
+      identity: {
+        if $0.podibleId == book.podibleId, let identity = player.activePlaybackIdentity {
+          return identity
+        }
+        return playbackIdentityResolver.identity(for: $0)
+      },
       context: modelContext
     )
+    let path = NavigationPath([LibraryNavigationRoute.localBook(book.podibleId)])
+    switch selectedTab {
+    case .home: homeNavigationPath = path
+    case .library: libraryNavigationPath = path
+    case .favorites: favoritesNavigationPath = path
+    case .search: searchNavigationPath = path
+    }
   }
 
   private var appTabs: some View {

@@ -906,6 +906,91 @@ final class kindlingTests: XCTestCase {
     XCTAssertNil(defaults.object(forKey: legacyKey))
   }
 
+  func testActualEndOfAudioPersistsCompletionAndEmitsOneFinishEvent() async throws {
+    let defaults = try isolatedDefaults(named: "ActualAudioCompletion")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    let identity = PlaybackIdentity(canonicalID: "short-audiobook")
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("kindling-completion-\(UUID().uuidString).wav")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8_000, channels: 1))
+    let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 800))
+    buffer.frameLength = 800
+    if let samples = buffer.floatChannelData {
+      samples[0].initialize(repeating: 0, count: 800)
+    }
+    do {
+      let file = try AVAudioFile(forWriting: url, settings: format.settings)
+      try file.write(from: buffer)
+    }
+    let player = AudioPlayerController(defaults: defaults, repository: repository)
+    let finished = expectation(forNotification: .audioPlayerDidFinishItem, object: player)
+    player.load(url: url, identity: identity, title: "Short Audiobook")
+    player.play()
+    await fulfillment(of: [finished], timeout: 10)
+    XCTAssertTrue(player.hasFinished)
+    XCTAssertFalse(player.isPlaying)
+    XCTAssertEqual(player.currentTime, player.duration, accuracy: 0.001)
+    XCTAssertNotNil(repository.completedDuration(for: identity))
+    player.play()
+    XCTAssertFalse(player.isPlaying)
+    player.unload()
+    XCTAssertNotNil(repository.completedDuration(for: identity))
+  }
+
+  func testFinishedBookStaysAtEndAndIgnoresPlayUntilSeekingBack() throws {
+    let defaults = try isolatedDefaults(named: "FinishedPlayback")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let identity = PlaybackIdentity(canonicalID: "finished-book")
+    let player = AudioPlayerController(defaults: defaults)
+    player.load(
+      url: URL(fileURLWithPath: "/tmp/kindling-finished-regression.m4b"),
+      identity: identity, title: "Finished Book"
+    )
+    player.progress.duration = 120
+    player.progress.currentTime = 119
+    player.finishPlayback()
+    player.play()
+    player.stop()
+
+    XCTAssertTrue(player.hasFinished)
+    XCTAssertFalse(player.isPlaying)
+    XCTAssertEqual(player.currentTime, 120)
+    XCTAssertEqual(defaults.double(forKey: resumePositionKeyPrefix + identity.canonicalID), 120)
+
+    let restored = AudioPlayerController(defaults: defaults)
+    restored.play()  // A queued system play must not restart a completed session.
+    restored.load(
+      url: URL(fileURLWithPath: "/tmp/kindling-finished-regression.m4b"),
+      identity: identity, title: "Finished Book"
+    )
+    XCTAssertTrue(restored.hasFinished)
+    XCTAssertFalse(restored.isPlaying)
+    XCTAssertEqual(restored.currentTime, 120)
+    restored.seek(to: 60)
+    XCTAssertFalse(restored.hasFinished)
+    XCTAssertEqual(restored.currentTime, 60)
+  }
+
+  func testFinishedPlaybackSurvivesRepositoryRecovery() throws {
+    let defaults = try isolatedDefaults(named: "FinishedRecovery")
+    defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+    let container = try playbackTestContainer()
+    let identity = PlaybackIdentity(canonicalID: "finished-book")
+    let repository = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    repository.checkpoint(
+      identity: identity, position: 120, duration: 120, playbackRate: 1, flush: false)
+    let restored = PlaybackRepository(context: container.mainContext, defaults: defaults)
+    restored.flushRecoveryJournal()
+    XCTAssertEqual(restored.completedDuration(for: identity), 120)
+    XCTAssertEqual(restored.position(for: identity), 120)
+    restored.checkpoint(
+      identity: identity, position: 60, duration: 120, playbackRate: 1, flush: true)
+    XCTAssertNil(restored.completedDuration(for: identity))
+  }
+
   func testSystemPlayBeforeSessionRestoreDefersPlaybackAtSavedPosition() throws {
     let defaults = try isolatedDefaults(named: "SystemPlayResume")
     defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }

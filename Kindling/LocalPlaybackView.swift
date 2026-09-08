@@ -608,7 +608,7 @@ struct LocalPlaybackView: View {
           .frame(width: 68, height: 68)
         }
         .buttonStyle(.plain)
-        .disabled(player.isStalled)
+        .disabled(player.isStalled || player.hasFinished)
 
         transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
           player.skip(by: 30)

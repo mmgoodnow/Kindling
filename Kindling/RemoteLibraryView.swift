@@ -240,6 +240,10 @@ struct LibraryFeatureContainer: View {
         switch route {
         case .book(let item):
           bookDetailView(for: item)
+        case .localBook(let bookID):
+          if let book = localBooksById[bookID] {
+            bookDetailView(for: localProxyItem(for: book))
+          }
         case .group(let groupRoute):
           relatedBooksContent(for: groupRoute)
         case .homeRail(let rail):
@@ -300,6 +304,10 @@ struct LibraryFeatureContainer: View {
     var actions = BookDetailActions()
     actions.isFavorite = localBook.map(isSavedBook(_:)) ?? false
     actions.isRead = localBook?.localState?.isRead == true
+    actions.isAudioFinished =
+      localBook.map {
+        player.isPlaybackFinished(for: playbackIdentity(for: $0))
+      } ?? false
     if localBook != nil {
       actions.toggleFavorite = { toggleFavorite(bookID: item.id) }
       actions.toggleRead = { toggleRead(bookID: item.id) }

@@ -53,6 +53,7 @@ enum BookGroupRoute: Hashable {
 
 enum LibraryNavigationRoute: Hashable {
   case book(PodibleLibraryItem)
+  case localBook(String)
   case group(BookGroupRoute)
   case homeRail(LibraryCollection)
 }
@@ -81,6 +82,7 @@ enum LibraryCollection: String, CaseIterable, Hashable, Identifiable {
 struct BookDetailActions {
   var isFavorite: Bool = false
   var isRead: Bool = false
+  var isAudioFinished: Bool = false
   var play: (() -> Void)?
   var canPlayAudioEdition: ((PodiblePlaybackAudio) -> Bool)?
   var playAudioEdition: ((PodiblePlaybackAudio) -> Void)?
@@ -633,7 +635,14 @@ struct BookDetailView: View {
         action: {}
       )
     case .idle:
-      if let play = actions.play {
+      if actions.isAudioFinished {
+        primaryCTAButton(
+          title: "Finished",
+          systemImage: "checkmark.circle.fill",
+          isEnabled: false,
+          action: {}
+        )
+      } else if let play = actions.play {
         primaryCTAButton(
           title: playActionTitle,
           systemImage: "play.fill",

@@ -56,6 +56,7 @@ final class AudioPlayerController: ObservableObject {
     case failed(String)
   }
 
+  @Published private(set) var hasFinished = false
   @Published var isPlaying: Bool = false
   @Published var title: String = ""
   @Published var author: String = ""
@@ -253,7 +254,9 @@ final class AudioPlayerController: ObservableObject {
       self.artworkAccessToken = artworkAccessToken
     #endif
     progress.currentTime = persistedPosition(for: identity)
-    progress.duration = 0
+    let completedDuration = completedDuration(for: identity)
+    hasFinished = completedDuration != nil
+    progress.duration = completedDuration ?? 0
     lastPersistedPositionAt = 0
     self.isPlaying = false
     self.chapters = []
@@ -279,6 +282,7 @@ final class AudioPlayerController: ObservableObject {
     observesBuffering: Bool
   ) {
     persistSession()
+    if hasFinished { pendingPlayRequest = false }
     let resumePosition =
       pendingPlayRequest && savedPosition > 0
       ? max(0, savedPosition - Self.resumeRewindSeconds)
@@ -302,7 +306,7 @@ final class AudioPlayerController: ObservableObject {
   }
 
   func play() {
-    guard isPlaying == false, pendingPlayRequest == false else { return }
+    guard hasFinished == false, isPlaying == false, pendingPlayRequest == false else { return }
     pendingPlayRequest = true
     if shouldRewindOnResume {
       let rewindTarget = max(0, progress.currentTime - Self.resumeRewindSeconds)
@@ -316,7 +320,8 @@ final class AudioPlayerController: ObservableObject {
   }
 
   private func startPlaybackIfReady() {
-    guard pendingPlayRequest, pendingResumeSeekSeconds == nil, let player else { return }
+    guard hasFinished == false, pendingPlayRequest, pendingResumeSeekSeconds == nil, let player
+    else { return }
     pendingPlayRequest = false
     player.play()
     player.rate = Float(playbackRate)
@@ -372,6 +377,7 @@ final class AudioPlayerController: ObservableObject {
     if recordHistory {
       rememberSeekOrigin(progress.currentTime)
     }
+    if clampedSeconds < progress.duration { hasFinished = false }
     progress.currentTime = clampedSeconds
     persistCurrentPosition(force: true)
 
@@ -402,7 +408,6 @@ final class AudioPlayerController: ObservableObject {
     player?.pause()
     isPlaying = false
     persistCurrentPosition(force: true)
-    progress.currentTime = 0
     #if os(iOS)
       updateNowPlayingInfo()
     #endif
@@ -418,6 +423,8 @@ final class AudioPlayerController: ObservableObject {
     currentFileURL = nil
     currentPlaybackIdentity = nil
     activeResumeID = nil
+    hasFinished = false
+    progress.currentTime = 0
     progress.duration = 0
     title = ""
     author = ""
@@ -583,7 +590,7 @@ final class AudioPlayerController: ObservableObject {
     let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
     timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
       [weak self] time in
-      guard let self, self.player === player else { return }
+      guard let self, self.player === player, !self.hasFinished else { return }
       let seconds = time.seconds
       if seconds.isFinite {
         if let pendingResumeSeekSeconds,
@@ -697,20 +704,34 @@ final class AudioPlayerController: ObservableObject {
       queue: .main
     ) { [weak self] _ in
       guard let self, self.player === player else { return }
-      isPlaying = false
-      progress.currentTime = progress.duration
-      if let currentPlaybackIdentity {
-        NotificationCenter.default.post(
-          name: .audioPlayerDidFinishItem,
-          object: self,
-          userInfo: ["resumeID": currentPlaybackIdentity.canonicalID]
-        )
-      }
-      clearPersistedPosition()
-      #if os(iOS)
-        updateNowPlayingInfo()
-      #endif
+      finishPlayback()
     }
+  }
+
+  func finishPlayback() {
+    guard !hasFinished else { return }
+    pendingPlayRequest = false
+    cancelPendingResumeSeek()
+    player?.pause()
+    isPlaying = false
+    isStalled = false
+    let itemDuration = player?.currentItem?.duration.seconds ?? 0
+    if itemDuration.isFinite, itemDuration > 0 { progress.duration = itemDuration }
+    guard progress.duration.isFinite, progress.duration > 0 else { return }
+    hasFinished = true
+    progress.currentTime = progress.duration
+    persistCurrentPosition(force: true)
+    if let currentPlaybackIdentity {
+      NotificationCenter.default.post(
+        name: .audioPlayerDidFinishItem,
+        object: self,
+        userInfo: ["resumeID": currentPlaybackIdentity.canonicalID]
+      )
+    }
+    #if os(iOS)
+      shouldResumeAfterInterruption = false
+      updateNowPlayingInfo()
+    #endif
   }
 
   private func scheduleResumeSeek(to seconds: Double, on player: AVPlayer) {
@@ -823,6 +844,19 @@ final class AudioPlayerController: ObservableObject {
     seekHistory.append(normalized)
   }
 
+  func isPlaybackFinished(for identity: PlaybackIdentity) -> Bool {
+    if currentPlaybackIdentity == identity { return hasFinished }
+    return completedDuration(for: identity) != nil
+  }
+
+  private func completedDuration(for identity: PlaybackIdentity) -> Double? {
+    if let playbackRepository {
+      return playbackRepository.completedDuration(for: identity)
+    }
+    return defaults.object(forKey: "audioPlayer.completedDuration." + identity.canonicalID)
+      as? Double
+  }
+
   func persistedProgress(identity: PlaybackIdentity, duration: Double?) -> Double? {
     guard let duration, duration.isFinite, duration > 0 else { return nil }
     if let activeResumeID,
@@ -877,6 +911,12 @@ final class AudioPlayerController: ObservableObject {
       flush: force
     )
     if playbackRepository == nil {
+      let completionKey = "audioPlayer.completedDuration." + currentPlaybackIdentity.canonicalID
+      if hasFinished {
+        defaults.set(progress.duration, forKey: completionKey)
+      } else {
+        defaults.removeObject(forKey: completionKey)
+      }
       defaults.set(
         progress.currentTime,
         forKey: resumePositionKey(for: currentPlaybackIdentity.canonicalID)

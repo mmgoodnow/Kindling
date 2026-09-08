@@ -88,6 +88,14 @@ final class PlaybackRepository {
     state(for: identity, createIfNeeded: false)?.positionSeconds ?? legacyPosition(for: identity)
   }
 
+  func completedDuration(for identity: PlaybackIdentity) -> Double? {
+    guard let state = state(for: identity, createIfNeeded: false),
+      let duration = state.durationSeconds, duration.isFinite, duration > 0,
+      state.positionSeconds >= duration
+    else { return nil }
+    return duration
+  }
+
   func progress(for identity: PlaybackIdentity, duration: Double?) -> Double? {
     guard let duration, duration.isFinite, duration > 0 else { return nil }
     let position = position(for: identity)
