@@ -65,9 +65,11 @@ struct ContentView: View {
           .safeAreaInset(edge: .bottom, spacing: 0) {
             if player.hasLoadedItem && !player.hasFinished {
               miniPlayer
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.bar)
+                .frame(maxWidth: 820)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity)
             }
           }
       #endif

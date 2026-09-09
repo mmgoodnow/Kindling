@@ -1139,30 +1139,112 @@ struct MiniPlaybackAccessory: View {
     #endif
   }
 
-  var body: some View {
-    MiniPlayerBarView(
-      player: miniPlayerViewData(
-        bookTitle: player.title,
-        author: player.author,
-        isPlaying: player.isPlaying,
-        chapters: player.chapters,
-        currentTime: progress.currentTime,
-        totalDuration: progress.duration
-      ),
-      presentation: presentation,
-      onOpen: onExpand,
-      onTogglePlayback: player.togglePlayback,
-      onSkipForward: { player.skip(by: 30) }
-    ) {
-      sharedPlaybackArtwork(
-        size: presentation.artworkSize,
-        cornerRadius: presentation == .inline ? 6 : 8,
-        player: player,
-        rpcURLString: userSettings.podibleRPCURL,
-        accessToken: podibleAuth.accessToken
-      )
-    }
+  private var viewData: MiniPlayerViewData {
+    miniPlayerViewData(
+      bookTitle: player.title,
+      author: player.author,
+      isPlaying: player.isPlaying,
+      chapters: player.chapters,
+      currentTime: progress.currentTime,
+      totalDuration: progress.duration
+    )
   }
+
+  var body: some View {
+    #if os(macOS)
+      macMiniPlayer
+    #else
+      MiniPlayerBarView(
+        player: viewData,
+        presentation: presentation,
+        onOpen: onExpand,
+        onTogglePlayback: player.togglePlayback,
+        onSkipForward: { player.skip(by: 30) }
+      ) {
+        sharedPlaybackArtwork(
+          size: presentation.artworkSize,
+          cornerRadius: presentation == .inline ? 6 : 8,
+          player: player,
+          rpcURLString: userSettings.podibleRPCURL,
+          accessToken: podibleAuth.accessToken
+        )
+      }
+    #endif
+  }
+
+  #if os(macOS)
+    private var macMiniPlayer: some View {
+      HStack(spacing: 14) {
+        HStack(spacing: 2) {
+          macTransportButton("gobackward.15", label: "Back 15 seconds") {
+            player.skip(by: -15)
+          }
+          macTransportButton(
+            player.isPlaying ? "pause.fill" : "play.fill",
+            label: player.isPlaying ? "Pause" : "Play",
+            isPrimary: true,
+            action: player.togglePlayback
+          )
+          macTransportButton("goforward.30", label: "Forward 30 seconds") {
+            player.skip(by: 30)
+          }
+        }
+
+        Divider()
+          .frame(height: 28)
+
+        Button(action: onExpand) {
+          HStack(spacing: 10) {
+            sharedPlaybackArtwork(
+              size: 44, cornerRadius: 7, player: player,
+              rpcURLString: userSettings.podibleRPCURL,
+              accessToken: podibleAuth.accessToken
+            )
+            VStack(alignment: .leading, spacing: 3) {
+              Text(player.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+              Text(viewData.primaryText == player.title ? player.author : viewData.primaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
+              .frame(width: 28, height: 36)
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open Now Playing")
+        .accessibilityLabel("Open Now Playing: \(player.title)")
+      }
+      .foregroundStyle(.primary)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 10)
+      .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func macTransportButton(
+      _ image: String,
+      label: String,
+      isPrimary: Bool = false,
+      action: @escaping () -> Void
+    ) -> some View {
+      Button(action: action) {
+        Image(systemName: image)
+          .font(.system(size: isPrimary ? 22 : 18, weight: .medium))
+          .frame(width: 36, height: 40)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(label)
+      .accessibilityLabel(label)
+    }
+  #endif
 }
 
 @MainActor
