@@ -48,7 +48,11 @@ public enum BookCollectionLayout: String, CaseIterable, Identifiable, Sendable {
     case .grid:
       "Grid"
     case .threeColumnGrid:
-      "3 Columns"
+      #if os(macOS)
+        "Compact Grid"
+      #else
+        "3 Columns"
+      #endif
     case .list:
       "List"
     }
@@ -501,14 +505,27 @@ public struct BookCollectionView: View {
       } else {
         switch layout {
         case .grid, .threeColumnGrid:
-          let columnCount = layout == .threeColumnGrid ? 3 : 2
           let columnSpacing: CGFloat = layout == .threeColumnGrid ? 10 : 18
+          #if os(macOS)
+            let columns = [
+              GridItem(
+                .adaptive(
+                  minimum: layout == .threeColumnGrid ? 120 : 160,
+                  maximum: layout == .threeColumnGrid ? 150 : 200
+                ),
+                spacing: columnSpacing,
+                alignment: .top
+              )
+            ]
+          #else
+            let columns = Array(
+              repeating: GridItem(.flexible(), spacing: columnSpacing),
+              count: layout == .threeColumnGrid ? 3 : 2
+            )
+          #endif
           ScrollView {
             LazyVGrid(
-              columns: Array(
-                repeating: GridItem(.flexible(), spacing: columnSpacing),
-                count: columnCount
-              ),
+              columns: columns,
               spacing: layout == .threeColumnGrid ? 16 : 20
             ) {
               ForEach(filteredBooks) { book in

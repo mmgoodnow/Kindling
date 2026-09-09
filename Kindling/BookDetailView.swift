@@ -125,78 +125,158 @@ struct BookDetailView: View {
   @State private var detailPalette: ArtworkPalette = .fallback
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        hero
-        audioEditionSection
-        inlineActionGrid
-        if let description = displayMarkdownDescription {
-          Text(description)
-            .font(.body)
-            .foregroundStyle(.primary)
-            .fixedSize(horizontal: false, vertical: true)
-        } else if let summary = displaySummary, summary.isEmpty == false {
-          Text(normalizedMarkdownDescription(summary))
-            .font(.body)
-            .foregroundStyle(.primary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-      .padding(.horizontal, 20)
-      .padding(.top, 16)
-      .padding(.bottom, 16)
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .navigationTitle(item.title)
-    #if os(iOS)
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        if hasMenuActions {
-          ToolbarItem(placement: .topBarTrailing) {
-            overflowMenu
+    detailPage
+      .navigationTitle(item.title)
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          if hasMenuActions {
+            ToolbarItem(placement: .topBarTrailing) {
+              overflowMenu
+            }
           }
         }
-      }
-    #else
-      .toolbar {
-        if hasMenuActions {
-          ToolbarItem(placement: .primaryAction) {
-            overflowMenu
+      #else
+        .toolbar {
+          if hasMenuActions {
+            ToolbarItem(placement: .primaryAction) {
+              overflowMenu
+            }
           }
         }
+      #endif
+      .task(id: detailPaletteTaskID) {
+        loadDetailPalette()
       }
-    #endif
-    .task(id: detailPaletteTaskID) {
-      loadDetailPalette()
-    }
-    .sheet(isPresented: $isShowingCoverPicker) {
-      BookCoverPickerSheet(
-        title: item.title,
-        author: item.author,
-        currentImagePath: currentCoverImagePath,
-        fetchAlternateCovers: actions.fetchAlternateCovers,
-        applyAlternateCover: { cover in
-          let updated = try await actions.setAlternateCover?(cover)
-          await MainActor.run {
-            coverImagePathOverride = updated?.bookImagePath
+      .sheet(isPresented: $isShowingCoverPicker) {
+        BookCoverPickerSheet(
+          title: item.title,
+          author: item.author,
+          currentImagePath: currentCoverImagePath,
+          fetchAlternateCovers: actions.fetchAlternateCovers,
+          applyAlternateCover: { cover in
+            let updated = try await actions.setAlternateCover?(cover)
+            await MainActor.run {
+              coverImagePathOverride = updated?.bookImagePath
+            }
           }
-        }
-      )
-      .environmentObject(userSettings)
-      .environmentObject(podibleAuth)
-    }
-    .sheet(isPresented: $isShowingReleaseSearch) {
-      BookReleaseSearchSheet(
-        title: item.title,
-        author: item.author,
-        initialMedia: releaseSearchInitialMedia,
-        searchReleases: actions.searchReleases,
-        createManifestationFromSearch: actions.createManifestationFromSearch
-      )
-    }
+        )
+        .environmentObject(userSettings)
+        .environmentObject(podibleAuth)
+      }
+      .sheet(isPresented: $isShowingReleaseSearch) {
+        BookReleaseSearchSheet(
+          title: item.title,
+          author: item.author,
+          initialMedia: releaseSearchInitialMedia,
+          searchReleases: actions.searchReleases,
+          createManifestationFromSearch: actions.createManifestationFromSearch
+        )
+      }
   }
 
   // MARK: - Hero
+
+  @ViewBuilder
+  private var detailPage: some View {
+    #if os(macOS)
+      GeometryReader { geometry in
+        ScrollView {
+          Group {
+            if geometry.size.width >= 680 {
+              HStack(alignment: .top, spacing: 32) {
+                detailArtwork
+                macDetailInformation
+                  .frame(maxWidth: 640, alignment: .leading)
+              }
+            } else {
+              VStack(alignment: .leading, spacing: 24) {
+                detailArtwork
+                  .frame(maxWidth: .infinity)
+                macDetailInformation
+              }
+            }
+          }
+          .frame(maxWidth: 872, alignment: .leading)
+          .padding(28)
+          .frame(maxWidth: .infinity, alignment: .top)
+        }
+      }
+    #else
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          hero
+          audioEditionSection
+          inlineActionGrid
+          bookDescription
+
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    #endif
+  }
+
+  @ViewBuilder
+  private var bookDescription: some View {
+    if let description = displayMarkdownDescription {
+      Text(description)
+        .font(.body)
+        .foregroundStyle(.primary)
+        .fixedSize(horizontal: false, vertical: true)
+    } else if let summary = displaySummary, summary.isEmpty == false {
+      Text(normalizedMarkdownDescription(summary))
+        .font(.body)
+        .foregroundStyle(.primary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  #if os(macOS)
+    private var macDetailInformation: some View {
+      VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(detailViewData.title)
+            .font(.largeTitle.bold())
+            .textSelection(.enabled)
+
+          Button(action: { showAuthorAction?() }) {
+            Label(detailViewData.author, systemImage: "person")
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(.secondary)
+          .disabled(showAuthorAction == nil)
+
+          if let year = detailViewData.publishedYear {
+            Text(String(year))
+              .foregroundStyle(.secondary)
+          }
+          ForEach(seriesRoutes, id: \.self) { route in
+            NavigationLink(value: LibraryNavigationRoute.group(.series(route))) {
+              BookDetailSeriesBarView(text: route.displayText, showsDisclosureIndicator: true)
+            }
+            .buttonStyle(.plain)
+          }
+          if let narrator = detailViewData.narrator {
+            Text("Narrated by \(narrator)")
+              .foregroundStyle(.secondary)
+          }
+          if let requestedBy = detailViewData.requestedBy {
+            Text("Requested by \(requestedBy)")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+          }
+        }
+        inlineActionGrid
+        audioEditionSection
+        bookDescription
+          .textSelection(.enabled)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  #endif
 
   @ViewBuilder
   private var hero: some View {
@@ -592,8 +672,16 @@ struct BookDetailView: View {
 
   // MARK: - Actions
 
+  private var actionAlignment: HorizontalAlignment {
+    #if os(macOS)
+      .leading
+    #else
+      .center
+    #endif
+  }
+
   private var inlineActionGrid: some View {
-    VStack(spacing: 10) {
+    VStack(alignment: actionAlignment, spacing: 10) {
       primaryActionButton
 
       HStack(spacing: 10) {
@@ -620,7 +708,7 @@ struct BookDetailView: View {
         }
       }
     }
-    .frame(maxWidth: .infinity)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder
@@ -685,36 +773,47 @@ struct BookDetailView: View {
     isEnabled: Bool = true,
     action: @escaping () -> Void
   ) -> some View {
-    let clampedProgress = min(max(progress ?? 0, 0), 1)
-    let displayedProgress = clampedProgress > 0 ? clampedProgress : 1
-    let button = Button(action: action) {
-      GeometryReader { proxy in
-        ZStack {
-          Capsule()
-            .fill(detailPalette.background)
-
-          Rectangle()
-            .fill(detailPalette.progressFill)
-            .frame(width: proxy.size.width * displayedProgress)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-          ctaLabel(title: title, systemImage: systemImage)
-            .foregroundStyle(detailPalette.foreground)
-
-        }
-        .clipShape(Capsule())
+    #if os(macOS)
+      return Button(action: action) {
+        Label(title, systemImage: systemImage)
+          .padding(.horizontal, 10)
       }
-      .frame(height: 38)
-      .contentShape(Capsule())
-    }
-    .disabled(isEnabled == false)
-    .accessibilityLabel(title)
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+      .tint(detailPalette.foreground)
+      .disabled(!isEnabled)
+    #else
+      let clampedProgress = min(max(progress ?? 0, 0), 1)
+      let displayedProgress = clampedProgress > 0 ? clampedProgress : 1
+      let button = Button(action: action) {
+        GeometryReader { proxy in
+          ZStack {
+            Capsule()
+              .fill(detailPalette.background)
 
-    return
-      button
-      .buttonStyle(.plain)
-      .glassEffect(.regular, in: Capsule())
-      .opacity(isEnabled ? 1 : 0.55)
+            Rectangle()
+              .fill(detailPalette.progressFill)
+              .frame(width: proxy.size.width * displayedProgress)
+              .frame(maxWidth: .infinity, alignment: .leading)
+
+            ctaLabel(title: title, systemImage: systemImage)
+              .foregroundStyle(detailPalette.foreground)
+
+          }
+          .clipShape(Capsule())
+        }
+        .frame(height: 38)
+        .contentShape(Capsule())
+      }
+      .disabled(isEnabled == false)
+      .accessibilityLabel(title)
+
+      return
+        button
+        .buttonStyle(.plain)
+        .glassEffect(.regular, in: Capsule())
+        .opacity(isEnabled ? 1 : 0.55)
+    #endif
   }
 
   private func ctaLabel(title: String, systemImage: String) -> some View {
@@ -730,20 +829,27 @@ struct BookDetailView: View {
     systemImage: String,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
-      VStack(spacing: 3) {
-        Image(systemName: systemImage)
-          .font(.body.weight(.semibold))
-        Text(title)
-          .font(.caption2.weight(.semibold))
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
+    #if os(macOS)
+      Button(action: action) {
+        Label(title, systemImage: systemImage)
       }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-    }
-    .buttonStyle(.glass)
-    .buttonBorderShape(.capsule)
+      .buttonStyle(.bordered)
+    #else
+      Button(action: action) {
+        VStack(spacing: 3) {
+          Image(systemName: systemImage)
+            .font(.body.weight(.semibold))
+          Text(title)
+            .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+      }
+      .buttonStyle(.glass)
+      .buttonBorderShape(.capsule)
+    #endif
   }
 
   private func progressLabel(_ progress: Double?) -> String {

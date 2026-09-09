@@ -403,14 +403,65 @@ struct LocalPlaybackView: View {
           loadArtworkPalette()
         }
     #else
-      expandedPlayerView()
+      macPlayerView
         .tint(artworkPalette.foreground)
         .foregroundStyle(artworkPalette.foreground)
-        .frame(minWidth: 420, minHeight: 560)
-        .padding(28)
-        .background(macPlayerBackground)
+        .frame(minWidth: 460, minHeight: 520)
+        .background(artworkPalette.background)
+        .task(id: player.artworkURL?.absoluteString) {
+          loadArtworkPalette()
+        }
     #endif
   }
+
+  #if os(macOS)
+    private var macPlayerView: some View {
+      VStack(spacing: 16) {
+        HStack(spacing: 12) {
+          sharedPlaybackArtwork(
+            size: 48, cornerRadius: 6, player: player,
+            rpcURLString: userSettings.podibleRPCURL,
+            accessToken: podibleAuth.accessToken,
+            onSuccess: sampleAndCacheArtworkPalette
+          )
+          VStack(alignment: .leading, spacing: 4) {
+            Text(player.title)
+              .font(.headline)
+              .lineLimit(2)
+            Text(player.author)
+              .foregroundStyle(artworkPalette.foreground.opacity(0.7))
+              .lineLimit(1)
+          }
+          Spacer(minLength: 0)
+        }
+
+        Picker("Player content", selection: selectedContentTabBinding) {
+          ForEach(ContentTab.allCases) { tab in
+            Text(tab.rawValue).tag(tab)
+          }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 360)
+
+        BookCompletionProgressView(player: playerCoverViewData)
+
+        Group {
+          switch selectedContentTab {
+          case .artwork: artworkSection
+          case .chapters: chaptersSection
+          case .transcript: transcriptSection
+          }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+        Divider()
+        expandedPlayerControls
+          .frame(maxWidth: 480)
+      }
+      .padding(20)
+    }
+  #endif
 
   #if os(iOS)
     private var iOSPlayerPresentation: some View {
@@ -548,8 +599,8 @@ struct LocalPlaybackView: View {
     }
   #endif
 
-  private func expandedPlayerView() -> some View {
-    #if os(iOS)
+  #if os(iOS)
+    private func expandedPlayerView() -> some View {
       ZStack(alignment: .bottom) {
         playbackContentSection
           .padding(.horizontal, 16)
@@ -561,18 +612,14 @@ struct LocalPlaybackView: View {
           .padding(.bottom, 14)
       }
       .background(expandedPlayerBackground)
-    #else
-      VStack(spacing: 0) {
-        playbackContentSection
-          .padding(.horizontal, 24)
-          .padding(.top, 28)
+    }
+  #endif
 
-        expandedPlayerControls
-          .padding(.horizontal, 24)
-          .padding(.top, 28)
-      }
-      .padding(.bottom, 28)
-      .background(expandedPlayerBackground)
+  private var playerControlSize: CGFloat {
+    #if os(macOS)
+      48
+    #else
+      68
     #endif
   }
 
@@ -590,7 +637,7 @@ struct LocalPlaybackView: View {
             .frame(width: 52, height: 52)
         #endif
 
-        transportButton(systemName: "gobackward.15", size: 68, iconFont: .title) {
+        transportButton(systemName: "gobackward.15", size: playerControlSize, iconFont: .title) {
           player.skip(by: -15)
         }
 
@@ -602,15 +649,15 @@ struct LocalPlaybackView: View {
                 .tint(artworkPalette.foreground)
             } else {
               Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 54, weight: .regular))
+                .font(.system(size: playerControlSize - 14, weight: .regular))
             }
           }
-          .frame(width: 68, height: 68)
+          .frame(width: playerControlSize, height: playerControlSize)
         }
         .buttonStyle(.plain)
         .disabled(player.isStalled || player.hasFinished)
 
-        transportButton(systemName: "goforward.30", size: 68, iconFont: .title) {
+        transportButton(systemName: "goforward.30", size: playerControlSize, iconFont: .title) {
           player.skip(by: 30)
         }
 
@@ -628,10 +675,10 @@ struct LocalPlaybackView: View {
   }
 
   @ViewBuilder
-  private var heroSection: some View {
+  private func heroSection(size: CGFloat) -> some View {
     VStack(spacing: 0) {
       sharedPlaybackArtwork(
-        size: playerArtworkSize,
+        size: size,
         cornerRadius: 24,
         player: player,
         rpcURLString: userSettings.podibleRPCURL,
@@ -657,11 +704,6 @@ struct LocalPlaybackView: View {
     #else
       Color.clear
     #endif
-  }
-
-  private var macPlayerBackground: some View {
-    RoundedRectangle(cornerRadius: 24, style: .continuous)
-      .fill(.ultraThinMaterial)
   }
 
   private func transportButton(
@@ -810,14 +852,24 @@ struct LocalPlaybackView: View {
   }
 
   private var artworkSection: some View {
+    #if os(macOS)
+      GeometryReader { geometry in
+        artworkContent(size: min(296, max(120, geometry.size.height - 88)))
+      }
+    #else
+      artworkContent(size: playerArtworkSize)
+    #endif
+  }
+
+  private func artworkContent(size: CGFloat) -> some View {
     ScrollView(showsIndicators: false) {
       PlayerCoverContentView(
         player: playerCoverViewData,
-        artworkMaxWidth: playerArtworkSize,
+        artworkMaxWidth: size,
         showsBookProgress: false,
         showsChapterProgress: false
       ) {
-        heroSection
+        heroSection(size: size)
       }
       .padding(.top, 4)
       .padding(.bottom, 24)

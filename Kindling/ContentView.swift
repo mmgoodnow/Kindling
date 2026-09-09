@@ -7,6 +7,10 @@ struct ContentView: View {
   @EnvironmentObject private var podibleAuth: PodibleAuthController
   @Environment(\.modelContext) private var modelContext
   @Environment(\.scenePhase) private var scenePhase
+  #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+  #endif
   @Query(
     sort: [
       SortDescriptor(\LibraryBook.addedAt, order: .reverse),
@@ -80,8 +84,10 @@ struct ContentView: View {
       }
       .animation(.snappy(duration: 0.38), value: isShowingPlayer)
     #else
-      .sheet(isPresented: $isShowingPlayer) {
-        LocalPlaybackView(player: player)
+      .onChange(of: isShowingPlayer) { _, isPresented in
+        guard isPresented else { return }
+        openWindow(id: "now-playing")
+        isShowingPlayer = false
       }
     #endif
     .environment(libraryData)
@@ -195,6 +201,9 @@ struct ContentView: View {
       let resumeID = notification.userInfo?["resumeID"] as? String
     else { return }
     isShowingPlayer = false
+    #if os(macOS)
+      dismissWindow(id: "now-playing")
+    #endif
     guard
       let book = localBooks.first(where: {
         $0.podibleId == player.activePlaybackIdentity?.podibleID

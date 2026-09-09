@@ -70,6 +70,14 @@ struct KindlingApp: App {
     }
     .modelContainer(sharedModelContainer)
     #if os(macOS)
+      Window("Now Playing", id: "now-playing") {
+        LocalPlaybackView(player: audioPlayer)
+          .environmentObject(userSettings)
+          .environmentObject(podibleAuth)
+      }
+      .defaultSize(width: 680, height: 640)
+      .windowResizability(.contentMinSize)
+
       Settings {
         SettingsView()
           .scenePadding()
