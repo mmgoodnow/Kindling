@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
   name: "KindlingUI",
   platforms: [
-    .iOS("26.0"),
+    .iOS("27.0"),
     .macOS("26.0"),
   ],
   products: [
