@@ -179,6 +179,21 @@ func playbackRemainingText(_ seconds: Double) -> String {
   return "\(minutes) \(minutes == 1 ? "min" : "mins") left"
 }
 
+func playbackBookRemainingText(time: Double, duration: Double, rate: Double) -> String? {
+  guard duration.isFinite, duration > 0, time.isFinite else { return nil }
+  let speed = rate.isFinite && rate > 0 ? rate : 1
+  let remaining = max(0, duration - max(0, time)) / speed
+  guard remaining > 0 else { return "Book finished" }
+  let minutes = Int(ceil(remaining / 60))
+  let hours = minutes / 60
+  let minutePart = minutes % 60
+  let durationText =
+    hours > 0
+    ? "\(hours) hr" + (minutePart > 0 ? " \(minutePart) min" : "")
+    : "\(minutes) min"
+  return "\(durationText) left in book at \(formatPlaybackRate(speed))"
+}
+
 private func playbackChapterRows(
   chapters: [AudioPlayerController.Chapter],
   currentTime: Double,
@@ -794,6 +809,8 @@ struct LocalPlaybackView: View {
         totalDuration: totalDuration
       ),
       bookProgress: playbackBookProgress(time: currentTime, totalDuration: totalDuration),
+      bookRemainingText: playbackBookRemainingText(
+        time: currentTime, duration: totalDuration, rate: player.playbackRate),
       currentChapterTitle: currentChapter?.title,
       currentChapterProgress: currentChapterProgress,
       currentChapterElapsedText: formatPlaybackTime(currentChapterElapsed),

@@ -322,6 +322,7 @@ public struct PlayerViewData: Hashable, Sendable {
   public var bookDescription: String
   public var bookCompletionPercent: Int
   public var bookProgress: Double
+  public var bookRemainingText: String?
   public var currentChapterTitle: String?
   public var currentChapterProgress: Double
   public var currentChapterElapsedText: String
@@ -339,6 +340,7 @@ public struct PlayerViewData: Hashable, Sendable {
     bookDescription: String = "",
     bookCompletionPercent: Int = 0,
     bookProgress: Double = 0,
+    bookRemainingText: String? = nil,
     currentChapterTitle: String? = nil,
     currentChapterProgress: Double = 0,
     currentChapterElapsedText: String = "0:00",
@@ -355,6 +357,7 @@ public struct PlayerViewData: Hashable, Sendable {
     self.bookDescription = bookDescription
     self.bookCompletionPercent = max(0, min(100, bookCompletionPercent))
     self.bookProgress = max(0, min(1, bookProgress))
+    self.bookRemainingText = bookRemainingText
     self.currentChapterTitle = currentChapterTitle
     self.currentChapterProgress = max(0, min(1, currentChapterProgress))
     self.currentChapterElapsedText = currentChapterElapsedText
@@ -1626,6 +1629,13 @@ public struct BookCompletionProgressView: View {
         .font(.caption.weight(.semibold))
         .foregroundStyle(player.palette.foreground)
         .frame(maxWidth: .infinity, alignment: .center)
+      if let remaining = player.bookRemainingText {
+        Text(remaining)
+          .font(.caption)
+          .foregroundStyle(player.palette.secondaryForeground)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule(style: .continuous)

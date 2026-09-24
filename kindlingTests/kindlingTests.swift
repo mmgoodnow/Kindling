@@ -49,6 +49,20 @@ private final class UnauthorizedURLProtocol: URLProtocol, @unchecked Sendable {
 final class kindlingTests: XCTestCase {
   private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
 
+  func testBookRemainingTimeUsesPlaybackSpeedAndHandlesUnknownDuration() {
+    XCTAssertEqual(
+      playbackBookRemainingText(time: 3600, duration: 10800, rate: 1), "2 hr left in book at 1×")
+    XCTAssertEqual(
+      playbackBookRemainingText(time: 0, duration: 9360, rate: 1.3), "2 hr left in book at 1.3×")
+    XCTAssertEqual(
+      playbackBookRemainingText(time: 0, duration: 3661, rate: 1), "1 hr 2 min left in book at 1×")
+    XCTAssertEqual(
+      playbackBookRemainingText(time: 0, duration: 25, rate: 1), "1 min left in book at 1×")
+    XCTAssertEqual(playbackBookRemainingText(time: 600, duration: 600, rate: 1), "Book finished")
+    XCTAssertNil(playbackBookRemainingText(time: 0, duration: 0, rate: 1))
+    XCTAssertNil(playbackBookRemainingText(time: .nan, duration: 600, rate: 1))
+  }
+
   func testBuildMetadataDecodesGeneratedPropertyList() throws {
     let values: [String: Any] = [
       "buildTimestamp": "2026-08-16T19:30:00Z",
