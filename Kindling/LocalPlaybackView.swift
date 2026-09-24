@@ -325,19 +325,22 @@ private struct ChapterPlaybackProgressSectionView: View {
         }
       }
 
-      HStack {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(formatPlaybackTime(currentChapterElapsed))
-          .frame(maxWidth: .infinity, alignment: .leading)
+          .fixedSize()
 
         if let currentChapter {
           Text(currentChapter.title)
             .fontWeight(.semibold)
-            .lineLimit(1)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+          Spacer(minLength: 0)
         }
 
         Text(playbackRemainingText(currentChapterRemaining))
-          .frame(maxWidth: .infinity, alignment: .trailing)
+          .fixedSize()
       }
       .font(.caption.monospacedDigit())
       .foregroundStyle(palette.secondaryForeground)
