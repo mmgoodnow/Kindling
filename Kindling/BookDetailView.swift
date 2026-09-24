@@ -4,6 +4,10 @@ import Kingfisher
 import SwiftData
 import SwiftUI
 
+#if os(iOS)
+  import AppIntents
+#endif
+
 /// Bag of optional callbacks the detail view dispatches into the parent.
 /// `nil` means the action isn't applicable (e.g. no remote client, or no
 /// downloaded audio yet).
@@ -124,10 +128,28 @@ struct BookDetailView: View {
   @State private var coverImagePathOverride: String?
   @State private var detailPalette: ArtworkPalette = .fallback
 
+  #if os(iOS)
+    private var siriAudiobookIdentifier: EntityIdentifier? {
+      guard let book = localBook else { return nil }
+      let stored = book.playbackJSON.flatMap {
+        try? JSONDecoder().decode(PodiblePlayback.self, from: $0)
+      }
+      let audio = item.playback?.audio ?? stored?.audio
+      guard audio != nil || book.files.contains(where: { $0.downloadStatus == .completed }) else {
+        return nil
+      }
+      let identity = PlaybackIdentity(
+        openLibraryWorkID: book.openLibraryWorkID, podibleID: book.podibleId,
+        manifestationID: audio?.manifestationId)
+      return EntityIdentifier(for: KindlingAudiobook.self, identifier: identity.canonicalID)
+    }
+  #endif
+
   var body: some View {
     detailPage
       .navigationTitle(item.title)
       #if os(iOS)
+        .appEntityIdentifier(siriAudiobookIdentifier)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
           if hasMenuActions {

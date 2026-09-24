@@ -140,6 +140,14 @@ struct ContentView: View {
     .onReceive(NotificationCenter.default.publisher(for: .audioPlayerDidFinishItem)) {
       markFinishedPlaybackRead($0)
     }
+    #if os(iOS)
+      .onReceive(KindlingRuntime.shared.$requestedBookID.compactMap { $0 }) { bookID in
+        isShowingPlayer = false
+        selectedTab = .library
+        libraryNavigationPath = NavigationPath([LibraryNavigationRoute.localBook(bookID)])
+        KindlingRuntime.shared.requestedBookID = nil
+      }
+    #endif
     .alert("Podible Session Expired", isPresented: reauthenticationPrompt) {
       Button("Not Now", role: .cancel) {
         podibleAuth.dismissReauthenticationPrompt()

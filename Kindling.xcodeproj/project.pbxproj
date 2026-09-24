@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A27000000000000000000001 /* AudiobookIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27000000000000000000002 /* AudiobookIntents.swift */; };
 		514A16B72CA78AD800B6F94E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514A16B62CA78AD800B6F94E /* SettingsView.swift */; };
 		514A16BF2CB1017200B6F94E /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514A16BE2CB1017200B6F94E /* UserSettings.swift */; };
 		514A16C12CB1215700B6F94E /* BookFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514A16C02CB1215700B6F94E /* BookFile.swift */; };
@@ -98,6 +99,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A27000000000000000000002 /* AudiobookIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookIntents.swift; sourceTree = "<group>"; };
 		514A16B62CA78AD800B6F94E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		514A16BA2CAB6D9B00B6F94E /* Reporters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reporters.swift; sourceTree = "<group>"; };
 		514A16BC2CAFB51800B6F94E /* SearchResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultView.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				51792F902C900EEA004B6E71 /* KindlingApp.swift */,
 				51792F922C900EEA004B6E71 /* ContentView.swift */,
 				51B000022F20000000123456 /* LibraryStore.swift */,
+				A27000000000000000000002 /* AudiobookIntents.swift */,
 				51B000042F20000000123456 /* LibraryDownloadController.swift */,
 				51B000062F20000000123456 /* LibraryBookTileFactory.swift */,
 				51B000082F20000000123456 /* PlaybackMetadataLoader.swift */,
@@ -494,6 +497,7 @@
 			files = (
 				51792F932C900EEA004B6E71 /* ContentView.swift in Sources */,
 				51B000012F20000000123456 /* LibraryStore.swift in Sources */,
+				A27000000000000000000001 /* AudiobookIntents.swift in Sources */,
 				51B000032F20000000123456 /* LibraryDownloadController.swift in Sources */,
 				51B000052F20000000123456 /* LibraryBookTileFactory.swift in Sources */,
 				51B000072F20000000123456 /* PlaybackMetadataLoader.swift in Sources */,

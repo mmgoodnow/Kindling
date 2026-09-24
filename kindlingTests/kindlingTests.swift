@@ -1658,6 +1658,119 @@ final class kindlingTests: XCTestCase {
   }
 
   @MainActor
+  private func intentRuntime() throws -> KindlingRuntime {
+    let schema = Schema(versionedSchema: KindlingSchemaV4.self)
+    let container = try ModelContainer(
+      for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+    return KindlingRuntime(container: container, defaults: try isolatedDefaults(named: "Intents"))
+  }
+
+  private func intentAudio(_ id: Int) -> PodiblePlaybackAudio {
+    PodiblePlaybackAudio(
+      manifestationId: id, label: "Edition \(id)", editionNote: nil,
+      streamUrl: "/audio/\(id)", chaptersUrl: "/chapters/\(id)", transcriptUrl: nil,
+      mimeType: "audio/mp4", durationMs: 60000, sizeBytes: 100)
+  }
+
+  func testIntentCatalogKeepsStableEditionIDsAndExcludesEbooks() throws {
+    let runtime = try intentRuntime()
+    let book = LibraryBook(podibleId: "book", title: "Café Stories", narrator: "Ursula Reader")
+    let audio = intentAudio(1)
+    book.playbackJSON = try JSONEncoder().encode(
+      PodiblePlayback(audio: audio, audioOptions: [audio, intentAudio(2)], ebook: nil))
+    runtime.container.mainContext.insert(book)
+    runtime.container.mainContext.insert(LibraryBook(podibleId: "ebook", title: "Only text"))
+    let records = try runtime.catalog()
+    XCTAssertEqual(Set(records.map(\.id)), ["book#manifestation-1", "book#manifestation-2"])
+    XCTAssertTrue(records[0].matches("cafe ursula"))
+    XCTAssertFalse(records[0].matches("unrelated"))
+    XCTAssertFalse(records[0].matches("  "))
+    XCTAssertEqual(try runtime.catalog().map(\.id), records.map(\.id))
+  }
+
+  func testIntentCatalogKeepsDownloadedOnlyBookAndReadState() throws {
+    let runtime = try intentRuntime()
+    let book = LibraryBook(podibleId: "local", title: "Local Book")
+    let file = LibraryBookFile(
+      podibleId: "file", filename: "book.m4b", format: .m4b,
+      downloadStatus: .completed, localRelativePath: "local/book.m4b", book: book)
+    runtime.container.mainContext.insert(book)
+    runtime.container.mainContext.insert(file)
+    book.files = [file]
+    let state = LocalBookState(bookPodibleId: book.podibleId, isRead: true, book: book)
+    runtime.container.mainContext.insert(state)
+    book.localState = state
+    let record = try XCTUnwrap(runtime.catalog().first)
+    XCTAssertEqual(record.localPath, "local/book.m4b")
+    XCTAssertTrue(record.finished)
+  }
+
+  func testIntentRejectsCompletedBookAndDoesNotStartAnotherSession() async throws {
+    let runtime = try intentRuntime()
+    let book = LibraryBook(podibleId: "finished", title: "Finished")
+    book.playbackJSON = try JSONEncoder().encode(PodiblePlayback(audio: intentAudio(3), ebook: nil))
+    runtime.container.mainContext.insert(book)
+    let record = try XCTUnwrap(runtime.catalog().first)
+    runtime.repository.checkpoint(
+      identity: record.identity, position: 60, duration: 60, playbackRate: 1, flush: true)
+    do {
+      try await runtime.play(id: record.id)
+      XCTFail("Finished book must not restart")
+    } catch AudiobookIntentError.finished {}
+    XCTAssertFalse(runtime.player.hasLoadedItem)
+    do {
+      try await runtime.resume()
+      XCTFail("No unfinished book to resume")
+    } catch AudiobookIntentError.noCurrentBook {}
+  }
+
+  func testIntentMissingBookDoesNotModifyPlayback() async throws {
+    let runtime = try intentRuntime()
+    do {
+      try await runtime.play(id: "deleted")
+      XCTFail("Deleted book must fail")
+    } catch AudiobookIntentError.unavailable {}
+    XCTAssertFalse(runtime.player.hasLoadedItem)
+  }
+
+  func testIntentDownloadedPlaybackFinishesWithoutAView() async throws {
+    let runtime = try intentRuntime()
+    let book = LibraryBook(podibleId: UUID().uuidString, title: "Offline intent test")
+    runtime.container.mainContext.insert(book)
+    let path = "intent-tests/\(UUID().uuidString).wav"
+    let url = try LibraryStorage().url(forRelativePath: path)
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
+    let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 800))
+    buffer.frameLength = 800
+    if let samples = buffer.floatChannelData {
+      memset(samples[0], 0, 800 * MemoryLayout<Float>.size)
+    }
+    do {
+      let file = try AVAudioFile(forWriting: url, settings: format.settings)
+      try file.write(from: buffer)
+    }
+    let file = LibraryBookFile(
+      podibleId: UUID().uuidString, filename: "test.wav", downloadStatus: .completed,
+      localRelativePath: path, book: book)
+    runtime.container.mainContext.insert(file)
+    book.files = [file]
+    let finished = expectation(forNotification: .audioPlayerDidFinishItem, object: runtime.player)
+    try await runtime.play(id: book.podibleId)
+    XCTAssertEqual(runtime.player.activeResumeID, book.podibleId)
+    await fulfillment(of: [finished], timeout: 10)
+    // The runtime's observer persists completion independently of ContentView.
+    for _ in 0..<20 where book.localState?.isRead != true {
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    XCTAssertEqual(book.localState?.isRead, true)
+    XCTAssertTrue(runtime.player.hasFinished)
+    XCTAssertFalse(runtime.player.isPlaying)
+    runtime.player.unload()
+  }
+
   private func playbackTestContainer() throws -> ModelContainer {
     let configuration = ModelConfiguration(
       schema: Schema(versionedSchema: KindlingSchemaV2.self),

@@ -11,35 +11,19 @@ import SwiftUI
 @main
 struct KindlingApp: App {
   @Environment(\.scenePhase) private var scenePhase
-  @StateObject private var userSettings = UserSettings()
-  @StateObject private var podibleAuth = PodibleAuthController()
+  @StateObject private var userSettings: UserSettings
+  @StateObject private var podibleAuth: PodibleAuthController
   @StateObject private var audioPlayer: AudioPlayerController
   let sharedModelContainer: ModelContainer
   private let playbackRepository: PlaybackRepository
 
   init() {
-    let container = Self.makeModelContainer()
-    let repository = PlaybackRepository(context: container.mainContext)
-    try? repository.migrateLegacyState()
-    sharedModelContainer = container
-    playbackRepository = repository
-    _audioPlayer = StateObject(wrappedValue: AudioPlayerController(repository: repository))
-  }
-
-  private static func makeModelContainer() -> ModelContainer {
-    let schema = Schema(versionedSchema: KindlingSchemaV4.self)
-    let modelConfiguration = ModelConfiguration(
-      schema: schema, isStoredInMemoryOnly: false)
-
-    do {
-      return try ModelContainer(
-        for: schema,
-        migrationPlan: KindlingMigrationPlan.self,
-        configurations: [modelConfiguration]
-      )
-    } catch {
-      fatalError("Could not create ModelContainer: \(error)")
-    }
+    let runtime = KindlingRuntime.shared
+    sharedModelContainer = runtime.container
+    playbackRepository = runtime.repository
+    _audioPlayer = StateObject(wrappedValue: runtime.player)
+    _userSettings = StateObject(wrappedValue: runtime.settings)
+    _podibleAuth = StateObject(wrappedValue: runtime.auth)
   }
 
   var body: some Scene {
@@ -49,7 +33,8 @@ struct KindlingApp: App {
         .environmentObject(podibleAuth)
         .environmentObject(audioPlayer)
         .task {
-          if audioPlayer.hasLoadedItem == false {
+          if audioPlayer.hasLoadedItem == false && !KindlingRuntime.shared.isHandlingPlaybackIntent
+          {
             _ = audioPlayer.restoreLastSession()
           }
         }
@@ -58,10 +43,20 @@ struct KindlingApp: App {
           #if os(iOS)
             audioPlayer.updateArtworkAccessToken(podibleAuth.accessToken)
           #endif
-          if audioPlayer.hasLoadedItem == false {
+          if audioPlayer.hasLoadedItem == false && !KindlingRuntime.shared.isHandlingPlaybackIntent
+          {
             _ = audioPlayer.restoreLastSession(accessToken: podibleAuth.accessToken)
           }
         }
+        #if os(iOS)
+          .task {
+            KindlingShortcuts.updateAppShortcutParameters()
+            AudiobookSpotlightIndexer.shared.schedule()
+          }
+          .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            AudiobookSpotlightIndexer.shared.schedule()
+          }
+        #endif
         .onChange(of: scenePhase) { _, phase in
           if phase != .active {
             playbackRepository.flushRecoveryJournal()

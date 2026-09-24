@@ -331,6 +331,30 @@ final class AudioPlayerController: ObservableObject {
     #endif
   }
 
+  /// Intent completion means the item became playable, not merely that loading was requested.
+  func playForIntent() async throws {
+    guard let identity = activeResumeID, player?.currentItem != nil else {
+      throw AudiobookIntentError.unavailable
+    }
+    guard !hasFinished else { throw AudiobookIntentError.finished }
+    play()
+    do {
+      for _ in 0..<150 {
+        try Task.checkCancellation()
+        guard activeResumeID == identity else { throw CancellationError() }
+        if player?.currentItem?.status == .failed {
+          throw player?.currentItem?.error ?? AudiobookIntentError.unavailable
+        }
+        if isPlaying || hasFinished { return }
+        try await Task.sleep(for: .milliseconds(100))
+      }
+      throw URLError(.timedOut)
+    } catch {
+      if activeResumeID == identity { pause() }
+      throw error
+    }
+  }
+
   func pause() {
     pendingPlayRequest = false
     player?.pause()
