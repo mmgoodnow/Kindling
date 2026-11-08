@@ -45,9 +45,84 @@ private final class UnauthorizedURLProtocol: URLProtocol, @unchecked Sendable {
   override func stopLoading() {}
 }
 
+private final class CoverLibraryURLProtocol: URLProtocol, @unchecked Sendable {
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+  override func startLoading() {
+    let response = HTTPURLResponse(
+      url: request.url!, statusCode: 200, httpVersion: nil,
+      headerFields: ["Content-Type": "application/json"])!
+    let json =
+      #"{"jsonrpc":"2.0","id":1,"result":{"items":[{"id":1,"title":"Test","author":"Author","coverUrl":"/covers/1.jpg?v=2026-11-03T00%3A00%3A00Z","addedAt":"2026-11-03T00:00:00Z","updatedAt":"2026-11-03T00:00:00Z","series":[],"audioStatus":"ready","ebookStatus":"missing","status":"ready"}]}}"#
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data(json.utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+  override func stopLoading() {}
+}
+
 @MainActor
 final class kindlingTests: XCTestCase {
   private let resumePositionKeyPrefix = "audioPlayer.resumePosition."
+
+  func testLibraryResponsePreservesRelativeCoverQuery() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CoverLibraryURLProtocol.self]
+    let session = URLSession(configuration: configuration)
+    defer { session.invalidateAndCancel() }
+    let client = PodibleClient(
+      rpcURL: URL(string: "https://podible.example/rpc")!,
+      accessToken: "test-token", session: session)
+    let items = try await client.fetchLibraryItems()
+    let path = try XCTUnwrap(items.first?.bookImagePath)
+    let url = try XCTUnwrap(URL(string: path))
+    XCTAssertEqual(url.host, "podible.example")
+    XCTAssertEqual(
+      URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "v" }?
+        .value,
+      "2026-11-03T00:00:00Z")
+  }
+
+  func testCoverCacheRevisionPreservesServerVersion() throws {
+    let url = try XCTUnwrap(
+      remoteLibraryAssetURL(
+        baseURLString: "https://podible.example/rpc",
+        path: "/covers/1.jpg?v=2026-11-03T00%3A00%3A00Z",
+        versionToken: "123"))
+    let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+    XCTAssertEqual(query.first { $0.name == "v" }?.value, "2026-11-03T00:00:00Z")
+    XCTAssertEqual(query.first { $0.name == "kindling_revision" }?.value, "123")
+    let legacy = try XCTUnwrap(
+      remoteLibraryAssetURL(
+        baseURLString: "https://podible.example/rpc", path: "/covers/1.jpg", versionToken: "123"))
+    XCTAssertFalse(
+      URLComponents(url: legacy, resolvingAgainstBaseURL: false)!.queryItems!.contains {
+        $0.name == "v"
+      })
+  }
+
+  func testCoverRedirectRestoresOnlySameOriginAuthorization() throws {
+    let source = URL(string: "https://podible.example/covers/1.jpg?v=old")!
+    let rpc = "https://podible.example/rpc"
+    for (destination, expected) in [
+      ("https://podible.example/covers/1.jpg?v=new", "Bearer test-token" as String?),
+      ("https://other.example/cover.jpg", nil),
+      ("http://podible.example/cover.jpg", nil),
+      ("https://podible.example:8443/cover.jpg", nil),
+    ] {
+      var request = URLRequest(url: URL(string: destination)!)
+      request.setValue("Bearer stale-token", forHTTPHeaderField: "Authorization")
+      let redirected = AuthenticatedRemoteImageRequest.redirectedRequest(
+        request, from: source, rpcURLString: rpc, accessToken: "test-token")
+      XCTAssertEqual(redirected.value(forHTTPHeaderField: "Authorization"), expected)
+    }
+    let request = URLRequest(url: source)
+    XCTAssertNil(
+      AuthenticatedRemoteImageRequest.redirectedRequest(
+        request, from: URL(string: "https://other.example/"), rpcURLString: rpc,
+        accessToken: "test-token"
+      ).value(forHTTPHeaderField: "Authorization"))
+  }
 
   func testBookRemainingTimeUsesPlaybackSpeedAndHandlesUnknownDuration() {
     XCTAssertEqual(

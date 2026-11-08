@@ -2272,7 +2272,11 @@ struct PodibleClient: PodibleLibraryServing {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       throw PodibleError.badURL
     }
-    components.queryItems = queryItems.isEmpty ? nil : queryItems
+    if !queryItems.isEmpty {
+      let names = Set(queryItems.map(\.name))
+      components.queryItems =
+        (components.queryItems ?? []).filter { !names.contains($0.name) } + queryItems
+    }
     guard let final = components.url else {
       throw PodibleError.badURL
     }

@@ -2774,8 +2774,9 @@ private func versionedAssetURL(_ url: URL, versionToken: String?) -> URL {
   guard let versionToken, versionToken.isEmpty == false else { return url }
   guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
   var items = components.queryItems ?? []
-  items.removeAll { $0.name == "v" }
-  items.append(URLQueryItem(name: "v", value: versionToken))
+  // Podible owns `v` and expects its exact server revision, not our Unix timestamp.
+  items.removeAll { $0.name == "kindling_revision" }
+  items.append(URLQueryItem(name: "kindling_revision", value: versionToken))
   components.queryItems = items
   return components.url ?? url
 }

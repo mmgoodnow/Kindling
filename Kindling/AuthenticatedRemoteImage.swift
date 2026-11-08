@@ -51,6 +51,12 @@ struct AuthenticatedRemoteImage<Placeholder: View>: View {
     }
 
     return image.requestModifier(modifier)
+      .redirectHandler(
+        AnyRedirectHandler { _, response, request, completion in
+          completion(
+            AuthenticatedRemoteImageRequest.redirectedRequest(
+              request, from: response.url, rpcURLString: rpcURLString, accessToken: accessToken))
+        })
   }
 }
 
@@ -68,6 +74,22 @@ enum AuthenticatedRemoteImageRequest {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
       return request
     }
+  }
+
+  static func redirectedRequest(
+    _ request: URLRequest, from sourceURL: URL?, rpcURLString: String, accessToken: String?
+  ) -> URLRequest {
+    var result = request
+    // Never forward credentials to another origin, even if URLSession retained them.
+    result.setValue(nil, forHTTPHeaderField: "Authorization")
+    if let sourceURL, let destinationURL = request.url,
+      shouldAuthorize(url: sourceURL, rpcURLString: rpcURLString),
+      shouldAuthorize(url: destinationURL, rpcURLString: rpcURLString),
+      let accessToken, !accessToken.isEmpty
+    {
+      result.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    }
+    return result
   }
 
   static func shouldAuthorize(url: URL, rpcURLString: String) -> Bool {
